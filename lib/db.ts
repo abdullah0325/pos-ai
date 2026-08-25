@@ -2576,7 +2576,7 @@ export type ModuleKey =
   | 'employees'
   | 'reports'
   | 'settings'
-  // Legacy & sub-routes for direct navigation
+  // Sub-routes & legacy keys for deep linking / routing
   | 'invoices'
   | 'counter-sales'
   | 'distributors'
@@ -2597,31 +2597,31 @@ export type ModuleKey =
 
 export const moduleLabels: Record<ModuleKey, string> = {
   dashboard: 'Executive Dashboard',
-  sales: 'Sales & Distribution Hub',
-  purchase: 'Procurement & Buying Hub',
-  products: 'Finished Products Inventory',
+  sales: 'Sales & Distribution',
+  purchase: 'Purchase & Procurement',
+  products: 'Finished Products',
   'raw-materials': 'Raw Material Warehouse',
-  employees: 'Employees & Payroll Management',
-  reports: 'Reports & Financial Statements',
-  settings: 'System Configuration & Backups',
+  employees: 'Employees & Payroll',
+  reports: 'Reports & Statements',
+  settings: 'Settings & Backups',
   // Sub-labels
-  invoices: 'Commercial Invoices & Challans',
-  'counter-sales': 'Counter Sales & Direct POS',
-  distributors: 'Distributor Accounts & Balances',
-  wholesalers: 'Wholesale Buyer Accounts',
-  customers: 'Customer & Retail Shop Accounts',
-  production: 'Plant Production Engine & BOM',
-  stock: 'Consolidated Stock Register',
-  suppliers: 'Supplier Accounts & Vendor Ledgers',
-  purchases: 'Raw Material Purchase Orders',
-  expenses: 'Factory & Administrative Expenses',
-  returns: 'Returns & Damaged Goods Tracking',
-  'cash-bank': 'Cash Register & Bank Accounts',
+  invoices: 'Commercial Invoices',
+  'counter-sales': 'Counter Sales (POS)',
+  distributors: 'Distributors & Sales Reps',
+  wholesalers: 'Wholesaler Accounts',
+  customers: 'Customer & Shop Accounts',
+  production: 'Plant Production Engine',
+  stock: 'Stock Register & Alerts',
+  suppliers: 'Supplier Accounts & Ledgers',
+  purchases: 'Raw Material Purchases',
+  expenses: 'Factory & Admin Expenses',
+  returns: 'Returns & Defects',
+  'cash-bank': 'Cash & Bank Accounts',
   'daily-summary': 'Daily Accounts Summary',
   'monthly-summary': 'Monthly Financial Statement',
   'yearly-summary': 'Yearly Financial Review',
   'profit-loss': 'Profit & Loss Statement',
-  phonebook: 'Factory & Trade Phone Book',
+  phonebook: 'Trade Phone Book',
 }
 
 // Currency formatting helper (Pakistani Rupee PKR)

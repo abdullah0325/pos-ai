@@ -4,47 +4,26 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import {
   Boxes,
-  Briefcase,
-  Building2,
   ChevronDown,
-  CircleDollarSign,
-  CreditCard,
   Download,
-  Factory,
-  FileText,
-  HelpCircle,
   LayoutDashboard,
-  LogOut,
   Menu,
-  Moon,
   Package,
-  Phone,
-  Plus,
-  RefreshCw,
-  Search,
   Settings,
   Shield,
   ShoppingBag,
-  ShoppingCart,
-  Store,
   TrendingUp,
   Truck,
-  Upload,
-  User,
-  UserCheck,
   Users,
-  Wallet,
   WifiOff,
   X,
-  RotateCcw,
-  Calendar,
-  Layers,
-  Banknote,
+  FileText,
 } from 'lucide-react'
 
 import {
   loadDatabase,
   saveDatabase,
+  exportDatabaseJSON,
   type AppDatabase,
   type ModuleKey,
   moduleLabels,
@@ -53,21 +32,21 @@ import {
 } from '@/lib/db'
 
 import DashboardView from './dashboard-view'
-import InvoicesView from './invoices-view'
-import ProductionView from './production-view'
-import InventoryView from './inventory-view'
+import SalesView, { type SalesSubTab } from './sales-view'
+import ProcurementView, { type PurchaseSubTab } from './procurement-view'
+import ProductsView, { type ProductsSubTab } from './products-view'
 import RawMaterialsView from './raw-materials-view'
-import SalesEntitiesView from './sales-entities-view'
-import PosView from './pos-view'
-import ProcurementView from './procurement-view'
-import AccountsView from './accounts-view'
+import AccountsView, { type AccountsSubTab } from './accounts-view'
 import EmployeesView from './employees-view'
-import PhonebookView from './phonebook-view'
 import SettingsView from './settings-view'
 
 export default function BusinessApp() {
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
   const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard')
+  const [salesTab, setSalesTab] = useState<SalesSubTab>('invoices')
+  const [purchaseTab, setPurchaseTab] = useState<PurchaseSubTab>('suppliers')
+  const [productsTab, setProductsTab] = useState<ProductsSubTab>('catalog')
+  const [reportsTab, setReportsTab] = useState<AccountsSubTab>('reports')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [isOwner, setIsOwner] = useState(true)
@@ -86,16 +65,38 @@ export default function BusinessApp() {
     saveDatabase(updated)
   }
 
-  // Navigation handler
-  const handleNavigate = (key: ModuleKey) => {
-    setActiveModule(key)
+  // Smart Navigation Handler: supports 8 top modules + direct routing to subtabs
+  const handleNavigate = (key: ModuleKey, subTab?: string) => {
+    // Check if key is a legacy/sub-route and route appropriately
+    if (['invoices', 'counter-sales', 'distributors', 'wholesalers', 'customers', 'phonebook'].includes(key)) {
+      setActiveModule('sales')
+      const mapped = key === 'counter-sales' ? 'pos' : (key as SalesSubTab)
+      setSalesTab(mapped)
+    } else if (['suppliers', 'purchases', 'expenses', 'returns'].includes(key)) {
+      setActiveModule('purchase')
+      setPurchaseTab(key as PurchaseSubTab)
+    } else if (['production', 'stock'].includes(key)) {
+      setActiveModule('products')
+      setProductsTab(key === 'stock' ? 'stock' : 'production')
+    } else if (['daily-summary', 'monthly-summary', 'yearly-summary', 'profit-loss', 'cash-bank'].includes(key)) {
+      setActiveModule('reports')
+      setReportsTab(key as AccountsSubTab)
+    } else {
+      setActiveModule(key)
+      if (subTab) {
+        if (key === 'sales') setSalesTab(subTab as SalesSubTab)
+        if (key === 'purchase') setPurchaseTab(subTab as PurchaseSubTab)
+        if (key === 'products') setProductsTab(subTab as ProductsSubTab)
+        if (key === 'reports') setReportsTab(subTab as AccountsSubTab)
+      }
+    }
     setSidebarOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
     <div className="app-frame">
-      {/* SIDEBAR NAVIGATION */}
+      {/* FLAT & SIMPLE SIDEBAR NAVIGATION */}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="brand">
           <Image
@@ -120,238 +121,93 @@ export default function BusinessApp() {
           <ChevronDown className="workspace-chevron" />
         </div>
 
-        {/* Sidebar Nav Items */}
-        <div className="nav-list">
-          {/* Group 1: Overview */}
-          <div className="nav-group">
-            <div className="nav-label">Overview</div>
-            <button
-              className={`nav-item ${activeModule === 'dashboard' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('dashboard')}
-            >
-              <LayoutDashboard />
-              <span>Dashboard</span>
-            </button>
-          </div>
+        {/* 8 Core Top-Level Flat Sidebar Nav Items */}
+        <nav className="nav-list" aria-label="Core Business Navigation">
+          {/* 1. Dashboard */}
+          <button
+            className={`nav-item ${activeModule === 'dashboard' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('dashboard')}
+            id="nav-dashboard"
+          >
+            <LayoutDashboard />
+            <span>Dashboard</span>
+          </button>
 
-          {/* Group 2: Sales & Commerce */}
-          <div className="nav-group">
-            <div className="nav-label">Sales & Distribution</div>
-            <button
-              className={`nav-item ${activeModule === 'invoices' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('invoices')}
-            >
-              <FileText />
-              <span>Invoices</span>
-              <span className="nav-count">{db.invoices.length}</span>
-            </button>
+          {/* 2. Sales */}
+          <button
+            className={`nav-item ${activeModule === 'sales' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('sales')}
+            id="nav-sales"
+          >
+            <ShoppingBag />
+            <span>Sales</span>
+            <span className="nav-count">{db.invoices.length}</span>
+          </button>
 
-            <button
-              className={`nav-item ${activeModule === 'counter-sales' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('counter-sales')}
-            >
-              <ShoppingCart />
-              <span>Counter Sales (POS)</span>
-            </button>
+          {/* 3. Purchase */}
+          <button
+            className={`nav-item ${activeModule === 'purchase' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('purchase')}
+            id="nav-purchase"
+          >
+            <Truck />
+            <span>Purchase</span>
+            <span className="nav-count">{db.purchases.length}</span>
+          </button>
 
-            <button
-              className={`nav-item ${activeModule === 'distributors' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('distributors')}
-            >
-              <Truck />
-              <span>Distributors & Sales Reps</span>
-            </button>
+          {/* 4. Products */}
+          <button
+            className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('products')}
+            id="nav-products"
+          >
+            <Package />
+            <span>Products</span>
+            <span className="nav-count">{db.products.length}</span>
+          </button>
 
-            <button
-              className={`nav-item ${activeModule === 'wholesalers' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('wholesalers')}
-            >
-              <Building2 />
-              <span>Wholesaler Accounts</span>
-            </button>
+          {/* 5. Raw Material */}
+          <button
+            className={`nav-item ${activeModule === 'raw-materials' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('raw-materials')}
+            id="nav-raw-materials"
+          >
+            <Boxes />
+            <span>Raw Material</span>
+            <span className="nav-count">{db.rawMaterials.length}</span>
+          </button>
 
-            <button
-              className={`nav-item ${activeModule === 'customers' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('customers')}
-            >
-              <Store />
-              <span>Customers / Shops</span>
-            </button>
+          {/* 6. Employees */}
+          <button
+            className={`nav-item ${activeModule === 'employees' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('employees')}
+            id="nav-employees"
+          >
+            <Users />
+            <span>Employees</span>
+            <span className="nav-count">{db.employees?.length || 0}</span>
+          </button>
 
-            <button
-              className={`nav-item ${activeModule === 'phonebook' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('phonebook')}
-            >
-              <Phone />
-              <span>Phone Book</span>
-            </button>
-          </div>
+          {/* 7. Reports */}
+          <button
+            className={`nav-item ${activeModule === 'reports' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('reports')}
+            id="nav-reports"
+          >
+            <TrendingUp />
+            <span>Reports</span>
+          </button>
 
-          {/* Group 3: Product Management */}
-          <div className="nav-group">
-            <div className="nav-label">Product Management</div>
-            <button
-              className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('products')}
-              id="nav-products"
-            >
-              <Package />
-              <span>Product Management</span>
-              <span className="nav-count">{db.products.length}</span>
-            </button>
-          </div>
-
-          {/* Group 4: Raw Material Management */}
-          <div className="nav-group">
-            <div className="nav-label">Raw Material Management</div>
-            <button
-              className={`nav-item ${activeModule === 'raw-materials' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('raw-materials')}
-              id="nav-raw-materials"
-            >
-              <Boxes />
-              <span>Raw Material Management</span>
-              <span className="nav-count">{db.rawMaterials.length}</span>
-            </button>
-          </div>
-
-          {/* Group 5: Plant Operations & Stock */}
-          <div className="nav-group">
-            <div className="nav-label">Plant & Manufacturing</div>
-            <button
-              className={`nav-item ${activeModule === 'production' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('production')}
-              id="nav-production"
-            >
-              <Factory />
-              <span>Production Engine</span>
-              <span className="nav-count">{db.productionRuns.length}</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'stock' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('stock')}
-              id="nav-stock"
-            >
-              <Layers />
-              <span>Stock Register</span>
-            </button>
-          </div>
-
-          {/* Group 4: Procurement & Overheads */}
-          <div className="nav-group">
-            <div className="nav-label">Purchases & Expenses</div>
-            <button
-              className={`nav-item ${activeModule === 'suppliers' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('suppliers')}
-            >
-              <Briefcase />
-              <span>Supplier Accounts</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'purchases' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('purchases')}
-            >
-              <ShoppingBag />
-              <span>Purchases (Raw Mat.)</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'expenses' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('expenses')}
-            >
-              <CircleDollarSign />
-              <span>Factory Expenses</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'returns' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('returns')}
-            >
-              <RotateCcw />
-              <span>Returns & Defects</span>
-            </button>
-          </div>
-
-          {/* Group 5: Accounts & Financials */}
-          <div className="nav-group">
-            <div className="nav-label">Financial Accounts</div>
-            <button
-              className={`nav-item ${activeModule === 'cash-bank' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('cash-bank')}
-            >
-              <Wallet />
-              <span>Cash & Bank</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'daily-summary' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('daily-summary')}
-            >
-              <Calendar />
-              <span>Daily Summary</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'monthly-summary' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('monthly-summary')}
-            >
-              <Calendar />
-              <span>Monthly Summary</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'yearly-summary' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('yearly-summary')}
-            >
-              <TrendingUp />
-              <span>Yearly Summary</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'profit-loss' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('profit-loss')}
-            >
-              <CircleDollarSign />
-              <span>Profit & Loss</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'reports' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('reports')}
-            >
-              <Download />
-              <span>Reports & Export</span>
-            </button>
-          </div>
-
-          {/* Group 6: Human Resources & Staff */}
-          <div className="nav-group">
-            <div className="nav-label">Staff & Payroll</div>
-            <button
-              className={`nav-item ${activeModule === 'employees' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('employees')}
-              id="nav-employees"
-            >
-              <Users />
-              <span>Employees & Payroll</span>
-              <span className="nav-count">{db.employees?.length || 0}</span>
-            </button>
-          </div>
-
-          {/* Group 7: System */}
-          <div className="nav-group">
-            <div className="nav-label">Administration</div>
-            <button
-              className={`nav-item ${activeModule === 'settings' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('settings')}
-            >
-              <Settings />
-              <span>Settings & Backup</span>
-            </button>
-          </div>
-        </div>
+          {/* 8. Settings */}
+          <button
+            className={`nav-item ${activeModule === 'settings' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('settings')}
+            id="nav-settings"
+          >
+            <Settings />
+            <span>Settings</span>
+          </button>
+        </nav>
 
         {/* Sidebar Footer */}
         <div className="sidebar-foot">
@@ -387,7 +243,7 @@ export default function BusinessApp() {
           <div className="breadcrumb">
             <span>AL FAROOQ FOODS</span>
             <span>/</span>
-            <strong>{moduleLabels[activeModule]}</strong>
+            <strong>{moduleLabels[activeModule] || 'Workspace'}</strong>
           </div>
 
           <div className="top-actions">
@@ -399,10 +255,7 @@ export default function BusinessApp() {
             <button
               className="icon-button"
               title="Quick Backup JSON"
-              onClick={() => {
-                const { exportDatabaseJSON } = require('@/lib/db')
-                exportDatabaseJSON(db)
-              }}
+              onClick={() => exportDatabaseJSON(db)}
             >
               <Download />
             </button>
@@ -426,70 +279,37 @@ export default function BusinessApp() {
             />
           )}
 
-          {activeModule === 'invoices' && (
-            <InvoicesView db={db} onSaveDatabase={handleSaveDatabase} />
+          {activeModule === 'sales' && (
+            <SalesView
+              db={db}
+              initialTab={salesTab}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
+            />
           )}
 
-          {activeModule === 'production' && (
-            <ProductionView db={db} onSaveDatabase={handleSaveDatabase} />
+          {activeModule === 'purchase' && (
+            <ProcurementView
+              db={db}
+              activeSubView={purchaseTab}
+              onSaveDatabase={handleSaveDatabase}
+            />
+          )}
+
+          {activeModule === 'products' && (
+            <ProductsView
+              db={db}
+              initialTab={productsTab}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
+            />
           )}
 
           {activeModule === 'raw-materials' && (
             <RawMaterialsView
               db={db}
               onSaveDatabase={handleSaveDatabase}
-              onNavigateToSupplier={() => handleNavigate('suppliers')}
-            />
-          )}
-
-          {(activeModule === 'products' || activeModule === 'stock') && (
-            <InventoryView
-              db={db}
-              activeSubView={activeModule}
-              onSaveDatabase={handleSaveDatabase}
-            />
-          )}
-
-          {activeModule === 'counter-sales' && (
-            <PosView
-              db={db}
-              onSaveDatabase={handleSaveDatabase}
-              onNavigate={handleNavigate}
-            />
-          )}
-
-          {(activeModule === 'distributors' ||
-            activeModule === 'wholesalers' ||
-            activeModule === 'customers') && (
-            <SalesEntitiesView
-              db={db}
-              entityType={activeModule}
-              onSaveDatabase={handleSaveDatabase}
-            />
-          )}
-
-          {(activeModule === 'suppliers' ||
-            activeModule === 'purchases' ||
-            activeModule === 'expenses' ||
-            activeModule === 'returns') && (
-            <ProcurementView
-              db={db}
-              activeSubView={activeModule}
-              onSaveDatabase={handleSaveDatabase}
-            />
-          )}
-
-          {(activeModule === 'daily-summary' ||
-            activeModule === 'monthly-summary' ||
-            activeModule === 'yearly-summary' ||
-            activeModule === 'profit-loss' ||
-            activeModule === 'cash-bank' ||
-            activeModule === 'reports') && (
-            <AccountsView
-              db={db}
-              viewType={activeModule}
-              onSaveDatabase={handleSaveDatabase}
-              isOwner={isOwner}
+              onNavigateToSupplier={() => handleNavigate('purchase', 'suppliers')}
             />
           )}
 
@@ -497,8 +317,13 @@ export default function BusinessApp() {
             <EmployeesView db={db} onSaveDatabase={handleSaveDatabase} />
           )}
 
-          {activeModule === 'phonebook' && (
-            <PhonebookView db={db} onSaveDatabase={handleSaveDatabase} />
+          {activeModule === 'reports' && (
+            <AccountsView
+              db={db}
+              viewType={reportsTab}
+              onSaveDatabase={handleSaveDatabase}
+              isOwner={isOwner}
+            />
           )}
 
           {activeModule === 'settings' && (
@@ -534,7 +359,7 @@ export default function BusinessApp() {
               <button
                 onClick={() => {
                   setShowReceiptModal(false)
-                  handleNavigate('invoices')
+                  handleNavigate('sales', 'invoices')
                 }}
               >
                 <FileText />
@@ -550,20 +375,6 @@ export default function BusinessApp() {
         </div>
       )}
     </div>
-  )
-}
-
-function Building2Icon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
-      <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
-      <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
-      <path d="M10 6h4"/>
-      <path d="M10 10h4"/>
-      <path d="M10 14h4"/>
-      <path d="M10 18h4"/>
-    </svg>
   )
 }
 
