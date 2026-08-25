@@ -5,6 +5,7 @@ import Image from 'next/image'
 import {
   Boxes,
   Briefcase,
+  Building2,
   ChevronDown,
   CircleDollarSign,
   CreditCard,
@@ -25,10 +26,12 @@ import {
   Shield,
   ShoppingBag,
   ShoppingCart,
+  Store,
   TrendingUp,
   Truck,
   Upload,
   User,
+  UserCheck,
   Users,
   Wallet,
   WifiOff,
@@ -36,6 +39,7 @@ import {
   RotateCcw,
   Calendar,
   Layers,
+  Banknote,
 } from 'lucide-react'
 
 import {
@@ -52,9 +56,12 @@ import DashboardView from './dashboard-view'
 import InvoicesView from './invoices-view'
 import ProductionView from './production-view'
 import InventoryView from './inventory-view'
+import RawMaterialsView from './raw-materials-view'
 import SalesEntitiesView from './sales-entities-view'
+import PosView from './pos-view'
 import ProcurementView from './procurement-view'
 import AccountsView from './accounts-view'
+import EmployeesView from './employees-view'
 import PhonebookView from './phonebook-view'
 import SettingsView from './settings-view'
 
@@ -152,14 +159,14 @@ export default function BusinessApp() {
               onClick={() => handleNavigate('distributors')}
             >
               <Truck />
-              <span>Distributor Accounts</span>
+              <span>Distributors & Sales Reps</span>
             </button>
 
             <button
               className={`nav-item ${activeModule === 'wholesalers' ? 'nav-item-active' : ''}`}
               onClick={() => handleNavigate('wholesalers')}
             >
-              <Building2Icon />
+              <Building2 />
               <span>Wholesaler Accounts</span>
             </button>
 
@@ -167,8 +174,8 @@ export default function BusinessApp() {
               className={`nav-item ${activeModule === 'customers' ? 'nav-item-active' : ''}`}
               onClick={() => handleNavigate('customers')}
             >
-              <Users />
-              <span>Client Biodata</span>
+              <Store />
+              <span>Customers / Shops</span>
             </button>
 
             <button
@@ -180,12 +187,41 @@ export default function BusinessApp() {
             </button>
           </div>
 
-          {/* Group 3: Manufacturing & Inventory */}
+          {/* Group 3: Product Management */}
+          <div className="nav-group">
+            <div className="nav-label">Product Management</div>
+            <button
+              className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
+              onClick={() => handleNavigate('products')}
+              id="nav-products"
+            >
+              <Package />
+              <span>Product Management</span>
+              <span className="nav-count">{db.products.length}</span>
+            </button>
+          </div>
+
+          {/* Group 4: Raw Material Management */}
+          <div className="nav-group">
+            <div className="nav-label">Raw Material Management</div>
+            <button
+              className={`nav-item ${activeModule === 'raw-materials' ? 'nav-item-active' : ''}`}
+              onClick={() => handleNavigate('raw-materials')}
+              id="nav-raw-materials"
+            >
+              <Boxes />
+              <span>Raw Material Management</span>
+              <span className="nav-count">{db.rawMaterials.length}</span>
+            </button>
+          </div>
+
+          {/* Group 5: Plant Operations & Stock */}
           <div className="nav-group">
             <div className="nav-label">Plant & Manufacturing</div>
             <button
               className={`nav-item ${activeModule === 'production' ? 'nav-item-active' : ''}`}
               onClick={() => handleNavigate('production')}
+              id="nav-production"
             >
               <Factory />
               <span>Production Engine</span>
@@ -193,26 +229,9 @@ export default function BusinessApp() {
             </button>
 
             <button
-              className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('products')}
-            >
-              <Package />
-              <span>Finished Goods</span>
-              <span className="nav-count">{db.products.length}</span>
-            </button>
-
-            <button
-              className={`nav-item ${activeModule === 'raw-materials' ? 'nav-item-active' : ''}`}
-              onClick={() => handleNavigate('raw-materials')}
-            >
-              <Boxes />
-              <span>Raw Materials</span>
-              <span className="nav-count">{db.rawMaterials.length}</span>
-            </button>
-
-            <button
               className={`nav-item ${activeModule === 'stock' ? 'nav-item-active' : ''}`}
               onClick={() => handleNavigate('stock')}
+              id="nav-stock"
             >
               <Layers />
               <span>Stock Register</span>
@@ -307,7 +326,21 @@ export default function BusinessApp() {
             </button>
           </div>
 
-          {/* Group 6: System */}
+          {/* Group 6: Human Resources & Staff */}
+          <div className="nav-group">
+            <div className="nav-label">Staff & Payroll</div>
+            <button
+              className={`nav-item ${activeModule === 'employees' ? 'nav-item-active' : ''}`}
+              onClick={() => handleNavigate('employees')}
+              id="nav-employees"
+            >
+              <Users />
+              <span>Employees & Payroll</span>
+              <span className="nav-count">{db.employees?.length || 0}</span>
+            </button>
+          </div>
+
+          {/* Group 7: System */}
           <div className="nav-group">
             <div className="nav-label">Administration</div>
             <button
@@ -401,7 +434,15 @@ export default function BusinessApp() {
             <ProductionView db={db} onSaveDatabase={handleSaveDatabase} />
           )}
 
-          {(activeModule === 'products' || activeModule === 'raw-materials' || activeModule === 'stock') && (
+          {activeModule === 'raw-materials' && (
+            <RawMaterialsView
+              db={db}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigateToSupplier={() => handleNavigate('suppliers')}
+            />
+          )}
+
+          {(activeModule === 'products' || activeModule === 'stock') && (
             <InventoryView
               db={db}
               activeSubView={activeModule}
@@ -409,10 +450,17 @@ export default function BusinessApp() {
             />
           )}
 
+          {activeModule === 'counter-sales' && (
+            <PosView
+              db={db}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
+            />
+          )}
+
           {(activeModule === 'distributors' ||
             activeModule === 'wholesalers' ||
-            activeModule === 'customers' ||
-            activeModule === 'counter-sales') && (
+            activeModule === 'customers') && (
             <SalesEntitiesView
               db={db}
               entityType={activeModule}
@@ -443,6 +491,10 @@ export default function BusinessApp() {
               onSaveDatabase={handleSaveDatabase}
               isOwner={isOwner}
             />
+          )}
+
+          {activeModule === 'employees' && (
+            <EmployeesView db={db} onSaveDatabase={handleSaveDatabase} />
           )}
 
           {activeModule === 'phonebook' && (

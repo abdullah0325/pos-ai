@@ -6,8 +6,11 @@ export const metadata: Metadata = {
   description: 'Offline-first business and production management for AL FAROOQ FOODS (Juices, Mineral Water, Confectionery & Snacks).',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/icon-light-32x32.png',
-    apple: '/apple-icon.png',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/al-farooq-foods-logo.png', type: 'image/png' },
+    ],
+    apple: '/al-farooq-foods-logo.png',
   },
 }
 

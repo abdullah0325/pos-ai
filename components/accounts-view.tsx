@@ -1,22 +1,54 @@
 'use client'
 
-import { useState } from 'react'
-import { CircleDollarSign, Calendar, TrendingUp, ArrowRightLeft, ArrowDownRight, ArrowUpRight, FileText, Download, Wallet, Plus, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import {
+  CircleDollarSign,
+  Calendar,
+  TrendingUp,
+  ArrowRightLeft,
+  ArrowDownRight,
+  ArrowUpRight,
+  FileText,
+  Download,
+  Wallet,
+  Plus,
+  X,
+  PieChart,
+  Layers,
+  FileSpreadsheet,
+} from 'lucide-react'
 import { formatPKR, formatDate, type AppDatabase, type AccountTransfer } from '@/lib/db'
 import { exportToCSV, generateStockReportPDF } from '@/lib/pdf-export'
 
+export type AccountsSubTab =
+  | 'reports'
+  | 'profit-loss'
+  | 'cash-bank'
+  | 'daily-summary'
+  | 'monthly-summary'
+  | 'yearly-summary'
+
 interface AccountsViewProps {
   db: AppDatabase
-  viewType: 'daily-summary' | 'monthly-summary' | 'yearly-summary' | 'profit-loss' | 'cash-bank' | 'reports'
+  viewType?: 'daily-summary' | 'monthly-summary' | 'yearly-summary' | 'profit-loss' | 'cash-bank' | 'reports'
   onSaveDatabase: (updated: AppDatabase) => void
   isOwner: boolean
 }
 
-export default function AccountsView({ db, viewType, onSaveDatabase, isOwner }: AccountsViewProps) {
+export default function AccountsView({ db, viewType = 'reports', onSaveDatabase, isOwner }: AccountsViewProps) {
+  const [tab, setTab] = useState<AccountsSubTab>(viewType as AccountsSubTab)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM
   const [selectedYear, setSelectedYear] = useState('2026')
   const [showTransferModal, setShowTransferModal] = useState(false)
+
+  useEffect(() => {
+    if (viewType) {
+      setTab(viewType as AccountsSubTab)
+    }
+  }, [viewType])
+
+  const currentView = tab
 
   // 1. DAILY CALCULATIONS for selectedDate
   const dailyInvoices = db.invoices.filter((inv) => inv.date === selectedDate)
@@ -83,35 +115,96 @@ export default function AccountsView({ db, viewType, onSaveDatabase, isOwner }: 
     exportToCSV(`Daily_Accounts_Summary_${selectedDate}`, headers, rows)
   }
 
+  const tabs: Array<{
+    id: AccountsSubTab
+    label: string
+    icon: React.ReactNode
+  }> = [
+    {
+      id: 'reports',
+      label: 'Reports & Exports',
+      icon: <FileSpreadsheet className="w-4 h-4" />,
+    },
+    {
+      id: 'profit-loss',
+      label: 'Profit & Loss Statement',
+      icon: <TrendingUp className="w-4 h-4" />,
+    },
+    {
+      id: 'cash-bank',
+      label: 'Cash & Bank Accounts',
+      icon: <Wallet className="w-4 h-4" />,
+    },
+    {
+      id: 'daily-summary',
+      label: 'Daily Summary',
+      icon: <Calendar className="w-4 h-4" />,
+    },
+    {
+      id: 'monthly-summary',
+      label: 'Monthly Summary',
+      icon: <Calendar className="w-4 h-4" />,
+    },
+    {
+      id: 'yearly-summary',
+      label: 'Yearly Summary',
+      icon: <TrendingUp className="w-4 h-4" />,
+    },
+  ]
+
   return (
     <div className="page-stack">
+      {/* Top Accounts Horizontal Navigation Bar */}
+      <div className="bg-white rounded-xl border border-stone-200 p-2 shadow-xs sticky top-[71px] z-20">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          {tabs.map((t) => {
+            const isActive = currentView === t.id
+            return (
+              <button
+                key={t.id}
+                id={`accounts-tab-${t.id}`}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-primary text-white shadow-xs font-bold'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                }`}
+              >
+                {t.icon}
+                <span>{t.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Heading */}
       <div className="page-heading">
         <div>
           <p className="eyebrow">Financial Accounts & Books</p>
           <h1>
-            {viewType === 'daily-summary'
+            {currentView === 'daily-summary'
               ? 'Daily Accounts Summary'
-              : viewType === 'monthly-summary'
+              : currentView === 'monthly-summary'
               ? 'Monthly Accounts Summary'
-              : viewType === 'yearly-summary'
+              : currentView === 'yearly-summary'
               ? 'Yearly Accounts Summary'
-              : viewType === 'profit-loss'
+              : currentView === 'profit-loss'
               ? 'Profit & Loss Statement'
-              : viewType === 'cash-bank'
+              : currentView === 'cash-bank'
               ? 'Cash & Bank Accounts'
               : 'Reports & Exports Center'}
           </h1>
           <p className="subheading">
-            {viewType === 'profit-loss'
+            {currentView === 'profit-loss'
               ? 'Comprehensive statement reflecting Sales Revenue, Cost of Goods Sold (COGS), Plant Overheads & Net Operating Profit.'
-              : viewType === 'cash-bank'
+              : currentView === 'cash-bank'
               ? 'Multi-account cash register, Meezan Bank, and HBL account ledger with real-time fund transfers.'
               : 'Auto-calculated offline books directly connected to manufacturing, sales, and procurement.'}
           </p>
         </div>
         <div className="heading-actions">
-          {viewType === 'daily-summary' && (
+          {currentView === 'daily-summary' && (
             <>
               <input
                 type="date"
@@ -125,7 +218,7 @@ export default function AccountsView({ db, viewType, onSaveDatabase, isOwner }: 
             </>
           )}
 
-          {viewType === 'monthly-summary' && (
+          {currentView === 'monthly-summary' && (
             <input
               type="month"
               value={selectedMonth}
@@ -134,7 +227,7 @@ export default function AccountsView({ db, viewType, onSaveDatabase, isOwner }: 
             />
           )}
 
-          {viewType === 'yearly-summary' && (
+          {currentView === 'yearly-summary' && (
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
@@ -145,7 +238,7 @@ export default function AccountsView({ db, viewType, onSaveDatabase, isOwner }: 
             </select>
           )}
 
-          {viewType === 'cash-bank' && (
+          {currentView === 'cash-bank' && (
             <button className="button primary" onClick={() => setShowTransferModal(true)}>
               <ArrowRightLeft /> Transfer Funds
             </button>
@@ -154,7 +247,7 @@ export default function AccountsView({ db, viewType, onSaveDatabase, isOwner }: 
       </div>
 
       {/* VIEW: DAILY SUMMARY */}
-      {viewType === 'daily-summary' && (
+      {currentView === 'daily-summary' && (
         <div className="space-y-6">
           <div className="stat-grid">
             <div className="stat-card">

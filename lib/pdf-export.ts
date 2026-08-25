@@ -1,7 +1,18 @@
 // Client-side PDF & Excel/CSV Export Engine for AL FAROOQ FOODS
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatPKR, formatDate, type InvoiceItem, type CustomerItem, type SupplierItem, type LedgerEntry, type ProductItem, type RawMaterialItem } from './db'
+import {
+  formatPKR,
+  formatDate,
+  type InvoiceItem,
+  type CustomerItem,
+  type SupplierItem,
+  type LedgerEntry,
+  type ProductItem,
+  type RawMaterialItem,
+  type EmployeeItem,
+  type SalaryPaymentRecord,
+} from './db'
 
 export function generateInvoicePDF(invoice: InvoiceItem, customer?: CustomerItem) {
   const doc = new jsPDF({
@@ -269,6 +280,155 @@ export function generateStockReportPDF(products: ProductItem[], rawMaterials: Ra
   })
 
   doc.save(`Stock_Report_AL_FAROOQ_FOODS_${new Date().toISOString().slice(0, 10)}.pdf`)
+}
+
+export function generateSalarySlipPDF(employee: EmployeeItem, payment: SalaryPaymentRecord) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+  // Theme Colors
+  const primaryColor: [number, number, number] = [124, 181, 24] // #7cb518
+  const darkColor: [number, number, number] = [43, 43, 43] // #2b2b2b
+
+  // Header Banner
+  doc.setFillColor(...primaryColor)
+  doc.rect(0, 0, 210, 32, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(22)
+  doc.text('AL FAROOQ FOODS', 14, 15)
+
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Factory & Head Office: Industrial Area, Sheikhupura Road, Lahore', 14, 21)
+  doc.text('Phone: 0344 9549051, 0346 9829900 | Official Payroll Voucher', 14, 26)
+
+  // Voucher Title Badge
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(142, 7, 54, 18, 3, 3, 'F')
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.text('SALARY RECEIPT', 169, 14, { align: 'center' })
+  doc.setFontSize(8.5)
+  doc.setTextColor(...primaryColor)
+  doc.text(payment.receiptNumber || 'SAL-VOUCHER', 169, 20, { align: 'center' })
+
+  // Employee Information
+  doc.setTextColor(...darkColor)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text('EMPLOYEE DETAILS:', 14, 42)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.text(`Employee Name: ${employee.name}`, 14, 48)
+  doc.text(`Designation / Role: ${employee.role}`, 14, 53)
+  doc.text(`Department: ${employee.department || 'Production & Plant'}`, 14, 58)
+  doc.text(`Phone: ${employee.phone} | CNIC: ${employee.cnic || '—'}`, 14, 63)
+  doc.text(`Duty Timing: ${employee.dutyTiming || 'General Shift'}`, 14, 68)
+
+  // Payment Metadata
+  doc.setFont('helvetica', 'bold')
+  doc.text('DISBURSEMENT DETAILS:', 130, 42)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Salary Month: ${payment.month}`, 130, 48)
+  doc.text(`Disbursement Date: ${formatDate(payment.paymentDate)}`, 130, 53)
+  doc.text(`Payment Mode: ${payment.paymentMethod}`, 130, 58)
+  doc.text(`Disbursed From: ${payment.paymentAccount === 'cash-in-hand' ? 'Cash in Hand (Factory Register)' : payment.paymentAccount === 'meezan-bank' ? 'Meezan Bank Ltd' : 'Habib Bank Ltd (HBL)'}`, 130, 63)
+  doc.text(`Payment Status: ${payment.status.toUpperCase()}`, 130, 68)
+
+  // Salary Breakdown Table
+  const tableRows = [
+    ['1', 'Base Basic Salary', 'Fixed monthly contracted remuneration', formatPKR(payment.baseSalary)],
+    ['2', 'Total Allowances & Benefits', payment.allowancesBreakdown?.map(a => `${a.name}: ${formatPKR(a.amount)}`).join(', ') || 'Food, conveyance, medical allowances', `+ ${formatPKR(payment.allowances)}`],
+  ]
+
+  if (payment.overtimeBonus && payment.overtimeBonus > 0) {
+    tableRows.push(['3', 'Overtime & Performance Bonus', 'Additional overtime hours & plant targets', `+ ${formatPKR(payment.overtimeBonus)}`])
+  }
+
+  if (payment.loanDeduction && payment.loanDeduction > 0) {
+    tableRows.push([(tableRows.length + 1).toString(), 'Loan / Advance Deductions', 'Monthly salary advance settlement', `- ${formatPKR(payment.loanDeduction)}`])
+  }
+
+  if (payment.absentDeduction && payment.absentDeduction > 0) {
+    tableRows.push([(tableRows.length + 1).toString(), 'Absent / Unpaid Leave Deduction', 'Deduction for unapproved absence', `- ${formatPKR(payment.absentDeduction)}`])
+  }
+
+  autoTable(doc, {
+    startY: 76,
+    head: [['#', 'Compensation Component', 'Description / Details', 'Amount (PKR)']],
+    body: tableRows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [124, 181, 24],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 9,
+    },
+    styles: {
+      fontSize: 8.5,
+      textColor: [43, 43, 43],
+      cellPadding: 3.5,
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 60 },
+      2: { cellWidth: 'auto' },
+      3: { cellWidth: 40, halign: 'right', fontStyle: 'bold' },
+    },
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalY = (doc as any).lastAutoTable?.finalY || 140
+
+  // Net Paid Summary Box
+  doc.setFillColor(245, 248, 240)
+  doc.setDrawColor(124, 181, 24)
+  doc.roundedRect(120, finalY + 6, 76, 26, 2, 2, 'FD')
+
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.text('NET AMOUNT DISBURSED:', 124, finalY + 14)
+
+  doc.setTextColor(124, 181, 24)
+  doc.setFontSize(15)
+  doc.text(formatPKR(payment.amountPaid), 124, finalY + 24)
+
+  // Remaining Loan Status Note
+  if (employee.totalLoanBalance > 0) {
+    doc.setTextColor(184, 72, 30)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.text(`Remaining Loan / Advance Balance: ${formatPKR(employee.totalLoanBalance)}`, 14, finalY + 12)
+  }
+
+  // Notes
+  if (payment.notes) {
+    doc.setTextColor(...darkColor)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.text(`Voucher Notes: ${payment.notes}`, 14, finalY + 20)
+  }
+
+  // Signatures
+  doc.setDrawColor(180, 180, 180)
+  doc.line(20, finalY + 55, 75, finalY + 55)
+  doc.line(135, finalY + 55, 190, finalY + 55)
+
+  doc.setTextColor(...darkColor)
+  doc.setFontSize(8)
+  doc.text('Employee Signature & Date', 47, finalY + 60, { align: 'center' })
+  doc.text('Authorized Signatory (AL FAROOQ FOODS)', 162, finalY + 60, { align: 'center' })
+
+  // Footer
+  doc.setFontSize(7.5)
+  doc.setTextColor(130, 130, 130)
+  doc.text('This is a computer-generated payroll voucher created offline via AL FAROOQ FOODS ERP System.', 105, 285, { align: 'center' })
+
+  doc.save(`Salary_Receipt_${employee.name.replace(/\s+/g, '_')}_${payment.month.replace(/\s+/g, '_')}.pdf`)
 }
 
 // Export any dataset as CSV/Excel compatible file

@@ -1,17 +1,48 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Search, Truck, DollarSign, RotateCcw, Trash2, Edit, FileText, Download, X, AlertTriangle } from 'lucide-react'
-import { formatPKR, formatDate, type AppDatabase, type SupplierItem, type PurchaseItem, type ExpenseItem, type ReturnItem, type ExpenseCategory } from '@/lib/db'
+import { useState, useEffect } from 'react'
+import {
+  Plus,
+  Search,
+  Truck,
+  DollarSign,
+  RotateCcw,
+  Trash2,
+  Edit,
+  FileText,
+  Download,
+  X,
+  AlertTriangle,
+  Briefcase,
+  ShoppingBag,
+  CircleDollarSign,
+} from 'lucide-react'
+import {
+  formatPKR,
+  formatDate,
+  type AppDatabase,
+  type SupplierItem,
+  type PurchaseItem,
+  type ExpenseItem,
+  type ReturnItem,
+  type ExpenseCategory,
+} from '@/lib/db'
 import { generateLedgerPDF, exportToCSV } from '@/lib/pdf-export'
+
+export type PurchaseSubTab = 'suppliers' | 'purchases' | 'returns' | 'expenses'
 
 interface ProcurementViewProps {
   db: AppDatabase
-  activeSubView: 'suppliers' | 'purchases' | 'expenses' | 'returns'
+  activeSubView?: 'suppliers' | 'purchases' | 'expenses' | 'returns'
   onSaveDatabase: (updated: AppDatabase) => void
 }
 
-export default function ProcurementView({ db, activeSubView, onSaveDatabase }: ProcurementViewProps) {
+export default function ProcurementView({
+  db,
+  activeSubView = 'suppliers',
+  onSaveDatabase,
+}: ProcurementViewProps) {
+  const [tab, setTab] = useState<PurchaseSubTab>(activeSubView)
   const [query, setQuery] = useState('')
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(null)
   const [isCreatingSupplier, setIsCreatingSupplier] = useState(false)
@@ -19,6 +50,14 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
   const [isCreatingExpense, setIsCreatingExpense] = useState(false)
   const [isCreatingReturn, setIsCreatingReturn] = useState(false)
   const [viewingSupplierLedger, setViewingSupplierLedger] = useState<SupplierItem | null>(null)
+
+  useEffect(() => {
+    if (activeSubView) {
+      setTab(activeSubView)
+    }
+  }, [activeSubView])
+
+  const currentView = tab
 
   // Filters
   const filteredSuppliers = db.suppliers.filter((s) => s.name.toLowerCase().includes(query.toLowerCase()) || s.phone.includes(query))
@@ -45,32 +84,97 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
     exportToCSV(`Expenses_${new Date().toISOString().slice(0, 10)}`, headers, rows)
   }
 
+  const tabs: Array<{
+    id: PurchaseSubTab
+    label: string
+    icon: React.ReactNode
+    count?: number
+  }> = [
+    {
+      id: 'suppliers',
+      label: 'Supplier Accounts & Ledgers',
+      icon: <Briefcase className="w-4 h-4" />,
+      count: db.suppliers.length,
+    },
+    {
+      id: 'purchases',
+      label: 'Raw Material Purchases',
+      icon: <ShoppingBag className="w-4 h-4" />,
+      count: db.purchases.length,
+    },
+    {
+      id: 'returns',
+      label: 'Returns & Defects',
+      icon: <RotateCcw className="w-4 h-4" />,
+      count: db.returns.length,
+    },
+    {
+      id: 'expenses',
+      label: 'Factory Expenses',
+      icon: <CircleDollarSign className="w-4 h-4" />,
+      count: db.expenses.length,
+    },
+  ]
+
   return (
     <div className="page-stack">
+      {/* Top Purchase Horizontal Navigation Bar */}
+      <div className="bg-white rounded-xl border border-stone-200 p-2 shadow-xs sticky top-[71px] z-20">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          {tabs.map((t) => {
+            const isActive = currentView === t.id
+            return (
+              <button
+                key={t.id}
+                id={`purchase-tab-${t.id}`}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-primary text-white shadow-xs font-bold'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                }`}
+              >
+                {t.icon}
+                <span>{t.label}</span>
+                {t.count !== undefined && (
+                  <span
+                    className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-md ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="page-heading">
         <div>
           <p className="eyebrow">Procurement & Expenditures</p>
           <h1>
-            {activeSubView === 'suppliers'
+            {currentView === 'suppliers'
               ? 'Supplier Accounts & Ledgers'
-              : activeSubView === 'purchases'
+              : currentView === 'purchases'
               ? 'Raw Material Purchases'
-              : activeSubView === 'expenses'
+              : currentView === 'expenses'
               ? 'Factory Expenses & Overheads'
               : 'Returns & Damaged Goods'}
           </h1>
           <p className="subheading">
-            {activeSubView === 'suppliers'
+            {currentView === 'suppliers'
               ? 'Vendors supplying sugar, preforms, labels, juice concentrates, and packaging.'
-              : activeSubView === 'purchases'
+              : currentView === 'purchases'
               ? 'Purchase orders automatically increment raw material stock and update vendor payable ledgers.'
-              : activeSubView === 'expenses'
+              : currentView === 'expenses'
               ? 'Direct factory utilities, bottling wages, diesel generator fuel, transport, and maintenance.'
               : 'Log and track distributor defective bottle returns and warehouse batch adjustments.'}
           </p>
         </div>
         <div className="heading-actions">
-          {activeSubView === 'suppliers' && (
+          {currentView === 'suppliers' && (
             <>
               <button className="button secondary" onClick={handleExportSuppliers}>
                 <Download /> Export CSV
@@ -80,7 +184,7 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
               </button>
             </>
           )}
-          {activeSubView === 'purchases' && (
+          {currentView === 'purchases' && (
             <>
               <button className="button secondary" onClick={handleExportPurchases}>
                 <Download /> Export CSV
@@ -90,7 +194,7 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
               </button>
             </>
           )}
-          {activeSubView === 'expenses' && (
+          {currentView === 'expenses' && (
             <>
               <button className="button secondary" onClick={handleExportExpenses}>
                 <Download /> Export CSV
@@ -100,7 +204,7 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
               </button>
             </>
           )}
-          {activeSubView === 'returns' && (
+          {currentView === 'returns' && (
             <button className="button primary" onClick={() => setIsCreatingReturn(true)}>
               <Plus /> Record Return / Defect
             </button>
@@ -144,7 +248,7 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
       </div>
 
       {/* VIEW: SUPPLIERS */}
-      {activeSubView === 'suppliers' && (
+      {currentView === 'suppliers' && (
         <div className="panel table-panel">
           <div className="table-scroll">
             <table>
@@ -218,7 +322,7 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
       )}
 
       {/* VIEW: PURCHASES */}
-      {activeSubView === 'purchases' && (
+      {currentView === 'purchases' && (
         <div className="panel table-panel">
           <div className="table-scroll">
             <table>
@@ -280,7 +384,7 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
       )}
 
       {/* VIEW: EXPENSES */}
-      {activeSubView === 'expenses' && (
+      {currentView === 'expenses' && (
         <div className="panel table-panel">
           <div className="table-scroll">
             <table>
@@ -332,7 +436,7 @@ export default function ProcurementView({ db, activeSubView, onSaveDatabase }: P
       )}
 
       {/* VIEW: RETURNS */}
-      {activeSubView === 'returns' && (
+      {currentView === 'returns' && (
         <div className="panel table-panel">
           <div className="table-scroll">
             <table>

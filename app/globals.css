@@ -1584,16 +1584,36 @@ tbody tr:hover {
 }
 
 /* Print Optimization */
+@media screen {
+  .pos-print-only {
+    display: none !important;
+  }
+}
+
 @media print {
-  .sidebar, .topbar, .mobile-tabs, .heading-actions, .module-toolbar, .row-actions, .banner-reminder {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .sidebar, .topbar, .mobile-tabs, .heading-actions, .module-toolbar, .row-actions, .banner-reminder, .pos-no-print, .editor-overlay {
     display: none !important;
   }
   .main-area, .content {
     padding: 0 !important;
+    margin: 0 !important;
     max-width: 100% !important;
   }
   .panel, .table-panel {
     border: 0 !important;
     box-shadow: none !important;
+  }
+  .pos-print-only {
+    display: block !important;
+    width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 4mm !important;
+    font-family: monospace, sans-serif !important;
+    font-size: 11px !important;
+    color: #000 !important;
   }
 }

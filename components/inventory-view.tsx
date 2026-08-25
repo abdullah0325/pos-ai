@@ -1,8 +1,48 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Search, Package, Boxes, AlertTriangle, Edit, Trash2, ArrowDownCircle, ArrowUpCircle, X, Download, FileText } from 'lucide-react'
-import { formatPKR, formatDate, type AppDatabase, type ProductItem, type RawMaterialItem, type ProductCategory, type RawMaterialCategory, type Status } from '@/lib/db'
+import { useState, useMemo, useRef } from 'react'
+import Image from 'next/image'
+import {
+  Plus,
+  Search,
+  Package,
+  Boxes,
+  AlertTriangle,
+  Edit,
+  Trash2,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  X,
+  Download,
+  FileText,
+  Tag,
+  Eye,
+  ImageIcon,
+  Receipt,
+  Check,
+  Layers,
+  TrendingUp,
+  Percent,
+  SlidersHorizontal,
+  FolderPlus,
+  UploadCloud,
+  CheckCircle2,
+  ShoppingBag,
+  Factory,
+  Building2,
+  Sparkles,
+} from 'lucide-react'
+import {
+  formatPKR,
+  formatDate,
+  fileToBase64,
+  type AppDatabase,
+  type ProductItem,
+  type RawMaterialItem,
+  type CategoryItem,
+  type RawMaterialCategory,
+  type Status,
+} from '@/lib/db'
 import { exportToCSV, generateStockReportPDF } from '@/lib/pdf-export'
 
 interface InventoryViewProps {
@@ -14,46 +54,139 @@ interface InventoryViewProps {
 export default function InventoryView({ db, activeSubView, onSaveDatabase }: InventoryViewProps) {
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
+  const [stockStatusFilter, setStockStatusFilter] = useState<'All' | 'In stock' | 'Low stock' | 'Out of stock'>('All')
+  const [sourceFilter, setSourceFilter] = useState<'All' | 'Manufactured' | 'Purchased'>('All')
+  const [sortBy, setSortBy] = useState<'name' | 'stock' | 'costPrice' | 'wholesalePrice' | 'retailPrice' | 'valuation'>('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+
+  // Modals state
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null)
+  const [viewProductDetails, setViewProductDetails] = useState<ProductItem | null>(null)
   const [selectedRawMaterial, setSelectedRawMaterial] = useState<RawMaterialItem | null>(null)
   const [isCreatingProduct, setIsCreatingProduct] = useState(false)
   const [isCreatingRaw, setIsCreatingRaw] = useState(false)
-  const [stockAdjustmentItem, setStockAdjustmentItem] = useState<{ id: string; name: string; current: number; type: 'product' | 'raw' } | null>(null)
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
+  const [stockAdjustmentItem, setStockAdjustmentItem] = useState<{
+    id: string
+    name: string
+    current: number
+    type: 'product' | 'raw'
+  } | null>(null)
 
-  // Products filter
-  const filteredProducts = db.products.filter((p) => {
-    const matchQ = p.name.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase())
-    const matchCat = categoryFilter === 'All' || p.category === categoryFilter
-    return matchQ && matchCat
-  })
+  const categories = db.categories || []
+
+  // Products filtering & sorting
+  const filteredProducts = useMemo(() => {
+    let result = db.products.filter((p) => {
+      const matchQ =
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.sku.toLowerCase().includes(query.toLowerCase()) ||
+        (p.description && p.description.toLowerCase().includes(query.toLowerCase())) ||
+        p.category.toLowerCase().includes(query.toLowerCase())
+
+      const matchCat = categoryFilter === 'All' || p.category === categoryFilter
+
+      const matchStock =
+        stockStatusFilter === 'All' ||
+        (stockStatusFilter === 'In stock' && p.quantity > p.reorderLevel) ||
+        (stockStatusFilter === 'Low stock' && p.quantity > 0 && p.quantity <= p.reorderLevel) ||
+        (stockStatusFilter === 'Out of stock' && p.quantity <= 0)
+
+      const matchSource =
+        sourceFilter === 'All' ||
+        (sourceFilter === 'Purchased' && p.isPurchasedProduct) ||
+        (sourceFilter === 'Manufactured' && !p.isPurchasedProduct)
+
+      return matchQ && matchCat && matchStock && matchSource
+    })
+
+    result.sort((a, b) => {
+      let valA: any = a.name.toLowerCase()
+      let valB: any = b.name.toLowerCase()
+
+      if (sortBy === 'stock') {
+        valA = a.quantity
+        valB = b.quantity
+      } else if (sortBy === 'costPrice') {
+        valA = a.costPrice
+        valB = b.costPrice
+      } else if (sortBy === 'wholesalePrice') {
+        valA = a.wholesalePrice
+        valB = b.wholesalePrice
+      } else if (sortBy === 'retailPrice') {
+        valA = a.retailPrice
+        valB = b.retailPrice
+      } else if (sortBy === 'valuation') {
+        valA = a.totalCost !== undefined ? a.totalCost : a.quantity * a.costPrice
+        valB = b.totalCost !== undefined ? b.totalCost : b.quantity * b.costPrice
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return result
+  }, [db.products, query, categoryFilter, stockStatusFilter, sourceFilter, sortBy, sortOrder])
 
   // Raw materials filter
-  const filteredRaw = db.rawMaterials.filter((r) => {
-    const matchQ = r.name.toLowerCase().includes(query.toLowerCase()) || r.sku.toLowerCase().includes(query.toLowerCase())
-    const matchCat = categoryFilter === 'All' || r.category === categoryFilter
-    return matchQ && matchCat
-  })
+  const filteredRaw = useMemo(() => {
+    return db.rawMaterials.filter((r) => {
+      const matchQ =
+        r.name.toLowerCase().includes(query.toLowerCase()) ||
+        r.sku.toLowerCase().includes(query.toLowerCase())
+      const matchCat = categoryFilter === 'All' || r.category === categoryFilter
+      return matchQ && matchCat
+    })
+  }, [db.rawMaterials, query, categoryFilter])
 
   // Export CSV helpers
   const exportProductsCSV = () => {
-    const headers = ['SKU', 'Product Name', 'Category', 'Unit', 'Stock Qty', 'Cost Price (Rs)', 'Wholesale Price (Rs)', 'Retail Price (Rs)', 'Stock Value (Rs)', 'Status']
+    const headers = [
+      'SKU',
+      'Product Name',
+      'Category',
+      'Size/Unit',
+      'Packing Unit',
+      'Stock Qty',
+      'Cost Price (Rs)',
+      'Wholesale Price (Rs)',
+      'Wholesale Min Qty',
+      'Retail Price (Rs)',
+      'Total Valuation (Rs)',
+      'Sourcing',
+      'Status',
+    ]
     const rows = db.products.map((p) => [
       p.sku,
       p.name,
       p.category,
+      p.size ? `${p.size} ${p.sizeUnit || ''}`.trim() : '—',
       p.unit,
       p.quantity,
       p.costPrice,
       p.wholesalePrice,
+      p.wholesaleMinQty || '—',
       p.retailPrice,
-      p.quantity * p.costPrice,
+      p.totalCost !== undefined ? p.totalCost : p.quantity * p.costPrice,
+      p.isPurchasedProduct ? 'Purchased (Trading)' : 'Manufactured In-house',
       p.status,
     ])
     exportToCSV(`Finished_Products_${new Date().toISOString().slice(0, 10)}`, headers, rows)
   }
 
   const exportRawCSV = () => {
-    const headers = ['SKU', 'Material Name', 'Category', 'Stock Qty', 'Unit', 'Unit Cost (Rs)', 'Total Value (Rs)', 'Supplier', 'Status']
+    const headers = [
+      'SKU',
+      'Material Name',
+      'Category',
+      'Stock Qty',
+      'Unit',
+      'Unit Cost (Rs)',
+      'Total Value (Rs)',
+      'Supplier',
+      'Status',
+    ]
     const rows = db.rawMaterials.map((r) => [
       r.sku,
       r.name,
@@ -69,9 +202,13 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
   }
 
   // Delete product
-  const handleDeleteProduct = (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return
-    onSaveDatabase({ ...db, products: db.products.filter((p) => p.id !== id) })
+  const handleDeleteProduct = (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${name}"?`)) return
+    onSaveDatabase({
+      ...db,
+      products: db.products.filter((p) => p.id !== id),
+    })
+    if (viewProductDetails?.id === id) setViewProductDetails(null)
   }
 
   // Delete raw material
@@ -89,9 +226,13 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       const updatedProducts = db.products.map((p) => {
         if (p.id === stockAdjustmentItem.id) {
           const newQty = Math.max(0, p.quantity + delta)
+          const newTotal = p.isManualTotalCost && p.totalCost !== undefined
+            ? p.totalCost
+            : newQty * p.costPrice
           return {
             ...p,
             quantity: newQty,
+            totalCost: newTotal,
             status: (newQty <= 0 ? 'Out of stock' : newQty <= p.reorderLevel ? 'Low stock' : 'In stock') as Status,
             updatedAt: now,
           }
@@ -117,48 +258,83 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
     setStockAdjustmentItem(null)
   }
 
+  // Category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    db.products.forEach((p) => {
+      counts[p.category] = (counts[p.category] || 0) + 1
+    })
+    return counts
+  }, [db.products])
+
+  const totalFinishedStockValuation = db.products.reduce(
+    (sum, p) => sum + (p.totalCost !== undefined ? p.totalCost : p.quantity * p.costPrice),
+    0
+  )
+
+  const lowStockCount = db.products.filter((p) => p.quantity <= p.reorderLevel).length
+
   return (
-    <div className="page-stack">
+    <div className="page-stack" id="inventory-view-module">
       {/* Heading */}
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Inventory & Warehousing</p>
+          <p className="eyebrow">Inventory & Product Catalog</p>
           <h1>
             {activeSubView === 'products'
-              ? 'Finished Goods Inventory'
+              ? 'Finished Products & Catalog'
               : activeSubView === 'raw-materials'
               ? 'Raw Materials Management'
-              : 'Warehouse Stock In & Out'}
+              : 'Warehouse Stock Ledger'}
           </h1>
           <p className="subheading">
             {activeSubView === 'products'
-              ? 'Bottled mineral water, fruit juices, candy, toffee & snack packs ready for dispatch.'
+              ? 'Manage finished juices, bottled mineral waters, confectionery, wholesale tiers & product images.'
               : activeSubView === 'raw-materials'
               ? 'Sugar, concentrates, packaging boxes, PET preforms, and flavorings.'
               : 'Comprehensive inventory ledger, low-stock reorder triggers, and manual batch adjustments.'}
           </p>
         </div>
         <div className="heading-actions">
-          <button className="button secondary" onClick={() => generateStockReportPDF(db.products, db.rawMaterials)}>
-            <FileText /> Stock PDF
+          <button
+            className="button secondary"
+            onClick={() => generateStockReportPDF(db.products, db.rawMaterials)}
+            id="btn-stock-pdf"
+          >
+            <FileText className="w-4 h-4" /> Stock PDF
           </button>
           {activeSubView === 'products' && (
             <>
-              <button className="button secondary" onClick={exportProductsCSV}>
-                <Download /> CSV
+              <button
+                className="button secondary"
+                onClick={() => setIsManagingCategories(true)}
+                id="btn-manage-categories"
+              >
+                <Tag className="w-4 h-4" /> Manage Categories
               </button>
-              <button className="button primary" onClick={() => setIsCreatingProduct(true)}>
-                <Plus /> Add Product SKU
+              <button className="button secondary" onClick={exportProductsCSV} id="btn-export-products-csv">
+                <Download className="w-4 h-4" /> CSV
+              </button>
+              <button
+                className="button primary"
+                onClick={() => setIsCreatingProduct(true)}
+                id="btn-add-product"
+              >
+                <Plus className="w-4 h-4" /> Add Product
               </button>
             </>
           )}
           {activeSubView === 'raw-materials' && (
             <>
-              <button className="button secondary" onClick={exportRawCSV}>
-                <Download /> CSV
+              <button className="button secondary" onClick={exportRawCSV} id="btn-export-raw-csv">
+                <Download className="w-4 h-4" /> CSV
               </button>
-              <button className="button primary" onClick={() => setIsCreatingRaw(true)}>
-                <Plus /> Add Raw Material
+              <button
+                className="button primary"
+                onClick={() => setIsCreatingRaw(true)}
+                id="btn-add-raw-material"
+              >
+                <Plus className="w-4 h-4" /> Add Raw Material
               </button>
             </>
           )}
@@ -167,153 +343,342 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
 
       {/* KPI Stats */}
       <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total Finished Product Stock Value</div>
-          <strong>
-            {formatPKR(db.products.reduce((sum, p) => sum + p.quantity * p.costPrice, 0))}
-          </strong>
-          <span className="stat-change text-emerald-700">{db.products.length} registered SKUs</span>
+        <div className="stat-card" id="kpi-total-valuation">
+          <div className="stat-label">Finished Products Valuation</div>
+          <strong>{formatPKR(totalFinishedStockValuation)}</strong>
+          <span className="stat-change text-emerald-700">{db.products.length} registered products</span>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-label">Raw Material Inventory Value</div>
-          <strong>
-            {formatPKR(db.rawMaterials.reduce((sum, r) => sum + r.quantity * r.unitCost, 0))}
-          </strong>
-          <span className="stat-change text-purple-700">{db.rawMaterials.length} essential materials</span>
+        <div className="stat-card" id="kpi-categories-stat">
+          <div className="stat-label">Active Categories</div>
+          <strong>{categories.length} Categories</strong>
+          <span className="stat-change text-blue-700">Juices, Water, Confectionery & more</span>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-label">Critical Low Stock SKUs</div>
-          <strong className="text-amber-700">
-            {db.products.filter((p) => p.quantity <= p.reorderLevel).length +
-              db.rawMaterials.filter((r) => r.quantity <= r.reorderLevel).length}
+        <div className="stat-card" id="kpi-low-stock-alert">
+          <div className="stat-label">Low Stock Alerts</div>
+          <strong className={lowStockCount > 0 ? 'text-amber-700' : 'text-gray-900'}>
+            {lowStockCount} Products
           </strong>
-          <span className="stat-change text-amber-700">Below plant reorder safety limit</span>
+          <span className="stat-change text-amber-700">
+            {lowStockCount > 0 ? 'Below safety reorder threshold' : 'All SKUs above safety limit'}
+          </span>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-label">Factory Stock Status</div>
-          <strong className="text-emerald-700">Operational</strong>
-          <span className="stat-change">Real-time sync verified</span>
+        <div className="stat-card" id="kpi-sourcing-stat">
+          <div className="stat-label">Product Sourcing Breakdown</div>
+          <strong className="text-emerald-700">
+            {db.products.filter((p) => !p.isPurchasedProduct).length} In-House / {db.products.filter((p) => p.isPurchasedProduct).length} Outsourced
+          </strong>
+          <span className="stat-change">100% offline database synchronized</span>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="module-toolbar">
-        <div className="flex items-center gap-3">
-          <div className="search-box">
-            <Search />
+      {/* Toolbar & Multi-Filters */}
+      <div className="module-toolbar flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-[260px]">
+          <div className="search-box flex-1">
+            <Search className="w-4 h-4 text-gray-400" />
             <input
-              placeholder="Search by name or SKU..."
+              placeholder="Search by product name, SKU, category, or notes..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              id="input-product-search"
             />
+            {query && (
+              <button
+                type="button"
+                className="text-gray-400 hover:text-gray-600 mr-2 text-xs"
+                onClick={() => setQuery('')}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Category Dropdown Filter */}
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-gray-500 font-medium hidden sm:inline">Category:</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+              id="filter-category"
+            >
+              <option value="All">All Categories ({db.products.length})</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name} {categoryCounts[c.name] ? `(${categoryCounts[c.name]})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white"
-          >
-            <option value="All">All Categories</option>
-            {activeSubView === 'products' || activeSubView === 'stock' ? (
-              <>
-                <option value="Mineral Water">Mineral Water</option>
-                <option value="Fruit Juice">Fruit Juice</option>
-                <option value="Candy & Toffee">Candy & Toffee</option>
-                <option value="Potato Chips">Potato Chips</option>
-                <option value="Snacks">Snacks</option>
-              </>
-            ) : (
-              <>
-                <option value="Ingredients">Ingredients</option>
-                <option value="Packaging">Packaging</option>
-                <option value="Flavor & Concentrate">Flavor & Concentrate</option>
-                <option value="Chemicals & Minerals">Chemicals & Minerals</option>
-              </>
-            )}
-          </select>
+          {activeSubView === 'products' && (
+            <>
+              {/* Stock Status Filter */}
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-500 font-medium hidden sm:inline">Stock:</span>
+                <select
+                  value={stockStatusFilter}
+                  onChange={(e) => setStockStatusFilter(e.target.value as any)}
+                  className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+                  id="filter-stock-status"
+                >
+                  <option value="All">All Stock Levels</option>
+                  <option value="In stock">In Stock</option>
+                  <option value="Low stock">Low Stock Alert</option>
+                  <option value="Out of stock">Out of Stock</option>
+                </select>
+              </div>
+
+              {/* Sourcing Filter */}
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-500 font-medium hidden sm:inline">Source:</span>
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value as any)}
+                  className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+                  id="filter-sourcing"
+                >
+                  <option value="All">All Sources</option>
+                  <option value="Manufactured">Manufactured In-House</option>
+                  <option value="Purchased">Purchased / Outsourced</option>
+                </select>
+              </div>
+
+              {/* Sorting */}
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-500 font-medium hidden sm:inline">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+                  id="sort-by-select"
+                >
+                  <option value="name">Product Name</option>
+                  <option value="stock">Stock Quantity</option>
+                  <option value="costPrice">Cost Price</option>
+                  <option value="wholesalePrice">Wholesale Price</option>
+                  <option value="retailPrice">Retail Price</option>
+                  <option value="valuation">Total Stock Value</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                  className="border border-[var(--border)] rounded-md px-2 py-1.5 text-xs bg-white hover:bg-gray-50 font-mono"
+                  title="Toggle Ascending / Descending"
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* VIEW: FINISHED PRODUCTS */}
       {activeSubView === 'products' && (
-        <div className="panel table-panel">
+        <div className="panel table-panel" id="finished-products-panel">
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Product SKU & Name</th>
+                  <th>Product & Image</th>
+                  <th>SKU Code</th>
                   <th>Category</th>
+                  <th>Size / Unit</th>
                   <th>Available Stock</th>
-                  <th>Cost Price</th>
-                  <th>Wholesale Rate</th>
+                  <th>Cost Rate</th>
+                  <th>Wholesale Rate (Min Limit)</th>
                   <th>Retail Rate</th>
-                  <th>Total Stock Value</th>
+                  <th>Total Valuation</th>
                   <th>Status</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-[#7cb518]" />
-                        <div>
-                          <div className="font-bold text-gray-900">{p.name}</div>
-                          <div className="text-[11px] text-gray-500 font-mono">{p.sku}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">{p.category}</span>
-                    </td>
-                    <td>
-                      <span className="font-bold text-gray-900">
-                        {p.quantity} {p.unit}
-                      </span>
-                      {p.quantity <= p.reorderLevel && (
-                        <span className="text-[10px] text-amber-600 font-bold block">Reorder at {p.reorderLevel}</span>
-                      )}
-                    </td>
-                    <td>{formatPKR(p.costPrice)}</td>
-                    <td className="font-semibold text-[#7cb518]">{formatPKR(p.wholesalePrice)}</td>
-                    <td className="font-semibold text-gray-800">{formatPKR(p.retailPrice)}</td>
-                    <td className="font-bold text-gray-900">{formatPKR(p.quantity * p.costPrice)}</td>
-                    <td>
-                      <span
-                        className={
-                          p.status === 'In stock'
-                            ? 'status status-success'
-                            : p.status === 'Low stock'
-                            ? 'status status-warning'
-                            : 'status status-danger'
-                        }
-                      >
-                        {p.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="row-actions">
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="text-center py-12 text-gray-500">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Package className="w-8 h-8 text-gray-300" />
+                        <p className="text-sm font-medium">No products match your search or filter criteria.</p>
                         <button
-                          className="row-action text-[#7cb518]"
-                          title="Quick Stock Adjust"
-                          onClick={() => setStockAdjustmentItem({ id: p.id, name: p.name, current: p.quantity, type: 'product' })}
+                          className="button primary text-xs mt-2"
+                          onClick={() => setIsCreatingProduct(true)}
                         >
-                          <ArrowUpCircle />
-                        </button>
-                        <button className="row-action" title="Edit product" onClick={() => setSelectedProduct(p)}>
-                          <Edit />
-                        </button>
-                        <button className="row-action danger" title="Delete product" onClick={() => handleDeleteProduct(p.id)}>
-                          <Trash2 />
+                          <Plus className="w-3.5 h-3.5" /> Add New Product
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredProducts.map((p) => {
+                    const isLow = p.quantity <= p.reorderLevel
+                    const isOut = p.quantity <= 0
+                    const totalVal = p.totalCost !== undefined ? p.totalCost : p.quantity * p.costPrice
+
+                    return (
+                      <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
+                        <td>
+                          <div className="flex items-center gap-3">
+                            {/* Product Image Thumbnail */}
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0 flex items-center justify-center relative">
+                              {p.imageUrl ? (
+                                <img
+                                  src={p.imageUrl}
+                                  alt={p.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Package className="w-5 h-5 text-[#7cb518]" />
+                              )}
+                            </div>
+                            <div>
+                              <button
+                                type="button"
+                                className="font-bold text-gray-900 text-left hover:text-[#7cb518] transition-colors line-clamp-1"
+                                onClick={() => setViewProductDetails(p)}
+                              >
+                                {p.name}
+                              </button>
+                              <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                                {p.isPurchasedProduct ? (
+                                  <span className="inline-flex items-center gap-0.5 text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded font-medium text-[10px]">
+                                    <Building2 className="w-2.5 h-2.5" /> Purchased
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-0.5 text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium text-[10px]">
+                                    <Factory className="w-2.5 h-2.5" /> In-House
+                                  </span>
+                                )}
+                                {p.purchaseInvoiceImage && (
+                                  <span className="text-amber-700 bg-amber-50 px-1 rounded text-[10px] inline-flex items-center gap-0.5">
+                                    <Receipt className="w-2.5 h-2.5" /> Invoice
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="font-mono text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                            {p.sku}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="text-xs bg-emerald-50 text-emerald-800 font-medium px-2 py-0.5 rounded border border-emerald-200/60">
+                            {p.category}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="text-xs text-gray-700">
+                            {p.size ? (
+                              <strong>
+                                {p.size} {p.sizeUnit || ''} •{' '}
+                              </strong>
+                            ) : null}
+                            {p.unit}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex items-baseline gap-1.5">
+                            <span
+                              className={`font-bold ${
+                                isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-gray-900'
+                              }`}
+                            >
+                              {p.quantity} {p.unit}
+                            </span>
+                          </div>
+                          {isLow && !isOut && (
+                            <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-0.5">
+                              <AlertTriangle className="w-2.5 h-2.5" /> Low (Alert: {p.reorderLevel})
+                            </span>
+                          )}
+                          {isOut && (
+                            <span className="text-[10px] text-rose-600 font-bold">Out of stock</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className="text-gray-700 text-xs font-medium">{formatPKR(p.costPrice)}</span>
+                        </td>
+                        <td>
+                          <div className="font-semibold text-[#7cb518] text-xs">{formatPKR(p.wholesalePrice)}</div>
+                          {p.wholesaleMinQty ? (
+                            <div className="text-[10px] text-gray-500 font-normal">
+                              Min {p.wholesaleMinQty} {p.unit}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>
+                          <span className="font-semibold text-gray-900 text-xs">{formatPKR(p.retailPrice)}</span>
+                        </td>
+                        <td>
+                          <span className="font-bold text-gray-900 text-xs">{formatPKR(totalVal)}</span>
+                          {p.isManualTotalCost && (
+                            <span className="text-[9px] text-purple-600 block font-medium">(manual overriden)</span>
+                          )}
+                        </td>
+                        <td>
+                          <span
+                            className={
+                              isOut
+                                ? 'status status-danger'
+                                : isLow
+                                ? 'status status-warning'
+                                : 'status status-success'
+                            }
+                          >
+                            {isOut ? 'Out of stock' : isLow ? 'Low stock' : 'In stock'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="row-actions justify-end">
+                            <button
+                              className="row-action text-gray-600 hover:text-gray-900"
+                              title="View Full Product Specifications"
+                              onClick={() => setViewProductDetails(p)}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              className="row-action text-[#7cb518] hover:text-[#6a9e14]"
+                              title="Quick Stock In / Out Adjustment"
+                              onClick={() =>
+                                setStockAdjustmentItem({
+                                  id: p.id,
+                                  name: p.name,
+                                  current: p.quantity,
+                                  type: 'product',
+                                })
+                              }
+                            >
+                              <ArrowUpCircle className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              className="row-action text-blue-600 hover:text-blue-800"
+                              title="Edit product"
+                              onClick={() => setSelectedProduct(p)}
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              className="row-action danger"
+                              title="Delete product"
+                              onClick={() => handleDeleteProduct(p.id, p.name)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -322,7 +687,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
 
       {/* VIEW: RAW MATERIALS */}
       {activeSubView === 'raw-materials' && (
-        <div className="panel table-panel">
+        <div className="panel table-panel" id="raw-materials-panel">
           <div className="table-scroll">
             <table>
               <thead>
@@ -357,7 +722,9 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                         {r.quantity} {r.unit}
                       </span>
                       {r.quantity <= r.reorderLevel && (
-                        <span className="text-[10px] text-amber-600 font-bold block">Low threshold: {r.reorderLevel} {r.unit}</span>
+                        <span className="text-[10px] text-amber-600 font-bold block">
+                          Low threshold: {r.reorderLevel} {r.unit}
+                        </span>
                       )}
                     </td>
                     <td>{formatPKR(r.unitCost)}</td>
@@ -381,14 +748,29 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                         <button
                           className="row-action text-purple-600"
                           title="Quick Stock Adjust"
-                          onClick={() => setStockAdjustmentItem({ id: r.id, name: r.name, current: r.quantity, type: 'raw' })}
+                          onClick={() =>
+                            setStockAdjustmentItem({
+                              id: r.id,
+                              name: r.name,
+                              current: r.quantity,
+                              type: 'raw',
+                            })
+                          }
                         >
                           <ArrowUpCircle />
                         </button>
-                        <button className="row-action" title="Edit material" onClick={() => setSelectedRawMaterial(r)}>
+                        <button
+                          className="row-action"
+                          title="Edit material"
+                          onClick={() => setSelectedRawMaterial(r)}
+                        >
                           <Edit />
                         </button>
-                        <button className="row-action danger" title="Delete material" onClick={() => handleDeleteRaw(r.id)}>
+                        <button
+                          className="row-action danger"
+                          title="Delete material"
+                          onClick={() => handleDeleteRaw(r.id)}
+                        >
                           <Trash2 />
                         </button>
                       </div>
@@ -403,12 +785,12 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
 
       {/* VIEW: STOCK OVERVIEW & MOVEMENTS */}
       {activeSubView === 'stock' && (
-        <div className="space-y-6">
+        <div className="space-y-6" id="stock-ledger-panel">
           <div className="panel">
             <div className="panel-heading mb-3">
               <div>
                 <h2>Finished Goods Stock Register</h2>
-                <p>Real-time count of completed manufacturing inventory</p>
+                <p>Real-time count of completed manufacturing and trading inventory</p>
               </div>
             </div>
             <div className="table-scroll">
@@ -427,22 +809,49 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                 <tbody>
                   {db.products.map((p) => (
                     <tr key={p.id}>
-                      <td className="font-semibold text-gray-900">{p.name}</td>
+                      <td className="font-semibold text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-[#7cb518]" />
+                          <div>
+                            <div>{p.name}</div>
+                            <div className="text-[11px] text-gray-500 font-mono">{p.sku}</div>
+                          </div>
+                        </div>
+                      </td>
                       <td>{p.category}</td>
                       <td className="font-bold text-gray-900">
                         {p.quantity} {p.unit}
                       </td>
-                      <td className="text-gray-500">{p.reorderLevel} {p.unit}</td>
-                      <td className="font-bold">{formatPKR(p.quantity * p.costPrice)}</td>
+                      <td className="text-gray-500">
+                        {p.reorderLevel} {p.unit}
+                      </td>
+                      <td className="font-bold">
+                        {formatPKR(p.totalCost !== undefined ? p.totalCost : p.quantity * p.costPrice)}
+                      </td>
                       <td>
-                        <span className={p.quantity <= p.reorderLevel ? 'status status-warning' : 'status status-success'}>
-                          {p.status}
+                        <span
+                          className={
+                            p.quantity <= 0
+                              ? 'status status-danger'
+                              : p.quantity <= p.reorderLevel
+                              ? 'status status-warning'
+                              : 'status status-success'
+                          }
+                        >
+                          {p.quantity <= 0 ? 'Out of stock' : p.quantity <= p.reorderLevel ? 'Low stock' : 'In stock'}
                         </span>
                       </td>
                       <td className="text-right">
                         <button
                           className="button secondary text-xs py-1 h-auto"
-                          onClick={() => setStockAdjustmentItem({ id: p.id, name: p.name, current: p.quantity, type: 'product' })}
+                          onClick={() =>
+                            setStockAdjustmentItem({
+                              id: p.id,
+                              name: p.name,
+                              current: p.quantity,
+                              type: 'product',
+                            })
+                          }
                         >
                           Adjust Qty
                         </button>
@@ -482,17 +891,30 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                       <td className="font-bold text-gray-900">
                         {r.quantity} {r.unit}
                       </td>
-                      <td className="text-gray-500">{r.reorderLevel} {r.unit}</td>
+                      <td className="text-gray-500">
+                        {r.reorderLevel} {r.unit}
+                      </td>
                       <td className="font-bold">{formatPKR(r.quantity * r.unitCost)}</td>
                       <td>
-                        <span className={r.quantity <= r.reorderLevel ? 'status status-warning' : 'status status-success'}>
+                        <span
+                          className={
+                            r.quantity <= r.reorderLevel ? 'status status-warning' : 'status status-success'
+                          }
+                        >
                           {r.status}
                         </span>
                       </td>
                       <td className="text-right">
                         <button
                           className="button secondary text-xs py-1 h-auto"
-                          onClick={() => setStockAdjustmentItem({ id: r.id, name: r.name, current: r.quantity, type: 'raw' })}
+                          onClick={() =>
+                            setStockAdjustmentItem({
+                              id: r.id,
+                              name: r.name,
+                              current: r.quantity,
+                              type: 'raw',
+                            })
+                          }
                         >
                           Adjust Qty
                         </button>
@@ -510,6 +932,8 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       {(isCreatingProduct || selectedProduct) && (
         <ProductEditorModal
           product={selectedProduct}
+          categories={categories}
+          existingProducts={db.products}
           onClose={() => {
             setIsCreatingProduct(false)
             setSelectedProduct(null)
@@ -528,6 +952,31 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
             }
             setIsCreatingProduct(false)
             setSelectedProduct(null)
+          }}
+          onOpenCategoryManager={() => setIsManagingCategories(true)}
+        />
+      )}
+
+      {/* Product Details Drawer/Modal */}
+      {viewProductDetails && (
+        <ProductDetailsModal
+          product={viewProductDetails}
+          onClose={() => setViewProductDetails(null)}
+          onEdit={() => {
+            setSelectedProduct(viewProductDetails)
+            setViewProductDetails(null)
+          }}
+          onDelete={() => {
+            handleDeleteProduct(viewProductDetails.id, viewProductDetails.name)
+          }}
+          onStockAdjust={() => {
+            setStockAdjustmentItem({
+              id: viewProductDetails.id,
+              name: viewProductDetails.name,
+              current: viewProductDetails.quantity,
+              type: 'product',
+            })
+            setViewProductDetails(null)
           }}
         />
       )}
@@ -567,132 +1016,601 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
           onApply={handleApplyStockAdjustment}
         />
       )}
+
+      {/* Category Manager Modal */}
+      {isManagingCategories && (
+        <CategoryManagerModal
+          categories={categories}
+          products={db.products}
+          onClose={() => setIsManagingCategories(false)}
+          onSaveCategories={(updatedCats, updatedProds) => {
+            onSaveDatabase({
+              ...db,
+              categories: updatedCats,
+              products: updatedProds || db.products,
+            })
+          }}
+        />
+      )}
     </div>
   )
 }
 
+/* =========================================================================
+   PRODUCT EDITOR MODAL (Add / Edit Product with all requested fields)
+========================================================================= */
 function ProductEditorModal({
   product,
+  categories,
+  existingProducts,
   onClose,
   onSave,
+  onOpenCategoryManager,
 }: {
   product: ProductItem | null
+  categories: CategoryItem[]
+  existingProducts: ProductItem[]
   onClose: () => void
   onSave: (item: ProductItem) => void
+  onOpenCategoryManager: () => void
 }) {
-  const [sku, setSku] = useState(product?.sku || `PROD-${Date.now().toString().slice(-4)}`)
+  // Required fields
   const [name, setName] = useState(product?.name || '')
-  const [category, setCategory] = useState<ProductCategory>(product?.category || 'Mineral Water')
-  const [unit, setUnit] = useState(product?.unit || 'Cartons (24x500ml)')
-  const [quantity, setQuantity] = useState(product?.quantity || 100)
-  const [reorderLevel, setReorderLevel] = useState(product?.reorderLevel || 20)
-  const [costPrice, setCostPrice] = useState(product?.costPrice || 350)
-  const [wholesalePrice, setWholesalePrice] = useState(product?.wholesalePrice || 480)
-  const [retailPrice, setRetailPrice] = useState(product?.retailPrice || 600)
+  const [sku, setSku] = useState(product?.sku || `AF-${Date.now().toString().slice(-4)}`)
+
+  // Optional fields
+  const [category, setCategory] = useState<string>(
+    product?.category || categories[0]?.name || 'Mineral Water'
+  )
   const [description, setDescription] = useState(product?.description || '')
+  const [size, setSize] = useState(product?.size || '')
+  const [sizeUnit, setSizeUnit] = useState(product?.sizeUnit || 'ml')
+  const [unit, setUnit] = useState(product?.unit || 'Cartons')
+  const [quantity, setQuantity] = useState<number>(product?.quantity ?? 100)
+  const [reorderLevel, setReorderLevel] = useState<number>(product?.reorderLevel ?? 20)
+
+  // Pricing & Valuation
+  const [costPrice, setCostPrice] = useState<number>(product?.costPrice ?? 350)
+  const [wholesalePrice, setWholesalePrice] = useState<number>(product?.wholesalePrice ?? 480)
+  const [wholesaleMinQty, setWholesaleMinQty] = useState<number>(product?.wholesaleMinQty ?? 12)
+  const [retailPrice, setRetailPrice] = useState<number>(product?.retailPrice ?? 600)
+
+  // Total cost auto-calculated vs manual override
+  const [isManualTotalCost, setIsManualTotalCost] = useState(product?.isManualTotalCost || false)
+  const [manualTotalCost, setManualTotalCost] = useState<number>(
+    product?.totalCost !== undefined ? product.totalCost : (product?.quantity || 100) * (product?.costPrice || 350)
+  )
+
+  // Product Image
+  const [imageUrl, setImageUrl] = useState<string>(product?.imageUrl || '')
+  const imageFileInputRef = useRef<HTMLInputElement>(null)
+
+  // Sourcing & Purchase Invoice
+  const [isPurchasedProduct, setIsPurchasedProduct] = useState(product?.isPurchasedProduct || false)
+  const [purchaseCost, setPurchaseCost] = useState<number>(product?.purchaseCost || product?.costPrice || 0)
+  const [purchaseInvoiceImage, setPurchaseInvoiceImage] = useState<string>(product?.purchaseInvoiceImage || '')
+  const invoiceFileInputRef = useRef<HTMLInputElement>(null)
+
+  // Validation errors
+  const [error, setError] = useState<string | null>(null)
+
+  // Auto calculated total cost
+  const calculatedTotalCost = quantity * costPrice
+  const finalTotalCost = isManualTotalCost ? manualTotalCost : calculatedTotalCost
+
+  // Handle image upload
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const base64 = await fileToBase64(file)
+      setImageUrl(base64)
+    } catch (err) {
+      console.error('Failed to convert image:', err)
+    }
+  }
+
+  // Handle invoice image upload
+  const handleInvoiceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const base64 = await fileToBase64(file)
+      setPurchaseInvoiceImage(base64)
+    } catch (err) {
+      console.error('Failed to convert invoice image:', err)
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
+    setError(null)
+
+    if (!name.trim()) {
+      setError('Product Name is required.')
+      return
+    }
+
+    if (!sku.trim()) {
+      setError('SKU / Code is required.')
+      return
+    }
+
+    // Check SKU uniqueness (excluding current editing product)
+    const duplicate = existingProducts.find(
+      (p) => p.sku.toLowerCase() === sku.trim().toLowerCase() && p.id !== product?.id
+    )
+    if (duplicate) {
+      setError(`SKU "${sku}" is already assigned to "${duplicate.name}". Please use a unique SKU.`)
+      return
+    }
 
     const now = new Date().toISOString().slice(0, 10)
-    const status: Status = quantity <= 0 ? 'Out of stock' : quantity <= reorderLevel ? 'Low stock' : 'In stock'
+    const status: Status =
+      quantity <= 0 ? 'Out of stock' : quantity <= reorderLevel ? 'Low stock' : 'In stock'
 
     const saved: ProductItem = {
       id: product?.id || `prod-${Date.now()}`,
-      sku,
-      name,
-      category,
-      unit,
-      quantity,
-      reorderLevel,
-      costPrice,
-      wholesalePrice,
-      retailPrice,
+      name: name.trim(),
+      sku: sku.trim(),
+      category: category.trim(),
+      description: description.trim() || undefined,
+      size: size.trim() || undefined,
+      sizeUnit: size.trim() ? sizeUnit : undefined,
+      unit: unit.trim() || 'Cartons',
+      quantity: Number(quantity) || 0,
+      reorderLevel: Number(reorderLevel) || 0,
+      costPrice: Number(costPrice) || 0,
+      wholesalePrice: Number(wholesalePrice) || 0,
+      wholesaleMinQty: wholesaleMinQty ? Number(wholesaleMinQty) : undefined,
+      retailPrice: Number(retailPrice) || 0,
+      totalCost: Number(finalTotalCost) || 0,
+      isManualTotalCost,
+      imageUrl: imageUrl || undefined,
+      isPurchasedProduct,
+      purchaseCost: isPurchasedProduct ? Number(purchaseCost) || Number(costPrice) : undefined,
+      purchaseInvoiceImage: isPurchasedProduct ? purchaseInvoiceImage || undefined : undefined,
       status,
-      description,
       updatedAt: now,
     }
+
     onSave(saved)
   }
 
   return (
     <div className="editor-overlay">
-      <form className="editor-modal" onSubmit={handleSubmit}>
+      <form className="editor-modal large" onSubmit={handleSubmit} id="product-editor-form">
         <div className="editor-header">
           <div>
-            <p className="eyebrow">Finished Goods</p>
-            <h2>{product ? 'Edit Finished Product' : 'Add New Finished Product SKU'}</h2>
+            <p className="eyebrow">Product Management</p>
+            <h2>{product ? `Edit Product: ${product.name}` : 'Add New Product'}</h2>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
-            <X />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="form-grid">
-          <label>
-            SKU / Item Code *
-            <input value={sku} onChange={(e) => setSku(e.target.value)} required />
-          </label>
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-2.5 rounded-lg text-xs flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
-          <label>
-            Product Name *
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mineral Water 500ml" required />
-          </label>
+        <div className="space-y-6">
+          {/* SECTION 1: ESSENTIAL IDENTIFIERS */}
+          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
+            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Package className="w-3.5 h-3.5 text-[#7cb518]" /> 1. Essential Product Information
+            </h3>
+            <div className="form-grid">
+              <label className="col-span-2">
+                Product Name *
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Al-Farooq Mineral Water 500ml (24-pack)"
+                  required
+                  id="input-product-name"
+                />
+              </label>
 
-          <label>
-            Category *
-            <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
-              <option value="Mineral Water">Mineral Water</option>
-              <option value="Fruit Juice">Fruit Juice</option>
-              <option value="Candy & Toffee">Candy & Toffee</option>
-              <option value="Potato Chips">Potato Chips</option>
-              <option value="Snacks">Snacks</option>
-            </select>
-          </label>
+              <label>
+                SKU / Item Code * <span className="text-[11px] text-gray-400">(Must be unique)</span>
+                <input
+                  value={sku}
+                  onChange={(e) => setSku(e.target.value)}
+                  placeholder="e.g. AFW-500-24"
+                  required
+                  id="input-product-sku"
+                />
+              </label>
 
-          <label>
-            Unit Packing *
-            <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. Cartons (24 bottles)" required />
-          </label>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="mb-0 text-xs font-semibold text-gray-700">Category *</label>
+                  <button
+                    type="button"
+                    className="text-[11px] text-[#7cb518] hover:underline font-semibold"
+                    onClick={onOpenCategoryManager}
+                  >
+                    + Manage Categories
+                  </button>
+                </div>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+                  id="select-product-category"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <label>
-            Initial Stock Quantity
-            <input type="number" min="0" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
-          </label>
+              {/* Optional Size & Size/Unit */}
+              <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-gray-200">
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                    Product Size / Volume <span className="text-[11px] text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    value={size}
+                    onChange={(e) => setSize(e.target.value)}
+                    placeholder="e.g. 500, 1.5, 250, 100, 19"
+                    id="input-product-size"
+                  />
+                </div>
 
-          <label>
-            Reorder Level (Alert)
-            <input type="number" min="1" value={reorderLevel} onChange={(e) => setReorderLevel(Number(e.target.value))} />
-          </label>
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                    Size Unit <span className="text-[11px] text-gray-400 font-normal">(Dropdown)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={sizeUnit}
+                      onChange={(e) => setSizeUnit(e.target.value)}
+                      className="border border-[var(--border)] rounded-md px-3 py-2 text-xs bg-white w-full"
+                      id="select-product-size-unit"
+                    >
+                      <option value="ml">ml (Milliliters)</option>
+                      <option value="L">L (Liters)</option>
+                      <option value="g">g (Grams)</option>
+                      <option value="kg">kg (Kilograms)</option>
+                      <option value="oz">oz (Ounces)</option>
+                      <option value="pcs">pcs (Pieces)</option>
+                      <option value="pack">pack</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
 
-          <label>
-            Unit Cost Price (Rs)
-            <input type="number" min="0" value={costPrice} onChange={(e) => setCostPrice(Number(e.target.value))} />
-          </label>
+              <label>
+                Packaging / Dispatch Unit *
+                <select
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                  className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-xs bg-white"
+                >
+                  <option value="Cartons">Cartons</option>
+                  <option value="Bottles">Bottles</option>
+                  <option value="Packs">Packs</option>
+                  <option value="Pcs">Pcs</option>
+                  <option value="Jars">Jars</option>
+                  <option value="Boxes">Boxes</option>
+                  <option value="Bags">Bags</option>
+                  <option value="Trays">Trays</option>
+                  <option value="Crates">Crates</option>
+                </select>
+              </label>
 
-          <label>
-            Wholesale / Distributor Rate (Rs) *
-            <input type="number" min="0" value={wholesalePrice} onChange={(e) => setWholesalePrice(Number(e.target.value))} required />
-          </label>
+              <label>
+                Reorder Threshold Limit (Alert)
+                <input
+                  type="number"
+                  min="0"
+                  value={reorderLevel}
+                  onChange={(e) => setReorderLevel(Number(e.target.value))}
+                  placeholder="20"
+                />
+              </label>
 
-          <label>
-            Retail Rate (Rs) *
-            <input type="number" min="0" value={retailPrice} onChange={(e) => setRetailPrice(Number(e.target.value))} required />
-          </label>
+              <label className="col-span-2">
+                Description & Specifications <span className="text-[11px] text-gray-400 font-normal">(Optional)</span>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. 24 x 500ml shrink-wrapped bottles, pure mineral source, shelf life 12 months."
+                  id="input-product-desc"
+                />
+              </label>
+            </div>
+          </div>
 
-          <label className="col-span-2">
-            Description & Formulation Notes
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Bottle size, shelf life, specifications" />
-          </label>
+          {/* SECTION 2: STOCK & PRICING TIERS */}
+          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
+            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-[#7cb518]" /> 2. Stock Quantities & Wholesale Pricing Structure
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-3 rounded-lg border border-gray-200">
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                  Current Stock in Warehouse *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  required
+                  id="input-product-qty"
+                />
+                <span className="text-[11px] text-gray-500 mt-1 block">Unit: {unit}</span>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border border-gray-200">
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                  Actual / Base Cost Price (Rs) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={costPrice}
+                  onChange={(e) => setCostPrice(Number(e.target.value))}
+                  required
+                  id="input-product-cost-price"
+                />
+                <span className="text-[11px] text-gray-500 mt-1 block">Production / Base unit cost</span>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg border border-gray-200">
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                  Retail Selling Price (Rs) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={retailPrice}
+                  onChange={(e) => setRetailPrice(Number(e.target.value))}
+                  required
+                  id="input-product-retail-price"
+                />
+                <span className="text-[11px] text-emerald-700 font-semibold mt-1 block">
+                  Margin: {costPrice > 0 ? `${Math.round(((retailPrice - costPrice) / costPrice) * 100)}%` : '—'}
+                </span>
+              </div>
+            </div>
+
+            {/* Wholesale Price & Minimum Limit */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 bg-emerald-50/50 p-3.5 rounded-lg border border-emerald-200/60">
+              <div>
+                <label className="text-xs font-semibold text-emerald-900 mb-1 block">
+                  Wholesale Price (Rs) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={wholesalePrice}
+                  onChange={(e) => setWholesalePrice(Number(e.target.value))}
+                  required
+                  id="input-product-wholesale-price"
+                />
+                <span className="text-[11px] text-emerald-800 mt-1 block font-medium">
+                  Wholesale Margin: {costPrice > 0 ? `${Math.round(((wholesalePrice - costPrice) / costPrice) * 100)}%` : '—'}
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-emerald-900 mb-1 block">
+                  Wholesale Minimum Quantity Limit <span className="text-[11px] text-gray-500 font-normal">(Threshold)</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={wholesaleMinQty}
+                  onChange={(e) => setWholesaleMinQty(Number(e.target.value))}
+                  placeholder="e.g. 12, 24, 50"
+                  id="input-product-wholesale-min-qty"
+                />
+                <span className="text-[11px] text-emerald-800 mt-1 block">
+                  Applied when order is ≥ {wholesaleMinQty || 1} {unit}
+                </span>
+              </div>
+            </div>
+
+            {/* Total Cost: Auto vs Manual */}
+            <div className="mt-4 bg-white p-3.5 rounded-lg border border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold text-gray-800">
+                  Total Valuation: {formatPKR(finalTotalCost)}
+                </div>
+                <div className="text-[11px] text-gray-500">
+                  Auto: {quantity} {unit} × {formatPKR(costPrice)} = {formatPKR(calculatedTotalCost)}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer font-medium select-none">
+                  <input
+                    type="checkbox"
+                    checked={isManualTotalCost}
+                    onChange={(e) => {
+                      setIsManualTotalCost(e.target.checked)
+                      if (!e.target.checked) setManualTotalCost(calculatedTotalCost)
+                    }}
+                    className="rounded border-gray-300 text-[#7cb518] focus:ring-[#7cb518]"
+                  />
+                  Manual Total Cost Override
+                </label>
+
+                {isManualTotalCost && (
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualTotalCost}
+                    onChange={(e) => setManualTotalCost(Number(e.target.value))}
+                    className="w-32 py-1 px-2 text-xs border border-purple-300 rounded font-bold text-purple-900 bg-purple-50"
+                    placeholder="Manual Total"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: PRODUCT IMAGE (OFFLINE PERSISTED) */}
+          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
+            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-[#7cb518]" /> 3. Product Image <span className="text-[11px] text-gray-400 font-normal">(Offline Stored)</span>
+            </h3>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3 rounded-lg border border-gray-200">
+              <div className="w-24 h-24 rounded-lg bg-gray-100 border border-gray-300 flex items-center justify-center overflow-hidden relative flex-shrink-0">
+                {imageUrl ? (
+                  <img src={imageUrl} alt="Product Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-gray-300" />
+                )}
+              </div>
+
+              <div className="flex-1 space-y-2 text-center sm:text-left">
+                <div className="text-xs text-gray-700">
+                  {imageUrl ? (
+                    <span className="text-emerald-700 font-semibold flex items-center gap-1 justify-center sm:justify-start">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Product photo attached
+                    </span>
+                  ) : (
+                    'Upload high-resolution bottle, packaging or carton photo (saved offline).'
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 justify-center sm:justify-start">
+                  <input
+                    type="file"
+                    ref={imageFileInputRef}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageFileChange}
+                  />
+                  <button
+                    type="button"
+                    className="button secondary text-xs py-1.5"
+                    onClick={() => imageFileInputRef.current?.click()}
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" /> {imageUrl ? 'Change Image' : 'Select Image File'}
+                  </button>
+                  {imageUrl && (
+                    <button
+                      type="button"
+                      className="button secondary text-xs py-1.5 text-rose-600 hover:text-rose-700"
+                      onClick={() => setImageUrl('')}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 4: SOURCING & PURCHASE INVOICE */}
+          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5 text-[#7cb518]" /> 4. Sourcing & Purchase Invoice Attachment
+              </h3>
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-900 cursor-pointer bg-white px-3 py-1 rounded-md border border-gray-300 select-none">
+                <input
+                  type="checkbox"
+                  checked={isPurchasedProduct}
+                  onChange={(e) => setIsPurchasedProduct(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  id="checkbox-is-purchased"
+                />
+                Product was Purchased / Outsourced (Not manufactured in-house)
+              </label>
+            </div>
+
+            {isPurchasedProduct ? (
+              <div className="bg-blue-50/60 p-4 rounded-lg border border-blue-200/80 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-blue-900 mb-1 block">
+                      Purchase Cost from Supplier (Rs)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={purchaseCost}
+                      onChange={(e) => setPurchaseCost(Number(e.target.value))}
+                      placeholder="e.g. 320"
+                      className="bg-white"
+                      id="input-purchase-cost"
+                    />
+                    <span className="text-[11px] text-blue-800 mt-1 block">
+                      Acquisition cost per unit paid to vendor.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-blue-900 mb-1 block">
+                      Attach Purchase Invoice / Receipt Image
+                    </label>
+                    <input
+                      type="file"
+                      ref={invoiceFileInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleInvoiceFileChange}
+                    />
+                    <button
+                      type="button"
+                      className="button secondary text-xs w-full py-2 bg-white flex items-center justify-center gap-2"
+                      onClick={() => invoiceFileInputRef.current?.click()}
+                    >
+                      <Receipt className="w-4 h-4 text-blue-600" />
+                      {purchaseInvoiceImage ? 'Replace Invoice Image' : 'Upload Purchase Invoice / Bill'}
+                    </button>
+                  </div>
+                </div>
+
+                {purchaseInvoiceImage && (
+                  <div className="bg-white p-3 rounded-lg border border-blue-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded bg-gray-100 overflow-hidden border border-gray-200">
+                        <img src={purchaseInvoiceImage} alt="Invoice" className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-gray-900">Purchase Invoice Attached</div>
+                        <div className="text-[11px] text-emerald-700">Offline document copy verified</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-rose-600 hover:underline font-semibold"
+                      onClick={() => setPurchaseInvoiceImage('')}
+                    >
+                      Remove Invoice
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 bg-white p-3 rounded-lg border border-gray-200">
+                This SKU is manufactured in-house at the AL FAROOQ FOODS plant using raw materials & production recipes.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="editor-actions">
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
-            Save Product
+          <button type="submit" className="button primary" id="btn-save-product-submit">
+            {product ? 'Update Product' : 'Create Product SKU'}
           </button>
         </div>
       </form>
@@ -700,6 +1618,437 @@ function ProductEditorModal({
   )
 }
 
+/* =========================================================================
+   PRODUCT DETAILS MODAL / DRAWER
+========================================================================= */
+function ProductDetailsModal({
+  product,
+  onClose,
+  onEdit,
+  onDelete,
+  onStockAdjust,
+}: {
+  product: ProductItem
+  onClose: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onStockAdjust: () => void
+}) {
+  const isLow = product.quantity <= product.reorderLevel
+  const isOut = product.quantity <= 0
+  const totalVal = product.totalCost !== undefined ? product.totalCost : product.quantity * product.costPrice
+  const retailMarginPct = product.costPrice > 0 ? Math.round(((product.retailPrice - product.costPrice) / product.costPrice) * 100) : 0
+  const wholesaleMarginPct = product.costPrice > 0 ? Math.round(((product.wholesalePrice - product.costPrice) / product.costPrice) * 100) : 0
+
+  return (
+    <div className="editor-overlay">
+      <div className="editor-modal large" id="product-details-modal">
+        <div className="editor-header">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+              {product.imageUrl ? (
+                <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+              ) : (
+                <Package className="w-6 h-6 text-[#7cb518]" />
+              )}
+            </div>
+            <div>
+              <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded mr-2">
+                {product.sku}
+              </span>
+              <span className="text-xs bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded">
+                {product.category}
+              </span>
+              <h2 className="text-lg font-bold text-gray-900 mt-1">{product.name}</h2>
+            </div>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-5">
+          {/* Main Specs Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <div className="text-[11px] text-gray-500 font-medium">Available Stock</div>
+              <div className={`text-lg font-bold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-gray-900'}`}>
+                {product.quantity} {product.unit}
+              </div>
+              <div className="text-[10px] text-gray-500">Reorder threshold: {product.reorderLevel}</div>
+            </div>
+
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <div className="text-[11px] text-gray-500 font-medium">Cost Price</div>
+              <div className="text-lg font-bold text-gray-900">{formatPKR(product.costPrice)}</div>
+              <div className="text-[10px] text-gray-500">Base / production rate</div>
+            </div>
+
+            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200/70">
+              <div className="text-[11px] text-emerald-800 font-medium">Wholesale Rate</div>
+              <div className="text-lg font-bold text-[#7cb518]">{formatPKR(product.wholesalePrice)}</div>
+              <div className="text-[10px] text-emerald-700">
+                Min: {product.wholesaleMinQty || 1} {product.unit} (+{wholesaleMarginPct}%)
+              </div>
+            </div>
+
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <div className="text-[11px] text-gray-500 font-medium">Retail Rate</div>
+              <div className="text-lg font-bold text-gray-900">{formatPKR(product.retailPrice)}</div>
+              <div className="text-[10px] text-emerald-700">+{retailMarginPct}% Profit Margin</div>
+            </div>
+          </div>
+
+          {/* Details & Sourcing Info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Product Specifications</h3>
+              
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Size / Volume:</span>
+                  <span className="font-semibold text-gray-900">
+                    {product.size ? `${product.size} ${product.sizeUnit || ''}` : 'Not Specified'}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Packaging Unit:</span>
+                  <span className="font-semibold text-gray-900">{product.unit}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Total Stock Value:</span>
+                  <span className="font-bold text-gray-900">{formatPKR(totalVal)}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-500">Sourcing Origin:</span>
+                  <span className="font-semibold text-gray-900">
+                    {product.isPurchasedProduct ? 'Purchased (Trading / External)' : 'In-House Plant Manufactured'}
+                  </span>
+                </div>
+              </div>
+
+              {product.description && (
+                <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-600">
+                  <span className="font-semibold text-gray-700 block mb-1">Description:</span>
+                  {product.description}
+                </div>
+              )}
+            </div>
+
+            {/* Image / Invoice Preview */}
+            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Attached Media & Invoices</h3>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 text-center">
+                  <div className="text-[11px] font-semibold text-gray-600 mb-1">Product Photo</div>
+                  <div className="w-full h-28 rounded bg-gray-100 overflow-hidden flex items-center justify-center border border-gray-200">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[11px] text-gray-400">No Image</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 text-center">
+                  <div className="text-[11px] font-semibold text-gray-600 mb-1">Purchase Invoice</div>
+                  <div className="w-full h-28 rounded bg-gray-100 overflow-hidden flex items-center justify-center border border-gray-200">
+                    {product.purchaseInvoiceImage ? (
+                      <img src={product.purchaseInvoiceImage} alt="Invoice" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[11px] text-gray-400">No Invoice Attached</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {product.isPurchasedProduct && product.purchaseCost && (
+                <div className="text-xs text-blue-800 bg-blue-50 p-2 rounded border border-blue-200">
+                  Supplier Purchase Cost: <strong>{formatPKR(product.purchaseCost)}</strong>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="editor-actions justify-between">
+          <button
+            type="button"
+            className="button secondary text-rose-600 hover:text-rose-700"
+            onClick={onDelete}
+          >
+            <Trash2 className="w-4 h-4" /> Delete Product
+          </button>
+          
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={onStockAdjust}
+            >
+              <ArrowUpCircle className="w-4 h-4" /> Adjust Stock
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              onClick={onEdit}
+            >
+              <Edit className="w-4 h-4" /> Edit Product
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* =========================================================================
+   CATEGORY MANAGER MODAL (Add, Edit, Delete Categories with real product counts)
+========================================================================= */
+function CategoryManagerModal({
+  categories,
+  products,
+  onClose,
+  onSaveCategories,
+}: {
+  categories: CategoryItem[]
+  products: ProductItem[]
+  onClose: () => void
+  onSaveCategories: (cats: CategoryItem[], updatedProducts?: ProductItem[]) => void
+}) {
+  const [editingCatId, setEditingCatId] = useState<string | null>(null)
+  const [catName, setCatName] = useState('')
+  const [catDesc, setCatDesc] = useState('')
+  const [isAddingNew, setIsAddingNew] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Compute product count per category
+  const counts: Record<string, number> = {}
+  products.forEach((p) => {
+    counts[p.category] = (counts[p.category] || 0) + 1
+  })
+
+  // Start edit
+  const handleStartEdit = (cat: CategoryItem) => {
+    setEditingCatId(cat.id)
+    setCatName(cat.name)
+    setCatDesc(cat.description || '')
+    setIsAddingNew(false)
+    setError(null)
+  }
+
+  // Save new / edited category
+  const handleSaveCategory = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (!catName.trim()) {
+      setError('Category name cannot be empty.')
+      return
+    }
+
+    if (isAddingNew) {
+      // Check duplicate name
+      if (categories.some((c) => c.name.toLowerCase() === catName.trim().toLowerCase())) {
+        setError('A category with this name already exists.')
+        return
+      }
+      const newCat: CategoryItem = {
+        id: `cat-${Date.now()}`,
+        name: catName.trim(),
+        description: catDesc.trim() || undefined,
+        createdAt: new Date().toISOString().slice(0, 10),
+      }
+      onSaveCategories([...categories, newCat])
+      setIsAddingNew(false)
+      setCatName('')
+      setCatDesc('')
+    } else if (editingCatId) {
+      const oldCat = categories.find((c) => c.id === editingCatId)
+      if (!oldCat) return
+
+      const oldName = oldCat.name
+      const newName = catName.trim()
+
+      const updatedCats = categories.map((c) =>
+        c.id === editingCatId ? { ...c, name: newName, description: catDesc.trim() || undefined } : c
+      )
+
+      // Also update products if category name changed
+      let updatedProds = products
+      if (oldName !== newName) {
+        updatedProds = products.map((p) => (p.category === oldName ? { ...p, category: newName } : p))
+      }
+
+      onSaveCategories(updatedCats, updatedProds)
+      setEditingCatId(null)
+      setCatName('')
+      setCatDesc('')
+    }
+  }
+
+  // Delete category
+  const handleDeleteCategory = (cat: CategoryItem) => {
+    const pCount = counts[cat.name] || 0
+    if (categories.length <= 1) {
+      alert('You must keep at least one category in the database.')
+      return
+    }
+
+    const msg = pCount > 0
+      ? `Category "${cat.name}" is currently used by ${pCount} product(s). Deleting it will re-assign those products to "Other". Proceed?`
+      : `Are you sure you want to delete category "${cat.name}"?`
+
+    if (!window.confirm(msg)) return
+
+    const updatedCats = categories.filter((c) => c.id !== cat.id)
+    const updatedProds = products.map((p) => (p.category === cat.name ? { ...p, category: 'Other' } : p))
+
+    onSaveCategories(updatedCats, updatedProds)
+  }
+
+  return (
+    <div className="editor-overlay">
+      <div className="editor-modal" id="category-manager-modal">
+        <div className="editor-header">
+          <div>
+            <p className="eyebrow">Product Organization</p>
+            <h2>Manage Product Categories</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2 rounded-lg text-xs mb-3">
+            {error}
+          </div>
+        )}
+
+        {/* Add Category Trigger / Form */}
+        {isAddingNew || editingCatId ? (
+          <form onSubmit={handleSaveCategory} className="bg-emerald-50/70 border border-emerald-200 p-3.5 rounded-xl mb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-emerald-900 uppercase">
+                {isAddingNew ? 'Create New Category' : 'Edit Category'}
+              </h3>
+              <button
+                type="button"
+                className="text-xs text-gray-500 hover:text-gray-700"
+                onClick={() => {
+                  setIsAddingNew(false)
+                  setEditingCatId(null)
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <input
+                value={catName}
+                onChange={(e) => setCatName(e.target.value)}
+                placeholder="Category Name (e.g. Carbonated Beverages)"
+                className="w-full bg-white text-xs"
+                required
+                autoFocus
+              />
+              <input
+                value={catDesc}
+                onChange={(e) => setCatDesc(e.target.value)}
+                placeholder="Short description / notes (optional)"
+                className="w-full bg-white text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="button secondary text-xs py-1"
+                onClick={() => {
+                  setIsAddingNew(false)
+                  setEditingCatId(null)
+                }}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="button primary text-xs py-1">
+                {isAddingNew ? 'Add Category' : 'Update Category'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="mb-4 flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <span className="text-xs text-gray-600 font-medium">
+              Total Categories: <strong>{categories.length}</strong>
+            </span>
+            <button
+              type="button"
+              className="button primary text-xs py-1.5"
+              onClick={() => {
+                setIsAddingNew(true)
+                setCatName('')
+                setCatDesc('')
+              }}
+            >
+              <FolderPlus className="w-3.5 h-3.5" /> Add New Category
+            </button>
+          </div>
+        )}
+
+        {/* Categories List */}
+        <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto border border-gray-200 rounded-xl">
+          {categories.map((c) => {
+            const count = counts[c.name] || 0
+            return (
+              <div key={c.id} className="p-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-gray-900">{c.name}</span>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-full border border-emerald-200/60">
+                      {count} {count === 1 ? 'Product' : 'Products'}
+                    </span>
+                  </div>
+                  {c.description && <div className="text-[11px] text-gray-500 mt-0.5">{c.description}</div>}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    className="p-1.5 text-gray-500 hover:text-blue-600 rounded hover:bg-gray-100"
+                    title="Edit category"
+                    onClick={() => handleStartEdit(c)}
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="p-1.5 text-gray-500 hover:text-rose-600 rounded hover:bg-gray-100"
+                    title="Delete category"
+                    onClick={() => handleDeleteCategory(c)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="editor-actions mt-4">
+          <button type="button" className="button secondary w-full" onClick={onClose}>
+            Close Category Manager
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* =========================================================================
+   RAW MATERIAL EDITOR MODAL
+========================================================================= */
 function RawMaterialEditorModal({
   material,
   suppliers,
@@ -754,7 +2103,7 @@ function RawMaterialEditorModal({
             <h2>{material ? 'Edit Raw Material' : 'Add New Raw Material'}</h2>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
-            <X />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -774,8 +2123,9 @@ function RawMaterialEditorModal({
             <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
               <option value="Ingredients">Ingredients</option>
               <option value="Packaging">Packaging (Preforms, Caps, Boxes)</option>
-              <option value="Flavor & Concentrate">Flavor & Concentrate</option>
+              <option value="Flavors">Flavor & Concentrate</option>
               <option value="Chemicals & Minerals">Chemicals & Minerals</option>
+              <option value="Other">Other</option>
             </select>
           </label>
 
@@ -824,6 +2174,9 @@ function RawMaterialEditorModal({
   )
 }
 
+/* =========================================================================
+   QUICK STOCK ADJUSTMENT MODAL
+========================================================================= */
 function StockAdjustmentModal({
   item,
   onClose,
@@ -852,7 +2205,7 @@ function StockAdjustmentModal({
             <h2>Adjust Stock: {item.name}</h2>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
-            <X />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
