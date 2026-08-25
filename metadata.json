@@ -1,0 +1,6 @@
+{
+  "name": "AL FAROOQ FOODS",
+  "description": "Offline-first food manufacturing and business management system for AL FAROOQ FOODS (Mineral Water, Fruit Juices, Confectionery & Snacks).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

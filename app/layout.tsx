@@ -1,21 +1,46 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'AL FAROOQ FOODS',
-  description: 'Offline-first business management for AL FAROOQ FOODS.',
-  generator: 'v0.app',
+  title: 'AL FAROOQ FOODS - Business Management System',
+  description: 'Offline-first business and production management for AL FAROOQ FOODS (Juices, Mineral Water, Confectionery & Snacks).',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/icon-light-32x32.png',
+    apple: '/apple-icon.png',
+  },
 }
 
 export const viewport: Viewport = {
   colorScheme: 'light',
-  themeColor: '#8C52FF',
+  themeColor: '#7CB518',
   width: 'device-width',
   initialScale: 1,
   userScalable: true,
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" className="bg-background"><body className="antialiased">{children}{process.env.NODE_ENV === 'production' && <Analytics />}</body></html>
+  return (
+    <html lang="en" className="bg-background">
+      <head>
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+      </head>
+      <body className="antialiased">
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                    console.log('SW registration optional:', err);
+                  });
+                });
+              }
+            `,
+          }}
+        />
+      </body>
+    </html>
+  )
 }
