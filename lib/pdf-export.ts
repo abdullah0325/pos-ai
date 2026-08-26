@@ -646,6 +646,101 @@ export function generateSupplierDealReceiptPDF(
   doc.save(`Deal_${deal.poNumber}_${supplier.name.replace(/\s+/g, '_')}.pdf`)
 }
 
+// Export Expense Voucher PDF
+export function generateExpenseVoucherPDF(expense: any) {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a5',
+  })
+
+  const primaryColor: [number, number, number] = [124, 181, 24]
+  const darkColor: [number, number, number] = [43, 43, 43]
+  const mutedColor: [number, number, number] = [109, 109, 104]
+
+  // Header Banner
+  doc.setFillColor(...primaryColor)
+  doc.rect(0, 0, 148, 24, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.text('AL FAROOQ FOODS', 10, 11)
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.text('PAYMENT & EXPENSE VOUCHER', 10, 17)
+
+  // Voucher Number badge
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(95, 5, 43, 14, 2, 2, 'F')
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('VOUCHER #', 116, 10, { align: 'center' })
+  doc.setFontSize(8.5)
+  doc.setTextColor(...primaryColor)
+  doc.text(expense.expenseNumber || expense.id, 116, 15, { align: 'center' })
+
+  // Voucher details box
+  doc.setTextColor(...darkColor)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+
+  const startY = 32
+  doc.text(`Date: ${formatDate(expense.date)}`, 10, startY)
+  doc.text(`Category: ${expense.category}`, 80, startY)
+
+  doc.text(`Paid To: ${expense.paidTo || expense.employeeName || 'General Payee'}`, 10, startY + 7)
+  doc.text(`Payment Method: ${expense.paymentMethod} (${expense.paymentAccount})`, 80, startY + 7)
+
+  if (expense.employeeName) {
+    doc.text(`Linked Employee: ${expense.employeeName}`, 10, startY + 14)
+  }
+
+  // Description / Details Box
+  doc.setDrawColor(220, 220, 220)
+  doc.setFillColor(248, 250, 252)
+  doc.roundedRect(10, startY + 20, 128, 25, 2, 2, 'FD')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...darkColor)
+  doc.text('Particulars / Description:', 14, startY + 26)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.text(expense.description || 'Business operational expense', 14, startY + 33, { maxWidth: 120 })
+
+  if (expense.transactionRef) {
+    doc.setFontSize(7.5)
+    doc.setTextColor(...mutedColor)
+    doc.text(`Transaction Reference: ${expense.transactionRef}`, 14, startY + 41)
+  }
+
+  // Amount Total
+  doc.setFillColor(...primaryColor)
+  doc.roundedRect(10, startY + 50, 128, 16, 2, 2, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('TOTAL AMOUNT PAID:', 16, startY + 60)
+  doc.setFontSize(13)
+  doc.text(formatPKR(expense.amount), 132, startY + 60, { align: 'right' })
+
+  // Signatures
+  doc.setTextColor(...darkColor)
+  doc.setFontSize(7.5)
+  doc.setDrawColor(180, 180, 180)
+  doc.line(14, startY + 90, 50, startY + 90)
+  doc.line(95, startY + 90, 134, startY + 90)
+
+  doc.text('Prepared By (Accounts)', 14, startY + 95)
+  doc.text('Approved By / Received By', 95, startY + 95)
+
+  doc.save(`Expense_Voucher_${expense.expenseNumber || expense.id}.pdf`)
+}
+
 // Export any dataset as CSV/Excel compatible file
 export function exportToCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const csvContent = [

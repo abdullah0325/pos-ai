@@ -20,6 +20,8 @@ import {
   WifiOff,
   X,
   FileText,
+  Receipt,
+  Store,
 } from 'lucide-react'
 
 import {
@@ -34,10 +36,12 @@ import {
 } from '@/lib/db'
 
 import DashboardView from './dashboard-view'
+import PosView from './pos-view'
 import SalesView, { type SalesSubTab } from './sales-view'
 import CustomerManagementView from './customer-management-view'
 import ProcurementView, { type PurchaseSubTab } from './procurement-view'
 import SuppliersManagementView from './suppliers-management-view'
+import ExpensesView from './expenses-view'
 import ProductsView, { type ProductsSubTab } from './products-view'
 import RawMaterialsView from './raw-materials-view'
 import AccountsView, { type AccountsSubTab } from './accounts-view'
@@ -129,7 +133,7 @@ export default function BusinessApp() {
           <ChevronDown className="workspace-chevron" />
         </div>
 
-        {/* 10 Core Top-Level Sidebar Nav Items */}
+        {/* Core Top-Level Sidebar Nav Items */}
         <nav className="nav-list" aria-label="Core Business Navigation">
           {/* 1. Dashboard */}
           <button
@@ -141,7 +145,17 @@ export default function BusinessApp() {
             <span>Dashboard</span>
           </button>
 
-          {/* 2. Sales */}
+          {/* 2. POS (Standalone Point-of-Sale Page) */}
+          <button
+            className={`nav-item ${activeModule === 'pos' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('pos')}
+            id="nav-pos"
+          >
+            <Store />
+            <span>POS</span>
+          </button>
+
+          {/* 3. Sales */}
           <button
             className={`nav-item ${activeModule === 'sales' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('sales')}
@@ -152,7 +166,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.invoices.length}</span>
           </button>
 
-          {/* 3. Customer Management (New Unified Hub) */}
+          {/* 4. Customer Management (Unified Hub) */}
           <button
             className={`nav-item ${activeModule === 'customer-management' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('customer-management')}
@@ -163,7 +177,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.customers.length}</span>
           </button>
 
-          {/* 4. Purchase */}
+          {/* 5. Purchase */}
           <button
             className={`nav-item ${activeModule === 'purchase' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('purchase')}
@@ -174,7 +188,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.purchases.length}</span>
           </button>
 
-          {/* 5. Suppliers (New Vendor Hub) */}
+          {/* 6. Suppliers (Vendor Hub) */}
           <button
             className={`nav-item ${activeModule === 'suppliers-management' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('suppliers-management')}
@@ -185,7 +199,18 @@ export default function BusinessApp() {
             <span className="nav-count">{db.suppliers.length}</span>
           </button>
 
-          {/* 6. Products */}
+          {/* 7. Expenses (Standalone Module) */}
+          <button
+            className={`nav-item ${activeModule === 'expenses' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('expenses')}
+            id="nav-expenses"
+          >
+            <Receipt />
+            <span>Expenses</span>
+            <span className="nav-count">{db.expenses.length}</span>
+          </button>
+
+          {/* 8. Products */}
           <button
             className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('products')}
@@ -196,7 +221,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.products.length}</span>
           </button>
 
-          {/* 7. Raw Material */}
+          {/* 9. Raw Material */}
           <button
             className={`nav-item ${activeModule === 'raw-materials' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('raw-materials')}
@@ -207,7 +232,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.rawMaterials.length}</span>
           </button>
 
-          {/* 8. Employees */}
+          {/* 10. Employees */}
           <button
             className={`nav-item ${activeModule === 'employees' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('employees')}
@@ -218,7 +243,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.employees?.length || 0}</span>
           </button>
 
-          {/* 9. Reports */}
+          {/* 11. Reports */}
           <button
             className={`nav-item ${activeModule === 'reports' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('reports')}
@@ -228,7 +253,7 @@ export default function BusinessApp() {
             <span>Reports</span>
           </button>
 
-          {/* 10. Settings */}
+          {/* 12. Settings */}
           <button
             className={`nav-item ${activeModule === 'settings' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('settings')}
@@ -309,6 +334,14 @@ export default function BusinessApp() {
             />
           )}
 
+          {activeModule === 'pos' && (
+            <PosView
+              db={db}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
+            />
+          )}
+
           {activeModule === 'sales' && (
             <SalesView
               db={db}
@@ -336,6 +369,14 @@ export default function BusinessApp() {
 
           {activeModule === 'suppliers-management' && (
             <SuppliersManagementView
+              db={db}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
+            />
+          )}
+
+          {activeModule === 'expenses' && (
+            <ExpensesView
               db={db}
               onSaveDatabase={handleSaveDatabase}
               onNavigate={handleNavigate}

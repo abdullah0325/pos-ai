@@ -32,6 +32,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
   
+  const url = new URL(event.request.url)
+  // Do not intercept or cache Next.js internal chunks, dev resources, or API routes
+  if (url.pathname.startsWith('/_next') || url.pathname.startsWith('/api') || url.pathname.includes('webpack') || url.pathname.includes('hot-update')) {
+    return
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -61,7 +67,7 @@ self.addEventListener('fetch', (event) => {
           return networkResponse
         })
         .catch(() => {
-          // If offline and request is for page, return cached root
+          // If offline and request is for page navigation, return cached root
           if (event.request.mode === 'navigate') {
             return caches.match('/')
           }

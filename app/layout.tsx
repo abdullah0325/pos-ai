@@ -33,11 +33,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+              if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol === 'https:' && window.location.hostname !== 'localhost') {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').catch(function(err) {
-                    console.log('SW registration optional:', err);
-                  });
+                  try {
+                    navigator.serviceWorker.register('/sw.js').catch(function(e) {
+                      console.log('SW registration note:', e);
+                    });
+                  } catch (e) {}
                 });
               }
             `,

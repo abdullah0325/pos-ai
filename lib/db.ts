@@ -7,7 +7,22 @@ export type ProductCategory = string
 export type RawMaterialCategory = 'Ingredients' | 'Packaging' | 'Chemicals & Minerals' | 'Flavors' | 'Other'
 export type CustomerType = 'Retailer' | 'Distributor' | 'Sales Man' | 'Sales Representative' | 'Wholesaler' | 'Other' | 'Counter'
 export type SupplierSupplyCategory = 'Raw Material' | 'Product' | 'Both' | string
-export type ExpenseCategory = 'Factory Electricity' | 'Labor & Wages' | 'Fuel & Transport' | 'Machine Maintenance' | 'Factory Rent' | 'Packaging & Consumables' | 'Office & Admin' | 'Marketing' | 'Misc'
+export type ExpenseCategory =
+  | 'Rent'
+  | 'Bills/Utilities'
+  | 'Salaries'
+  | 'Daily/Misc'
+  | 'Loan/Advance to employee'
+  | 'Machine Maintenance'
+  | 'Fuel & Transport'
+  | 'Packaging & Consumables'
+  | 'Factory Electricity'
+  | 'Labor & Wages'
+  | 'Factory Rent'
+  | 'Office & Admin'
+  | 'Marketing'
+  | 'Other'
+  | string
 
 export interface CategoryItem {
   id: string
@@ -268,9 +283,13 @@ export interface ExpenseItem {
   title?: string // Alias for compatibility
   amount: number
   paidTo: string
-  paymentMethod: 'Cash' | 'Bank Transfer' | 'Cheque'
+  employeeId?: string // Linked Employee Profile ID
+  employeeName?: string // Linked Employee Name
+  paymentMethod: 'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque'
   paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
+  transactionRef?: string
   receiptImage?: string
+  paymentScreenshot?: string
   status: 'Paid'
   notes?: string
   createdAt: string
@@ -2769,10 +2788,12 @@ export function fileToBase64(file: File): Promise<string> {
 
 export type ModuleKey =
   | 'dashboard'
+  | 'pos'
   | 'sales'
   | 'customer-management'
   | 'purchase'
   | 'suppliers-management'
+  | 'expenses'
   | 'products'
   | 'raw-materials'
   | 'employees'
@@ -2788,7 +2809,6 @@ export type ModuleKey =
   | 'stock'
   | 'suppliers'
   | 'purchases'
-  | 'expenses'
   | 'returns'
   | 'cash-bank'
   | 'daily-summary'
@@ -2799,10 +2819,12 @@ export type ModuleKey =
 
 export const moduleLabels: Record<ModuleKey, string> = {
   dashboard: 'Executive Dashboard',
+  pos: 'Point of Sale (POS)',
   sales: 'Sales & Distribution',
   'customer-management': 'Customer Management',
   purchase: 'Purchase & Procurement',
   'suppliers-management': 'Suppliers',
+  expenses: 'Factory & Business Expenses',
   products: 'Finished Products',
   'raw-materials': 'Raw Material Warehouse',
   employees: 'Employees & Payroll',
@@ -2818,7 +2840,6 @@ export const moduleLabels: Record<ModuleKey, string> = {
   stock: 'Stock Register & Alerts',
   suppliers: 'Supplier Accounts & Ledgers',
   purchases: 'Raw Material Purchases',
-  expenses: 'Factory & Admin Expenses',
   returns: 'Returns & Defects',
   'cash-bank': 'Cash & Bank Accounts',
   'daily-summary': 'Daily Accounts Summary',
