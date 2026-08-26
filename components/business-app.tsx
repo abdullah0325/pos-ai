@@ -15,6 +15,8 @@ import {
   TrendingUp,
   Truck,
   Users,
+  UserCheck,
+  Building2,
   WifiOff,
   X,
   FileText,
@@ -33,7 +35,9 @@ import {
 
 import DashboardView from './dashboard-view'
 import SalesView, { type SalesSubTab } from './sales-view'
+import CustomerManagementView from './customer-management-view'
 import ProcurementView, { type PurchaseSubTab } from './procurement-view'
+import SuppliersManagementView from './suppliers-management-view'
 import ProductsView, { type ProductsSubTab } from './products-view'
 import RawMaterialsView from './raw-materials-view'
 import AccountsView, { type AccountsSubTab } from './accounts-view'
@@ -44,7 +48,7 @@ export default function BusinessApp() {
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
   const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard')
   const [salesTab, setSalesTab] = useState<SalesSubTab>('invoices')
-  const [purchaseTab, setPurchaseTab] = useState<PurchaseSubTab>('suppliers')
+  const [purchaseTab, setPurchaseTab] = useState<PurchaseSubTab>('purchases')
   const [productsTab, setProductsTab] = useState<ProductsSubTab>('catalog')
   const [reportsTab, setReportsTab] = useState<AccountsSubTab>('reports')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -65,14 +69,18 @@ export default function BusinessApp() {
     saveDatabase(updated)
   }
 
-  // Smart Navigation Handler: supports 8 top modules + direct routing to subtabs
+  // Smart Navigation Handler: supports core modules + direct routing to subtabs
   const handleNavigate = (key: ModuleKey, subTab?: string) => {
     // Check if key is a legacy/sub-route and route appropriately
-    if (['invoices', 'counter-sales', 'distributors', 'wholesalers', 'customers', 'phonebook'].includes(key)) {
+    if (key === 'customer-management' || key === 'customers') {
+      setActiveModule('customer-management')
+    } else if (key === 'suppliers-management' || key === 'suppliers') {
+      setActiveModule('suppliers-management')
+    } else if (['invoices', 'counter-sales', 'wholesalers', 'phonebook'].includes(key)) {
       setActiveModule('sales')
       const mapped = key === 'counter-sales' ? 'pos' : (key as SalesSubTab)
       setSalesTab(mapped)
-    } else if (['suppliers', 'purchases', 'expenses', 'returns'].includes(key)) {
+    } else if (['purchases', 'expenses', 'returns'].includes(key)) {
       setActiveModule('purchase')
       setPurchaseTab(key as PurchaseSubTab)
     } else if (['production', 'stock'].includes(key)) {
@@ -121,7 +129,7 @@ export default function BusinessApp() {
           <ChevronDown className="workspace-chevron" />
         </div>
 
-        {/* 8 Core Top-Level Flat Sidebar Nav Items */}
+        {/* 10 Core Top-Level Sidebar Nav Items */}
         <nav className="nav-list" aria-label="Core Business Navigation">
           {/* 1. Dashboard */}
           <button
@@ -144,7 +152,18 @@ export default function BusinessApp() {
             <span className="nav-count">{db.invoices.length}</span>
           </button>
 
-          {/* 3. Purchase */}
+          {/* 3. Customer Management (New Unified Hub) */}
+          <button
+            className={`nav-item ${activeModule === 'customer-management' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('customer-management')}
+            id="nav-customer-management"
+          >
+            <UserCheck />
+            <span>Customer Management</span>
+            <span className="nav-count">{db.customers.length}</span>
+          </button>
+
+          {/* 4. Purchase */}
           <button
             className={`nav-item ${activeModule === 'purchase' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('purchase')}
@@ -155,7 +174,18 @@ export default function BusinessApp() {
             <span className="nav-count">{db.purchases.length}</span>
           </button>
 
-          {/* 4. Products */}
+          {/* 5. Suppliers (New Vendor Hub) */}
+          <button
+            className={`nav-item ${activeModule === 'suppliers-management' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('suppliers-management')}
+            id="nav-suppliers"
+          >
+            <Building2 />
+            <span>Suppliers</span>
+            <span className="nav-count">{db.suppliers.length}</span>
+          </button>
+
+          {/* 6. Products */}
           <button
             className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('products')}
@@ -166,7 +196,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.products.length}</span>
           </button>
 
-          {/* 5. Raw Material */}
+          {/* 7. Raw Material */}
           <button
             className={`nav-item ${activeModule === 'raw-materials' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('raw-materials')}
@@ -177,7 +207,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.rawMaterials.length}</span>
           </button>
 
-          {/* 6. Employees */}
+          {/* 8. Employees */}
           <button
             className={`nav-item ${activeModule === 'employees' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('employees')}
@@ -188,7 +218,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.employees?.length || 0}</span>
           </button>
 
-          {/* 7. Reports */}
+          {/* 9. Reports */}
           <button
             className={`nav-item ${activeModule === 'reports' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('reports')}
@@ -198,7 +228,7 @@ export default function BusinessApp() {
             <span>Reports</span>
           </button>
 
-          {/* 8. Settings */}
+          {/* 10. Settings */}
           <button
             className={`nav-item ${activeModule === 'settings' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('settings')}
@@ -288,11 +318,27 @@ export default function BusinessApp() {
             />
           )}
 
+          {activeModule === 'customer-management' && (
+            <CustomerManagementView
+              db={db}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
+            />
+          )}
+
           {activeModule === 'purchase' && (
             <ProcurementView
               db={db}
               activeSubView={purchaseTab}
               onSaveDatabase={handleSaveDatabase}
+            />
+          )}
+
+          {activeModule === 'suppliers-management' && (
+            <SuppliersManagementView
+              db={db}
+              onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
             />
           )}
 

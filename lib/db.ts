@@ -5,7 +5,8 @@ export type Status = 'Active' | 'In stock' | 'Low stock' | 'Out of stock' | 'In 
 
 export type ProductCategory = string
 export type RawMaterialCategory = 'Ingredients' | 'Packaging' | 'Chemicals & Minerals' | 'Flavors' | 'Other'
-export type CustomerType = 'Distributor' | 'Sales Representative' | 'Wholesaler' | 'Retailer' | 'Other' | 'Counter'
+export type CustomerType = 'Retailer' | 'Distributor' | 'Sales Man' | 'Sales Representative' | 'Wholesaler' | 'Other' | 'Counter'
+export type SupplierSupplyCategory = 'Raw Material' | 'Product' | 'Both' | string
 export type ExpenseCategory = 'Factory Electricity' | 'Labor & Wages' | 'Fuel & Transport' | 'Machine Maintenance' | 'Factory Rent' | 'Packaging & Consumables' | 'Office & Admin' | 'Marketing' | 'Misc'
 
 export interface CategoryItem {
@@ -108,15 +109,16 @@ export interface CustomerPaymentRecord {
 
 export interface CustomerItem {
   id: string
+  customerId?: string // Display ID e.g. CUST-1001 or manual
   name: string
-  businessName: string
+  businessName?: string
   type: CustomerType
   phone: string
   altPhone?: string
   email?: string
   cnic?: string
   address: string
-  city: string
+  city?: string
   territory?: string
   openingBalance: number
   currentBalance: number // positive = receivable from customer
@@ -124,15 +126,33 @@ export interface CustomerItem {
   status: 'Active' | 'Blocked'
   notes?: string
   paymentRecords?: CustomerPaymentRecord[]
+  createdAt?: string
   updatedAt: string
+}
+
+export interface SupplierPaymentRecord {
+  id: string
+  receiptNumber: string
+  date: string
+  amount: number
+  paymentMethod: 'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque'
+  paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
+  transactionRef?: string
+  receiptImage?: string // Base64 screenshot or photo of bank slip/cheque
+  purchaseId?: string // Linked deal / purchase ID
+  notes?: string
+  createdAt: string
 }
 
 export interface SupplierItem {
   id: string
+  supplierCode?: string // Display ID e.g. SUP-1001 or manual
   name: string
   contactPerson: string
   category: string
+  supplyCategory?: SupplierSupplyCategory
   phone: string
+  altPhone?: string
   email?: string
   address: string
   city: string
@@ -140,6 +160,8 @@ export interface SupplierItem {
   currentBalance: number // positive = payable to supplier
   status: 'Active' | 'Blocked'
   notes?: string
+  paymentRecords?: SupplierPaymentRecord[]
+  createdAt?: string
   updatedAt: string
 }
 
@@ -188,44 +210,69 @@ export interface InvoiceItem {
   createdAt: string
 }
 
+export type PurchaseType = 'Raw Material' | 'Finished Product'
+
 export interface PurchaseLineItem {
-  rawMaterialId: string
+  id?: string
+  itemId?: string // rawMaterialId or productId
+  itemType?: PurchaseType
+  rawMaterialId?: string
+  productId?: string
   name: string
+  category?: string
   quantity: number
   unit: string
   unitPrice: number
+  otherCost?: number
   total: number
+  isManualTotal?: boolean
 }
 
 export interface PurchaseItem {
   id: string
   poNumber: string
+  purchaseNumber?: string // Alias for compatibility
+  purchaseType?: PurchaseType // 'Raw Material' | 'Finished Product'
   date: string
-  supplierId: string
+  time?: string
+  supplierId?: string
   supplierName: string
   items: PurchaseLineItem[]
+  quantity?: number
+  unit?: string
+  unitPrice?: number
+  otherCost?: number // transport/handling/freight
   grandTotal: number
+  isManualTotalCost?: boolean
   amountPaid: number
   balanceDue: number
-  paymentMethod: 'Cash' | 'Bank Transfer' | 'Credit'
-  paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
   status: 'Paid' | 'Partial' | 'Unpaid'
+  paymentStatus?: 'Paid' | 'Partial' | 'Unpaid'
+  paymentMethod: 'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque' | 'Credit'
+  paymentAccount?: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
+  transactionRef?: string
+  invoiceImage?: string // Attached purchase invoice/bill image (Base64)
+  purchaseInvoiceImage?: string // Alias
+  paymentScreenshot?: string // Attached online transaction screenshot (Base64)
   notes?: string
-  createdAt: string
+  createdAt?: string
 }
 
 export interface ExpenseItem {
   id: string
   expenseNumber: string
+  voucherNumber?: string // Alias for compatibility
   date: string
   category: ExpenseCategory
   description: string
+  title?: string // Alias for compatibility
   amount: number
   paidTo: string
-  paymentMethod: 'Cash' | 'Bank Transfer'
+  paymentMethod: 'Cash' | 'Bank Transfer' | 'Cheque'
   paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
   receiptImage?: string
   status: 'Paid'
+  notes?: string
   createdAt: string
 }
 
@@ -1566,33 +1613,124 @@ export const initialDatabase: AppDatabase = {
   ],
   purchases: [
     {
+      id: 'po-3022',
+      poNumber: 'PO-2026-3022',
+      purchaseNumber: 'PO-2026-3022',
+      purchaseType: 'Finished Product',
+      date: '2026-08-24',
+      time: '11:30 AM',
+      supplierId: 'sup-5',
+      supplierName: 'Packages Limited Lahore',
+      items: [
+        {
+          id: 'item-po-1',
+          itemId: 'prod-8',
+          productId: 'prod-8',
+          itemType: 'Finished Product',
+          name: 'Farooq Royal Milk Toffee (1kg Jar x 12)',
+          category: 'Candy & Toffee',
+          quantity: 40,
+          unit: 'Cartons',
+          unitPrice: 2100,
+          otherCost: 1500,
+          total: 85500,
+        },
+      ],
+      quantity: 40,
+      unit: 'Cartons',
+      unitPrice: 2100,
+      otherCost: 1500,
+      grandTotal: 85500,
+      amountPaid: 85500,
+      balanceDue: 0,
+      paymentMethod: 'Online',
+      paymentAccount: 'meezan-bank',
+      transactionRef: 'RAAST-MZB-9921',
+      status: 'Paid',
+      invoiceImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="340" height="200" viewBox="0 0 340 200"><rect width="340" height="200" fill="%23f8fafc" stroke="%23cbd5e1" stroke-width="2"/><text x="20" y="32" font-family="Arial" font-size="14" font-weight="bold" fill="%231e293b">SUPPLIER TAX INVOICE</text><text x="20" y="55" font-family="Arial" font-size="11" fill="%2364748b">Supplier: Packages Limited Lahore</text><text x="20" y="75" font-family="Arial" font-size="11" fill="%2364748b">Billed To: AL FAROOQ FOODS (PVT) LTD</text><text x="20" y="105" font-family="Arial" font-size="12" font-weight="bold" fill="%23334155">Item: 40 Cartons Royal Milk Toffee 1kg</text><text x="20" y="130" font-family="Arial" font-size="11" fill="%23475569">Rate: Rs. 2,100 | Freight: Rs. 1,500</text><text x="20" y="165" font-family="Arial" font-size="15" font-weight="bold" fill="%2315803d">TOTAL PAID: PKR 85,500</text></svg>',
+      paymentScreenshot: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150"><rect width="300" height="150" fill="%23f0fdf4" stroke="%2316a34a" stroke-width="2"/><text x="15" y="30" font-family="Arial" font-size="14" font-weight="bold" fill="%23166534">MEEZAN BANK IBFT TRANSFER</text><text x="15" y="55" font-family="Arial" font-size="11" fill="%23374151">Paid To: Packages Limited A/C 01029</text><text x="15" y="80" font-family="Arial" font-size="16" font-weight="bold" fill="%2315803d">AMOUNT: PKR 85,500</text><text x="15" y="110" font-family="Arial" font-size="10" fill="%236b7280">Ref: RAAST-MZB-9921 | 24-Aug-2026</text></svg>',
+      notes: 'Outsourced confectionery packaging batch, pre-verified quality.',
+      createdAt: '2026-08-24T11:30:00Z',
+    },
+    {
       id: 'po-3021',
       poNumber: 'PO-2026-3021',
+      purchaseNumber: 'PO-2026-3021',
+      purchaseType: 'Raw Material',
       date: '2026-08-23',
+      time: '09:00 AM',
       supplierId: 'sup-1',
       supplierName: 'National Sugar Mills Ltd',
       items: [
-        { rawMaterialId: 'raw-1', name: 'Refined White Sugar (Food Grade A)', quantity: 2000, unit: 'kg', unitPrice: 145, total: 290000 },
+        {
+          id: 'item-po-2',
+          itemId: 'raw-1',
+          rawMaterialId: 'raw-1',
+          itemType: 'Raw Material',
+          name: 'Refined White Sugar (Food Grade A)',
+          category: 'Ingredients',
+          quantity: 2000,
+          unit: 'kg',
+          unitPrice: 145,
+          otherCost: 2000,
+          total: 292000,
+        },
       ],
-      grandTotal: 290000,
+      quantity: 2000,
+      unit: 'kg',
+      unitPrice: 145,
+      otherCost: 2000,
+      grandTotal: 292000,
       amountPaid: 200000,
-      balanceDue: 90000,
+      balanceDue: 92000,
       paymentMethod: 'Bank Transfer',
       paymentAccount: 'meezan-bank',
       status: 'Partial',
-      notes: 'Received 40 bags of 50kg Sugar. Quality verified.',
+      invoiceImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="340" height="200" viewBox="0 0 340 200"><rect width="340" height="200" fill="%23f8fafc" stroke="%23cbd5e1" stroke-width="2"/><text x="20" y="32" font-family="Arial" font-size="14" font-weight="bold" fill="%231e293b">NATIONAL SUGAR MILLS INVOICE</text><text x="20" y="55" font-family="Arial" font-size="11" fill="%2364748b">Bill #: NSM-2026-8819</text><text x="20" y="80" font-family="Arial" font-size="12" font-weight="bold" fill="%23334155">40 Bags x 50kg Refined Sugar Grade A</text><text x="20" y="105" font-family="Arial" font-size="11" fill="%23475569">Rate: Rs. 145/kg | Truck Freight: Rs. 2,000</text><text x="20" y="135" font-family="Arial" font-size="15" font-weight="bold" fill="%23334155">TOTAL BILL: PKR 292,000</text><text x="20" y="165" font-family="Arial" font-size="11" font-weight="bold" fill="%23b45309">PAID: Rs. 200,000 | DUE: Rs. 92,000</text></svg>',
+      notes: 'Received 40 bags of 50kg Sugar via Bedford Truck. Quality verified.',
       createdAt: '2026-08-23T09:00:00Z',
     },
     {
       id: 'po-3020',
       poNumber: 'PO-2026-3020',
+      purchaseNumber: 'PO-2026-3020',
+      purchaseType: 'Raw Material',
       date: '2026-08-22',
+      time: '01:00 PM',
       supplierId: 'sup-3',
       supplierName: 'Crown Plastics & Preforms',
       items: [
-        { rawMaterialId: 'raw-4', name: 'PET Preforms 500ml (28mm Neck)', quantity: 15000, unit: 'Pcs', unitPrice: 6.5, total: 97500 },
-        { rawMaterialId: 'raw-6', name: '28mm HDPE Bottling Caps (Tamper Evident)', quantity: 15000, unit: 'Pcs', unitPrice: 2.1, total: 31500 },
+        {
+          id: 'item-po-3',
+          itemId: 'raw-4',
+          rawMaterialId: 'raw-4',
+          itemType: 'Raw Material',
+          name: 'PET Preforms 500ml (28mm Neck)',
+          category: 'Packaging',
+          quantity: 15000,
+          unit: 'Pcs',
+          unitPrice: 6.5,
+          otherCost: 0,
+          total: 97500,
+        },
+        {
+          id: 'item-po-4',
+          itemId: 'raw-6',
+          rawMaterialId: 'raw-6',
+          itemType: 'Raw Material',
+          name: '28mm HDPE Bottling Caps (Tamper Evident)',
+          category: 'Packaging',
+          quantity: 15000,
+          unit: 'Pcs',
+          unitPrice: 2.1,
+          otherCost: 0,
+          total: 31500,
+        },
       ],
+      quantity: 30000,
+      unit: 'Pcs',
+      unitPrice: 4.3,
+      otherCost: 0,
       grandTotal: 129000,
       amountPaid: 129000,
       balanceDue: 0,
@@ -2507,6 +2645,68 @@ export function loadDatabase(): AppDatabase {
       })
     }
 
+    // Ensure all purchases have normalized poNumber, purchaseNumber, purchaseType, items, and status
+    if (parsed.purchases && Array.isArray(parsed.purchases)) {
+      parsed.purchases = parsed.purchases.map((p) => {
+        let mod = false
+        const copy = { ...p }
+        const poNum = copy.poNumber || copy.purchaseNumber || `PO-2026-${copy.id.slice(-4)}`
+        if (!copy.poNumber) {
+          copy.poNumber = poNum
+          mod = true
+        }
+        if (!copy.purchaseNumber) {
+          copy.purchaseNumber = poNum
+          mod = true
+        }
+        if (!copy.purchaseType) {
+          copy.purchaseType = 'Raw Material'
+          mod = true
+        }
+        if (!copy.items || !Array.isArray(copy.items) || copy.items.length === 0) {
+          copy.items = [
+            {
+              itemId: 'raw-1',
+              rawMaterialId: 'raw-1',
+              itemType: copy.purchaseType || 'Raw Material',
+              name: 'Raw Material Item',
+              quantity: copy.quantity || 1,
+              unit: copy.unit || 'kg',
+              unitPrice: copy.unitPrice || copy.grandTotal || 0,
+              otherCost: copy.otherCost || 0,
+              total: copy.grandTotal || 0,
+            },
+          ]
+          mod = true
+        }
+        if (copy.otherCost === undefined) {
+          copy.otherCost = 0
+          mod = true
+        }
+        if (copy.amountPaid === undefined) {
+          copy.amountPaid = copy.grandTotal || 0
+          mod = true
+        }
+        if (copy.balanceDue === undefined) {
+          copy.balanceDue = Math.max(0, (copy.grandTotal || 0) - (copy.amountPaid || 0))
+          mod = true
+        }
+        if (!copy.status) {
+          copy.status = copy.balanceDue === 0 ? 'Paid' : copy.amountPaid > 0 ? 'Partial' : 'Unpaid'
+          mod = true
+        }
+        if (!copy.paymentMethod) {
+          copy.paymentMethod = 'Bank Transfer'
+          mod = true
+        }
+        if (mod) updated = true
+        return copy
+      })
+    } else {
+      parsed.purchases = initialDatabase.purchases || []
+      updated = true
+    }
+
     if (updated) {
       localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(parsed))
     }
@@ -2570,7 +2770,9 @@ export function fileToBase64(file: File): Promise<string> {
 export type ModuleKey =
   | 'dashboard'
   | 'sales'
+  | 'customer-management'
   | 'purchase'
+  | 'suppliers-management'
   | 'products'
   | 'raw-materials'
   | 'employees'
@@ -2598,7 +2800,9 @@ export type ModuleKey =
 export const moduleLabels: Record<ModuleKey, string> = {
   dashboard: 'Executive Dashboard',
   sales: 'Sales & Distribution',
+  'customer-management': 'Customer Management',
   purchase: 'Purchase & Procurement',
+  'suppliers-management': 'Suppliers',
   products: 'Finished Products',
   'raw-materials': 'Raw Material Warehouse',
   employees: 'Employees & Payroll',

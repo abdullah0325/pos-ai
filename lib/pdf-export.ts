@@ -431,6 +431,221 @@ export function generateSalarySlipPDF(employee: EmployeeItem, payment: SalaryPay
   doc.save(`Salary_Receipt_${employee.name.replace(/\s+/g, '_')}_${payment.month.replace(/\s+/g, '_')}.pdf`)
 }
 
+// Generate Customer Payment Receipt PDF
+export function generateCustomerPaymentReceiptPDF(
+  customer: CustomerItem,
+  payment: {
+    receiptNumber: string
+    date: string
+    amount: number
+    paymentMethod: string
+    paymentAccount?: string
+    transactionRef?: string
+    notes?: string
+  }
+) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' })
+  const primaryColor: [number, number, number] = [124, 181, 24]
+  const darkColor: [number, number, number] = [43, 43, 43]
+  const mutedColor: [number, number, number] = [109, 109, 104]
+
+  // Header Banner
+  doc.setFillColor(...primaryColor)
+  doc.rect(0, 0, 148, 24, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.text('AL FAROOQ FOODS', 10, 11)
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Official Payment Receipt Voucher', 10, 17)
+
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(98, 5, 42, 14, 2, 2, 'F')
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('RECEIPT #', 119, 10, { align: 'center' })
+  doc.setFontSize(8.5)
+  doc.setTextColor(...primaryColor)
+  doc.text(payment.receiptNumber, 119, 15, { align: 'center' })
+
+  // Details
+  doc.setTextColor(...darkColor)
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.text('RECEIVED FROM:', 10, 32)
+  doc.setFont('helvetica', 'normal')
+  doc.text(customer.name, 10, 37)
+  if (customer.businessName) doc.text(customer.businessName, 10, 42)
+  doc.text(`Phone: ${customer.phone || '—'} | Type: ${customer.type}`, 10, 47)
+  if (customer.address) doc.text(`Address: ${customer.address}`, 10, 52)
+
+  doc.setFont('helvetica', 'bold')
+  doc.text('PAYMENT DETAILS:', 85, 32)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Date: ${formatDate(payment.date)}`, 85, 37)
+  doc.text(`Method: ${payment.paymentMethod}`, 85, 42)
+  if (payment.transactionRef) doc.text(`Ref: ${payment.transactionRef}`, 85, 47)
+
+  // Payment Box
+  doc.setFillColor(245, 248, 240)
+  doc.setDrawColor(124, 181, 24)
+  doc.roundedRect(10, 60, 128, 22, 2, 2, 'FD')
+
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('AMOUNT RECEIVED (PKR):', 16, 68)
+
+  doc.setTextColor(124, 181, 24)
+  doc.setFontSize(16)
+  doc.text(formatPKR(payment.amount), 16, 77)
+
+  doc.setTextColor(...mutedColor)
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Current Outstanding Balance: ${formatPKR(customer.currentBalance)}`, 75, 76)
+
+  if (payment.notes) {
+    doc.setTextColor(...darkColor)
+    doc.setFontSize(8)
+    doc.text(`Notes: ${payment.notes}`, 10, 89)
+  }
+
+  // Signatures
+  doc.setDrawColor(190, 190, 190)
+  doc.line(15, 115, 55, 115)
+  doc.line(90, 115, 135, 115)
+
+  doc.setFontSize(7.5)
+  doc.setTextColor(...darkColor)
+  doc.text('Customer Signature', 35, 120, { align: 'center' })
+  doc.text('AL FAROOQ FOODS Cashier', 112, 120, { align: 'center' })
+
+  doc.save(`Receipt_${payment.receiptNumber}_${customer.name.replace(/\s+/g, '_')}.pdf`)
+}
+
+// Generate Supplier Deal Receipt / Voucher PDF
+export function generateSupplierDealReceiptPDF(
+  supplier: SupplierItem,
+  deal: {
+    poNumber: string
+    date: string
+    items: Array<{ name: string; quantity: number; unit: string; unitPrice: number; total: number }>
+    grandTotal: number
+    amountPaid: number
+    balanceDue: number
+    status: string
+    paymentMethod?: string
+    notes?: string
+  }
+) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const primaryColor: [number, number, number] = [124, 181, 24]
+  const darkColor: [number, number, number] = [43, 43, 43]
+  const mutedColor: [number, number, number] = [109, 109, 104]
+
+  doc.setFillColor(...primaryColor)
+  doc.rect(0, 0, 210, 30, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(20)
+  doc.text('AL FAROOQ FOODS', 14, 14)
+
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Supplier Purchase Order & Deal Receipt Voucher', 14, 21)
+
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(145, 6, 52, 18, 2, 2, 'F')
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('PURCHASE VOUCHER', 171, 12, { align: 'center' })
+  doc.setFontSize(9)
+  doc.setTextColor(...primaryColor)
+  doc.text(deal.poNumber, 171, 18, { align: 'center' })
+
+  // Supplier info
+  doc.setTextColor(...darkColor)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text('VENDOR / SUPPLIER:', 14, 40)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.text(supplier.name, 14, 46)
+  doc.text(`Contact: ${supplier.contactPerson || '—'} | Phone: ${supplier.phone || '—'}`, 14, 51)
+  doc.text(`Address: ${supplier.address || '—'}, ${supplier.city || ''}`, 14, 56)
+
+  doc.setFont('helvetica', 'bold')
+  doc.text('DEAL DETAILS:', 130, 40)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Date: ${formatDate(deal.date)}`, 130, 46)
+  doc.text(`Status: ${deal.status.toUpperCase()}`, 130, 51)
+  doc.text(`Payment Mode: ${deal.paymentMethod || 'Cash'}`, 130, 56)
+
+  const rows = deal.items.map((item, i) => [
+    (i + 1).toString(),
+    item.name,
+    `${item.quantity} ${item.unit}`,
+    formatPKR(item.unitPrice),
+    formatPKR(item.total),
+  ])
+
+  autoTable(doc, {
+    startY: 64,
+    head: [['#', 'Item / Material Description', 'Quantity', 'Rate / Unit', 'Total Cost']],
+    body: rows,
+    theme: 'grid',
+    headStyles: { fillColor: [124, 181, 24], textColor: [255, 255, 255] },
+    styles: { fontSize: 8.5, cellPadding: 3 },
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalY = (doc as any).lastAutoTable?.finalY || 120
+  const summaryX = 120
+
+  doc.setFontSize(9)
+  doc.setTextColor(...mutedColor)
+  doc.text('Deal Total Value:', summaryX, finalY + 8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...darkColor)
+  doc.text(formatPKR(deal.grandTotal), 196, finalY + 8, { align: 'right' })
+
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...mutedColor)
+  doc.text('Amount Paid:', summaryX, finalY + 15)
+  doc.setTextColor(114, 128, 25)
+  doc.text(formatPKR(deal.amountPaid), 196, finalY + 15, { align: 'right' })
+
+  doc.setTextColor(...mutedColor)
+  doc.text('Remaining Balance Due:', summaryX, finalY + 22)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(deal.balanceDue > 0 ? 184 : 114, deal.balanceDue > 0 ? 72 : 128, deal.balanceDue > 0 ? 30 : 25)
+  doc.text(formatPKR(deal.balanceDue), 196, finalY + 22, { align: 'right' })
+
+  if (deal.notes) {
+    doc.setTextColor(...darkColor)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.text(`Notes / Terms: ${deal.notes}`, 14, finalY + 10)
+  }
+
+  doc.setDrawColor(200, 200, 200)
+  doc.line(14, finalY + 45, 65, finalY + 45)
+  doc.line(140, finalY + 45, 196, finalY + 45)
+
+  doc.setFontSize(8)
+  doc.text('Supplier Signature / Stamp', 14, finalY + 50)
+  doc.text('Received & Verified by (AL FAROOQ FOODS)', 140, finalY + 50)
+
+  doc.save(`Deal_${deal.poNumber}_${supplier.name.replace(/\s+/g, '_')}.pdf`)
+}
+
 // Export any dataset as CSV/Excel compatible file
 export function exportToCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const csvContent = [
