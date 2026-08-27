@@ -282,14 +282,14 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
           <p className="eyebrow">Inventory & Product Catalog</p>
           <h1>
             {activeSubView === 'products'
-              ? 'Finished Products & Catalog'
+              ? 'Products & Categories'
               : activeSubView === 'raw-materials'
               ? 'Raw Materials Management'
               : 'Warehouse Stock Ledger'}
           </h1>
           <p className="subheading">
             {activeSubView === 'products'
-              ? 'Manage finished juices, bottled mineral waters, confectionery, wholesale tiers & product images.'
+              ? 'Manage finished products catalog, categories, pricing rates, images, and stock inventory.'
               : activeSubView === 'raw-materials'
               ? 'Sugar, concentrates, packaging boxes, PET preforms, and flavorings.'
               : 'Comprehensive inventory ledger, low-stock reorder triggers, and manual batch adjustments.'}
@@ -1162,10 +1162,10 @@ function ProductEditorModal({
           </div>
         )}
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* SECTION 1: ESSENTIAL IDENTIFIERS */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Package className="w-3.5 h-3.5 text-[#7cb518]" /> 1. Essential Product Information
             </h3>
             <div className="form-grid">
@@ -1181,7 +1181,7 @@ function ProductEditorModal({
               </label>
 
               <label>
-                SKU / Item Code * <span className="text-[11px] text-gray-400">(Must be unique)</span>
+                SKU / Item Code * <span className="text-[11px] text-stone-400">(Must be unique)</span>
                 <input
                   value={sku}
                   onChange={(e) => setSku(e.target.value)}
@@ -1193,7 +1193,7 @@ function ProductEditorModal({
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="mb-0 text-xs font-semibold text-gray-700">Category *</label>
+                  <label className="mb-0 text-xs font-semibold text-stone-700">Category *</label>
                   <button
                     type="button"
                     className="text-[11px] text-[#7cb518] hover:underline font-semibold"
@@ -1205,7 +1205,7 @@ function ProductEditorModal({
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="select-product-category"
                 >
                   {categories.map((c) => (
@@ -1217,10 +1217,10 @@ function ProductEditorModal({
               </div>
 
               {/* Optional Size & Size/Unit */}
-              <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-gray-200">
+              <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-stone-200">
                 <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                    Product Size / Volume <span className="text-[11px] text-gray-400 font-normal">(Optional)</span>
+                  <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                    Product Size / Volume <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     value={size}
@@ -1231,14 +1231,14 @@ function ProductEditorModal({
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                    Size Unit <span className="text-[11px] text-gray-400 font-normal">(Dropdown)</span>
+                  <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                    Size Unit <span className="text-[11px] text-stone-400 font-normal">(Dropdown)</span>
                   </label>
                   <div className="flex gap-2">
                     <select
                       value={sizeUnit}
                       onChange={(e) => setSizeUnit(e.target.value)}
-                      className="border border-[var(--border)] rounded-md px-3 py-2 text-xs bg-white w-full"
+                      className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 w-full focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                       id="select-product-size-unit"
                     >
                       <option value="ml">ml (Milliliters)</option>
@@ -1258,7 +1258,7 @@ function ProductEditorModal({
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
-                  className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-xs bg-white"
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                 >
                   <option value="Cartons">Cartons</option>
                   <option value="Bottles">Bottles</option>
@@ -1284,7 +1284,7 @@ function ProductEditorModal({
               </label>
 
               <label className="col-span-2">
-                Description & Specifications <span className="text-[11px] text-gray-400 font-normal">(Optional)</span>
+                Description & Specifications <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
                 <input
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -1296,13 +1296,13 @@ function ProductEditorModal({
           </div>
 
           {/* SECTION 2: STOCK & PRICING TIERS */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-[#7cb518]" /> 2. Stock Quantities & Wholesale Pricing Structure
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white p-3 rounded-lg border border-gray-200">
-                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Current Stock in Warehouse *
                 </label>
                 <input
@@ -1313,11 +1313,11 @@ function ProductEditorModal({
                   required
                   id="input-product-qty"
                 />
-                <span className="text-[11px] text-gray-500 mt-1 block">Unit: {unit}</span>
+                <span className="text-[11px] text-stone-500 mt-1 block">Unit: {unit}</span>
               </div>
 
-              <div className="bg-white p-3 rounded-lg border border-gray-200">
-                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+              <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Actual / Base Cost Price (Rs) *
                 </label>
                 <input
@@ -1328,11 +1328,11 @@ function ProductEditorModal({
                   required
                   id="input-product-cost-price"
                 />
-                <span className="text-[11px] text-gray-500 mt-1 block">Production / Base unit cost</span>
+                <span className="text-[11px] text-stone-500 mt-1 block">Production / Base unit cost</span>
               </div>
 
-              <div className="bg-white p-3 rounded-lg border border-gray-200">
-                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+              <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Retail Selling Price (Rs) *
                 </label>
                 <input
@@ -1350,9 +1350,9 @@ function ProductEditorModal({
             </div>
 
             {/* Wholesale Price & Minimum Limit */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 bg-emerald-50/50 p-3.5 rounded-lg border border-emerald-200/60">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-3.5 bg-white p-3.5 rounded-xl border border-stone-200">
               <div>
-                <label className="text-xs font-semibold text-emerald-900 mb-1 block">
+                <label className="text-xs font-semibold text-stone-800 mb-1 block">
                   Wholesale Price (Rs) *
                 </label>
                 <input
@@ -1363,14 +1363,14 @@ function ProductEditorModal({
                   required
                   id="input-product-wholesale-price"
                 />
-                <span className="text-[11px] text-emerald-800 mt-1 block font-medium">
+                <span className="text-[11px] text-emerald-700 mt-1 block font-medium">
                   Wholesale Margin: {costPrice > 0 ? `${Math.round(((wholesalePrice - costPrice) / costPrice) * 100)}%` : '—'}
                 </span>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-emerald-900 mb-1 block">
-                  Wholesale Minimum Quantity Limit <span className="text-[11px] text-gray-500 font-normal">(Threshold)</span>
+                <label className="text-xs font-semibold text-stone-800 mb-1 block">
+                  Wholesale Minimum Quantity Limit <span className="text-[11px] text-stone-400 font-normal">(Threshold)</span>
                 </label>
                 <input
                   type="number"
@@ -1380,25 +1380,25 @@ function ProductEditorModal({
                   placeholder="e.g. 12, 24, 50"
                   id="input-product-wholesale-min-qty"
                 />
-                <span className="text-[11px] text-emerald-800 mt-1 block">
+                <span className="text-[11px] text-stone-500 mt-1 block">
                   Applied when order is ≥ {wholesaleMinQty || 1} {unit}
                 </span>
               </div>
             </div>
 
             {/* Total Cost: Auto vs Manual */}
-            <div className="mt-4 bg-white p-3.5 rounded-lg border border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="mt-3.5 bg-white p-3.5 rounded-xl border border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-bold text-gray-800">
+                <div className="text-xs font-bold text-stone-850">
                   Total Valuation: {formatPKR(finalTotalCost)}
                 </div>
-                <div className="text-[11px] text-gray-500">
+                <div className="text-[11px] text-stone-500">
                   Auto: {quantity} {unit} × {formatPKR(costPrice)} = {formatPKR(calculatedTotalCost)}
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer font-medium select-none">
+                <label className="flex items-center gap-1.5 text-xs text-stone-700 cursor-pointer font-medium select-none">
                   <input
                     type="checkbox"
                     checked={isManualTotalCost}
@@ -1406,7 +1406,7 @@ function ProductEditorModal({
                       setIsManualTotalCost(e.target.checked)
                       if (!e.target.checked) setManualTotalCost(calculatedTotalCost)
                     }}
-                    className="rounded border-gray-300 text-[#7cb518] focus:ring-[#7cb518]"
+                    className="rounded border-stone-300 text-[#7cb518] focus:ring-[#7cb518]"
                   />
                   Manual Total Cost Override
                 </label>
@@ -1417,7 +1417,7 @@ function ProductEditorModal({
                     min="0"
                     value={manualTotalCost}
                     onChange={(e) => setManualTotalCost(Number(e.target.value))}
-                    className="w-32 py-1 px-2 text-xs border border-purple-300 rounded font-bold text-purple-900 bg-purple-50"
+                    className="w-32 py-1 px-2 text-xs border border-purple-300 rounded-lg font-bold text-purple-900 bg-purple-50"
                     placeholder="Manual Total"
                   />
                 )}
@@ -1426,22 +1426,22 @@ function ProductEditorModal({
           </div>
 
           {/* SECTION 3: PRODUCT IMAGE (OFFLINE PERSISTED) */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-[#7cb518]" /> 3. Product Image <span className="text-[11px] text-gray-400 font-normal">(Offline Stored)</span>
+          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-[#7cb518]" /> 3. Product Image <span className="text-[11px] text-stone-400 font-normal">(Offline Stored)</span>
             </h3>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3 rounded-lg border border-gray-200">
-              <div className="w-24 h-24 rounded-lg bg-gray-100 border border-gray-300 flex items-center justify-center overflow-hidden relative flex-shrink-0">
+            <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 rounded-xl border border-stone-200">
+              <div className="w-24 h-24 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center overflow-hidden relative flex-shrink-0">
                 {imageUrl ? (
                   <img src={imageUrl} alt="Product Preview" className="w-full h-full object-cover" />
                 ) : (
-                  <ImageIcon className="w-8 h-8 text-gray-300" />
+                  <ImageIcon className="w-8 h-8 text-stone-300" />
                 )}
               </div>
 
               <div className="flex-1 space-y-2 text-center sm:text-left">
-                <div className="text-xs text-gray-700">
+                <div className="text-xs text-stone-700">
                   {imageUrl ? (
                     <span className="text-emerald-700 font-semibold flex items-center gap-1 justify-center sm:justify-start">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Product photo attached
@@ -1481,17 +1481,17 @@ function ProductEditorModal({
           </div>
 
           {/* SECTION 4: SOURCING & PURCHASE INVOICE */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
+          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Receipt className="w-3.5 h-3.5 text-[#7cb518]" /> 4. Sourcing & Purchase Invoice Attachment
               </h3>
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-900 cursor-pointer bg-white px-3 py-1 rounded-md border border-gray-300 select-none">
+              <label className="flex items-center gap-2 text-xs font-semibold text-stone-900 cursor-pointer bg-white px-3 py-1 rounded-lg border border-stone-300 select-none">
                 <input
                   type="checkbox"
                   checked={isPurchasedProduct}
                   onChange={(e) => setIsPurchasedProduct(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-stone-300 text-blue-600 focus:ring-blue-500"
                   id="checkbox-is-purchased"
                 />
                 Product was Purchased / Outsourced (Not manufactured in-house)
@@ -1499,7 +1499,7 @@ function ProductEditorModal({
             </div>
 
             {isPurchasedProduct ? (
-              <div className="bg-blue-50/60 p-4 rounded-lg border border-blue-200/80 space-y-4">
+              <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-200/80 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-semibold text-blue-900 mb-1 block">
@@ -1542,13 +1542,13 @@ function ProductEditorModal({
                 </div>
 
                 {purchaseInvoiceImage && (
-                  <div className="bg-white p-3 rounded-lg border border-blue-200 flex items-center justify-between">
+                  <div className="bg-white p-3 rounded-xl border border-blue-200 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded bg-gray-100 overflow-hidden border border-gray-200">
+                      <div className="w-12 h-12 rounded-lg bg-stone-100 overflow-hidden border border-stone-200">
                         <img src={purchaseInvoiceImage} alt="Invoice" className="w-full h-full object-cover" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-gray-900">Purchase Invoice Attached</div>
+                        <div className="text-xs font-bold text-stone-900">Purchase Invoice Attached</div>
                         <div className="text-[11px] text-emerald-700">Offline document copy verified</div>
                       </div>
                     </div>
@@ -1563,7 +1563,7 @@ function ProductEditorModal({
                 )}
               </div>
             ) : (
-              <p className="text-xs text-gray-500 bg-white p-3 rounded-lg border border-gray-200">
+              <p className="text-xs text-stone-500 bg-white p-3 rounded-xl border border-stone-200">
                 This SKU is manufactured in-house at the AL FAROOQ FOODS plant using raw materials & production recipes.
               </p>
             )}
@@ -1808,7 +1808,7 @@ function CategoryManagerModal({
     e.preventDefault()
     setError(null)
     if (!catName.trim()) {
-      setError('Category name cannot be empty.')
+      setError('Please enter a category name.')
       return
     }
 
@@ -1886,11 +1886,15 @@ function CategoryManagerModal({
 
   return (
     <div className="editor-overlay">
-      <div className="editor-modal" id="category-manager-modal">
+      <div className="editor-modal" id="category-manager-modal" style={{ maxWidth: '560px' }}>
+        {/* Header */}
         <div className="editor-header">
           <div>
-            <p className="eyebrow">Product Organization</p>
-            <h2>Manage Product Categories</h2>
+            <p className="eyebrow">Product Catalog</p>
+            <h2 className="text-lg font-bold text-stone-900">Manage Categories</h2>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Create, rename, and organize categories for your finished products.
+            </p>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
@@ -1898,124 +1902,154 @@ function CategoryManagerModal({
         </div>
 
         {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2 rounded-lg text-xs mb-3">
-            {error}
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 mb-4">
+            <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* Add Category Trigger / Form */}
+        {/* Add / Edit Form Box */}
         {isAddingNew || editingCatId ? (
-          <form onSubmit={handleSaveCategory} className="bg-emerald-50/70 border border-emerald-200 p-3.5 rounded-xl mb-4 space-y-3">
+          <form
+            onSubmit={handleSaveCategory}
+            className="bg-stone-50 border border-stone-200 p-4 rounded-xl mb-4 space-y-3"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-emerald-900 uppercase">
-                {isAddingNew ? 'Create New Category' : 'Edit Category'}
-              </h3>
+              <span className="text-xs font-bold text-stone-800 uppercase tracking-wider">
+                {isAddingNew ? 'New Category' : 'Edit Category'}
+              </span>
               <button
                 type="button"
-                className="text-xs text-gray-500 hover:text-gray-700"
+                className="text-xs text-stone-400 hover:text-stone-700"
                 onClick={() => {
                   setIsAddingNew(false)
                   setEditingCatId(null)
+                  setError(null)
                 }}
               >
                 Cancel
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                Category Name *
+              </label>
               <input
                 value={catName}
                 onChange={(e) => setCatName(e.target.value)}
-                placeholder="Category Name (e.g. Carbonated Beverages)"
-                className="w-full bg-white text-xs"
+                placeholder="e.g. Mineral Water, Juices, Confectionery"
+                className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                 required
                 autoFocus
               />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                Description / Notes <span className="text-stone-400 font-normal">(Optional)</span>
+              </label>
               <input
                 value={catDesc}
                 onChange={(e) => setCatDesc(e.target.value)}
-                placeholder="Short description / notes (optional)"
-                className="w-full bg-white text-xs"
+                placeholder="Brief description or packaging notes"
+                className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
-                className="button secondary text-xs py-1"
+                className="button secondary text-xs py-1.5 px-3"
                 onClick={() => {
                   setIsAddingNew(false)
                   setEditingCatId(null)
+                  setError(null)
                 }}
               >
                 Cancel
               </button>
-              <button type="submit" className="button primary text-xs py-1">
-                {isAddingNew ? 'Add Category' : 'Update Category'}
+              <button type="submit" className="button primary text-xs py-1.5 px-4">
+                {isAddingNew ? 'Create Category' : 'Save Changes'}
               </button>
             </div>
           </form>
         ) : (
-          <div className="mb-4 flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <span className="text-xs text-gray-600 font-medium">
-              Total Categories: <strong>{categories.length}</strong>
-            </span>
+          <div className="mb-4 flex justify-between items-center bg-stone-50 px-4 py-3 rounded-xl border border-stone-200">
+            <div>
+              <span className="text-xs font-bold text-stone-800">
+                {categories.length} Categories Registered
+              </span>
+              <p className="text-[11px] text-stone-500">Available in product creation dropdowns</p>
+            </div>
             <button
               type="button"
-              className="button primary text-xs py-1.5"
+              className="button primary text-xs py-1.5 px-3"
               onClick={() => {
                 setIsAddingNew(true)
                 setCatName('')
                 setCatDesc('')
+                setError(null)
               }}
             >
-              <FolderPlus className="w-3.5 h-3.5" /> Add New Category
+              <Plus className="w-3.5 h-3.5" /> Add Category
             </button>
           </div>
         )}
 
         {/* Categories List */}
-        <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto border border-gray-200 rounded-xl">
-          {categories.map((c) => {
-            const count = counts[c.name] || 0
-            return (
-              <div key={c.id} className="p-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-gray-900">{c.name}</span>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-full border border-emerald-200/60">
-                      {count} {count === 1 ? 'Product' : 'Products'}
-                    </span>
+        <div className="divide-y divide-stone-100 max-h-72 overflow-y-auto border border-stone-200 rounded-xl bg-white">
+          {categories.length === 0 ? (
+            <div className="p-6 text-center text-xs text-stone-400">
+              No categories found. Click "+ Add Category" above.
+            </div>
+          ) : (
+            categories.map((c) => {
+              const count = counts[c.name] || 0
+              return (
+                <div
+                  key={c.id}
+                  className="p-3.5 flex items-center justify-between hover:bg-stone-50/80 transition-colors"
+                >
+                  <div className="pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-stone-900">{c.name}</span>
+                      <span className="text-[10px] bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-md border border-emerald-200/50">
+                        {count} {count === 1 ? 'product' : 'products'}
+                      </span>
+                    </div>
+                    {c.description && (
+                      <p className="text-[11px] text-stone-500 mt-0.5">{c.description}</p>
+                    )}
                   </div>
-                  {c.description && <div className="text-[11px] text-gray-500 mt-0.5">{c.description}</div>}
-                </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    className="p-1.5 text-gray-500 hover:text-blue-600 rounded hover:bg-gray-100"
-                    title="Edit category"
-                    onClick={() => handleStartEdit(c)}
-                  >
-                    <Edit className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="p-1.5 text-gray-500 hover:text-rose-600 rounded hover:bg-gray-100"
-                    title="Delete category"
-                    onClick={() => handleDeleteCategory(c)}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="p-1.5 text-stone-500 hover:text-blue-600 rounded-md hover:bg-stone-100 transition-colors"
+                      title="Edit Category Name"
+                      onClick={() => handleStartEdit(c)}
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className="p-1.5 text-stone-500 hover:text-rose-600 rounded-md hover:bg-stone-100 transition-colors"
+                      title="Delete Category"
+                      onClick={() => handleDeleteCategory(c)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })
+          )}
         </div>
 
-        <div className="editor-actions mt-4">
-          <button type="button" className="button secondary w-full" onClick={onClose}>
-            Close Category Manager
+        <div className="editor-actions mt-5">
+          <button type="button" className="button secondary w-full py-2 text-xs" onClick={onClose}>
+            Done
           </button>
         </div>
       </div>
