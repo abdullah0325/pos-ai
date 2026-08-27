@@ -375,23 +375,24 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       </div>
 
       {/* Toolbar & Multi-Filters */}
-      <div className="module-toolbar flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-1 min-w-[260px]">
-          <div className="search-box flex-1">
-            <Search className="w-4 h-4 text-gray-400" />
+      <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-3" id="products-toolbar">
+        <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              placeholder="Search by product name, SKU, category, or notes..."
+              placeholder="Search products by name, SKU, category..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-8 py-2 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518] transition-all"
               id="input-product-search"
             />
             {query && (
               <button
                 type="button"
-                className="text-gray-400 hover:text-gray-600 mr-2 text-xs"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
                 onClick={() => setQuery('')}
               >
-                Clear
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -399,76 +400,66 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Category Dropdown Filter */}
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-gray-500 font-medium hidden sm:inline">Category:</span>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-              id="filter-category"
-            >
-              <option value="All">All Categories ({db.products.length})</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name} {categoryCounts[c.name] ? `(${categoryCounts[c.name]})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+            id="filter-category"
+          >
+            <option value="All">All Categories ({db.products.length})</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name} {categoryCounts[c.name] ? `(${categoryCounts[c.name]})` : ''}
+              </option>
+            ))}
+          </select>
 
           {activeSubView === 'products' && (
             <>
               {/* Stock Status Filter */}
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-500 font-medium hidden sm:inline">Stock:</span>
-                <select
-                  value={stockStatusFilter}
-                  onChange={(e) => setStockStatusFilter(e.target.value as any)}
-                  className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-                  id="filter-stock-status"
-                >
-                  <option value="All">All Stock Levels</option>
-                  <option value="In stock">In Stock</option>
-                  <option value="Low stock">Low Stock Alert</option>
-                  <option value="Out of stock">Out of Stock</option>
-                </select>
-              </div>
+              <select
+                value={stockStatusFilter}
+                onChange={(e) => setStockStatusFilter(e.target.value as any)}
+                className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                id="filter-stock-status"
+              >
+                <option value="All">All Stock Levels</option>
+                <option value="In stock">In Stock</option>
+                <option value="Low stock">Low Stock Alert</option>
+                <option value="Out of stock">Out of Stock</option>
+              </select>
 
               {/* Sourcing Filter */}
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-500 font-medium hidden sm:inline">Source:</span>
-                <select
-                  value={sourceFilter}
-                  onChange={(e) => setSourceFilter(e.target.value as any)}
-                  className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-                  id="filter-sourcing"
-                >
-                  <option value="All">All Sources</option>
-                  <option value="Manufactured">Manufactured In-House</option>
-                  <option value="Purchased">Purchased / Outsourced</option>
-                </select>
-              </div>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value as any)}
+                className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                id="filter-sourcing"
+              >
+                <option value="All">All Sources</option>
+                <option value="Manufactured">In-House</option>
+                <option value="Purchased">Outsourced</option>
+              </select>
 
               {/* Sorting */}
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-500 font-medium hidden sm:inline">Sort:</span>
+              <div className="flex items-center gap-1">
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+                  className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="sort-by-select"
                 >
-                  <option value="name">Product Name</option>
-                  <option value="stock">Stock Quantity</option>
-                  <option value="costPrice">Cost Price</option>
-                  <option value="wholesalePrice">Wholesale Price</option>
-                  <option value="retailPrice">Retail Price</option>
-                  <option value="valuation">Total Stock Value</option>
+                  <option value="name">Sort: Name</option>
+                  <option value="stock">Sort: Stock</option>
+                  <option value="costPrice">Sort: Cost Price</option>
+                  <option value="wholesalePrice">Sort: Wholesale Price</option>
+                  <option value="retailPrice">Sort: Retail Price</option>
+                  <option value="valuation">Sort: Total Value</option>
                 </select>
                 <button
                   type="button"
                   onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-                  className="border border-[var(--border)] rounded-md px-2 py-1.5 text-xs bg-white hover:bg-gray-50 font-mono"
+                  className="border border-stone-200 rounded-lg px-2.5 py-2 text-xs bg-white hover:bg-stone-50 text-stone-700 font-bold transition-colors"
                   title="Toggle Ascending / Descending"
                 >
                   {sortOrder === 'asc' ? '↑' : '↓'}
@@ -479,209 +470,183 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
         </div>
       </div>
 
-      {/* VIEW: FINISHED PRODUCTS */}
+      {/* VIEW: FINISHED PRODUCTS (CARD GRID) */}
       {activeSubView === 'products' && (
-        <div className="panel table-panel" id="finished-products-panel">
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Product & Image</th>
-                  <th>SKU Code</th>
-                  <th>Category</th>
-                  <th>Size / Unit</th>
-                  <th>Available Stock</th>
-                  <th>Cost Rate</th>
-                  <th>Wholesale Rate (Min Limit)</th>
-                  <th>Retail Rate</th>
-                  <th>Total Valuation</th>
-                  <th>Status</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={11} className="text-center py-12 text-gray-500">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Package className="w-8 h-8 text-gray-300" />
-                        <p className="text-sm font-medium">No products match your search or filter criteria.</p>
-                        <button
-                          className="button primary text-xs mt-2"
-                          onClick={() => setIsCreatingProduct(true)}
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Add New Product
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredProducts.map((p) => {
-                    const isLow = p.quantity <= p.reorderLevel
-                    const isOut = p.quantity <= 0
-                    const totalVal = p.totalCost !== undefined ? p.totalCost : p.quantity * p.costPrice
+        <div id="finished-products-panel">
+          {filteredProducts.length === 0 ? (
+            <div className="bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
+              <div className="flex flex-col items-center justify-center gap-3 max-w-sm mx-auto">
+                <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
+                  <Package className="w-7 h-7" />
+                </div>
+                <h3 className="text-base font-bold text-stone-800">No products found</h3>
+                <p className="text-xs text-stone-500">
+                  {query || categoryFilter !== 'All' || stockStatusFilter !== 'All' || sourceFilter !== 'All'
+                    ? 'Try adjusting your search query or filters to find what you are looking for.'
+                    : 'Get started by creating your first finished product SKU.'}
+                </p>
+                <button
+                  className="button primary text-xs mt-2"
+                  onClick={() => setIsCreatingProduct(true)}
+                >
+                  <Plus className="w-4 h-4" /> Add Product
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4.5" id="products-card-grid">
+              {filteredProducts.map((p) => {
+                const isLow = p.quantity <= p.reorderLevel && p.quantity > 0
+                const isOut = p.quantity <= 0
+                const sizeLabel = p.size ? `${p.size} ${p.sizeUnit || ''}`.trim() : null
 
-                    return (
-                      <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
-                        <td>
-                          <div className="flex items-center gap-3">
-                            {/* Product Image Thumbnail */}
-                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0 flex items-center justify-center relative">
-                              {p.imageUrl ? (
-                                <img
-                                  src={p.imageUrl}
-                                  alt={p.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <Package className="w-5 h-5 text-[#7cb518]" />
-                              )}
-                            </div>
-                            <div>
-                              <button
-                                type="button"
-                                className="font-bold text-gray-900 text-left hover:text-[#7cb518] transition-colors line-clamp-1"
-                                onClick={() => setViewProductDetails(p)}
-                              >
-                                {p.name}
-                              </button>
-                              <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                                {p.isPurchasedProduct ? (
-                                  <span className="inline-flex items-center gap-0.5 text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded font-medium text-[10px]">
-                                    <Building2 className="w-2.5 h-2.5" /> Purchased
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-0.5 text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium text-[10px]">
-                                    <Factory className="w-2.5 h-2.5" /> In-House
-                                  </span>
-                                )}
-                                {p.purchaseInvoiceImage && (
-                                  <span className="text-amber-700 bg-amber-50 px-1 rounded text-[10px] inline-flex items-center gap-0.5">
-                                    <Receipt className="w-2.5 h-2.5" /> Invoice
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                return (
+                  <div
+                    key={p.id}
+                    className="group bg-white rounded-2xl p-3.5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative overflow-hidden"
+                    id={`product-card-${p.id}`}
+                  >
+                    {/* Top Section: Image & Overlaid Badges */}
+                    <div>
+                      <div className="w-full aspect-[4/3] rounded-xl bg-stone-100 overflow-hidden relative flex items-center justify-center mb-3">
+                        {p.imageUrl ? (
+                          <img
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-stone-300 gap-1">
+                            <Package className="w-10 h-10 stroke-[1.5]" />
+                            <span className="text-[10px] font-medium text-stone-400">No Image</span>
                           </div>
-                        </td>
-                        <td>
-                          <span className="font-mono text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                            {p.sku}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="text-xs bg-emerald-50 text-emerald-800 font-medium px-2 py-0.5 rounded border border-emerald-200/60">
-                            {p.category}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="text-xs text-gray-700">
-                            {p.size ? (
-                              <strong>
-                                {p.size} {p.sizeUnit || ''} •{' '}
-                              </strong>
-                            ) : null}
-                            {p.unit}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="flex items-baseline gap-1.5">
-                            <span
-                              className={`font-bold ${
-                                isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-gray-900'
-                              }`}
-                            >
-                              {p.quantity} {p.unit}
-                            </span>
-                          </div>
-                          {isLow && !isOut && (
-                            <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-0.5">
-                              <AlertTriangle className="w-2.5 h-2.5" /> Low (Alert: {p.reorderLevel})
-                            </span>
-                          )}
-                          {isOut && (
-                            <span className="text-[10px] text-rose-600 font-bold">Out of stock</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className="text-gray-700 text-xs font-medium">{formatPKR(p.costPrice)}</span>
-                        </td>
-                        <td>
-                          <div className="font-semibold text-[#7cb518] text-xs">{formatPKR(p.wholesalePrice)}</div>
-                          {p.wholesaleMinQty ? (
-                            <div className="text-[10px] text-gray-500 font-normal">
-                              Min {p.wholesaleMinQty} {p.unit}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td>
-                          <span className="font-semibold text-gray-900 text-xs">{formatPKR(p.retailPrice)}</span>
-                        </td>
-                        <td>
-                          <span className="font-bold text-gray-900 text-xs">{formatPKR(totalVal)}</span>
-                          {p.isManualTotalCost && (
-                            <span className="text-[9px] text-purple-600 block font-medium">(manual overriden)</span>
-                          )}
-                        </td>
-                        <td>
-                          <span
-                            className={
-                              isOut
-                                ? 'status status-danger'
-                                : isLow
-                                ? 'status status-warning'
-                                : 'status status-success'
+                        )}
+
+                        {/* Top-Right Action Buttons */}
+                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-xs p-1 rounded-lg shadow-xs opacity-90 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            className="p-1.5 text-stone-500 hover:text-[#7cb518] hover:bg-stone-100 rounded-md transition-colors"
+                            title="Quick Stock Adjust"
+                            onClick={() =>
+                              setStockAdjustmentItem({
+                                id: p.id,
+                                name: p.name,
+                                current: p.quantity,
+                                type: 'product',
+                              })
                             }
                           >
-                            {isOut ? 'Out of stock' : isLow ? 'Low stock' : 'In stock'}
+                            <ArrowUpCircle className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-stone-100 rounded-md transition-colors"
+                            title="Edit Product"
+                            onClick={() => setSelectedProduct(p)}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-md transition-colors"
+                            title="Delete Product"
+                            onClick={() => handleDeleteProduct(p.id, p.name)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Top-Left Source Tag */}
+                        <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+                          {p.isPurchasedProduct ? (
+                            <span className="inline-flex items-center gap-1 bg-blue-600/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
+                              Outsourced
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-[#7cb518]/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
+                              In-House
+                            </span>
+                          )}
+
+                          {isOut ? (
+                            <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
+                              Out of Stock
+                            </span>
+                          ) : isLow ? (
+                            <span className="inline-flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
+                              <AlertTriangle className="w-2.5 h-2.5" /> Low Stock
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Category Pill & SKU */}
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="inline-block bg-emerald-50 text-emerald-800 font-semibold text-[10px] px-2 py-0.5 rounded-md">
+                          {p.category}
+                        </span>
+                        <span className="font-mono text-[10px] text-stone-400">
+                          {p.sku}
+                        </span>
+                      </div>
+
+                      {/* Product Name */}
+                      <h4
+                        className="font-bold text-stone-900 text-sm leading-snug line-clamp-1 group-hover:text-[#7cb518] transition-colors cursor-pointer"
+                        title={p.name}
+                        onClick={() => setViewProductDetails(p)}
+                      >
+                        {p.name}
+                      </h4>
+
+                      {/* Size / Unit & Available Stock */}
+                      <div className="flex items-center justify-between text-xs text-stone-500 mt-1">
+                        <span>
+                          {sizeLabel ? `${sizeLabel} • ` : ''}
+                          <strong className="text-stone-700">{p.unit}</strong>
+                        </span>
+                        <span
+                          className={`font-bold ${
+                            isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-stone-800'
+                          }`}
+                        >
+                          {p.quantity} {p.unit}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Pricing Bar */}
+                    <div className="mt-3.5 pt-3 border-t border-stone-100 flex items-end justify-between">
+                      <div>
+                        <span className="text-[10px] text-stone-400 uppercase font-bold tracking-wider block">
+                          Cost / Retail
+                        </span>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-xs text-stone-500 font-medium">
+                            {formatPKR(p.costPrice)}
                           </span>
-                        </td>
-                        <td>
-                          <div className="row-actions justify-end">
-                            <button
-                              className="row-action text-gray-600 hover:text-gray-900"
-                              title="View Full Product Specifications"
-                              onClick={() => setViewProductDetails(p)}
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              className="row-action text-[#7cb518] hover:text-[#6a9e14]"
-                              title="Quick Stock In / Out Adjustment"
-                              onClick={() =>
-                                setStockAdjustmentItem({
-                                  id: p.id,
-                                  name: p.name,
-                                  current: p.quantity,
-                                  type: 'product',
-                                })
-                              }
-                            >
-                              <ArrowUpCircle className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              className="row-action text-blue-600 hover:text-blue-800"
-                              title="Edit product"
-                              onClick={() => setSelectedProduct(p)}
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              className="row-action danger"
-                              title="Delete product"
-                              onClick={() => handleDeleteProduct(p.id, p.name)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                          <span className="text-stone-300 font-light">/</span>
+                          <span className="text-sm font-extrabold text-stone-900">
+                            {formatPKR(p.retailPrice)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setViewProductDetails(p)}
+                        className="text-[11px] font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-0.5 hover:underline"
+                      >
+                        <Eye className="w-3 h-3" /> View
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1870,6 +1835,14 @@ function CategoryManagerModal({
       const oldName = oldCat.name
       const newName = catName.trim()
 
+      if (
+        oldName.toLowerCase() !== newName.toLowerCase() &&
+        categories.some((c) => c.name.toLowerCase() === newName.toLowerCase())
+      ) {
+        setError('Another category with this name already exists.')
+        return
+      }
+
       const updatedCats = categories.map((c) =>
         c.id === editingCatId ? { ...c, name: newName, description: catDesc.trim() || undefined } : c
       )
@@ -1895,14 +1868,18 @@ function CategoryManagerModal({
       return
     }
 
-    const msg = pCount > 0
-      ? `Category "${cat.name}" is currently used by ${pCount} product(s). Deleting it will re-assign those products to "Other". Proceed?`
-      : `Are you sure you want to delete category "${cat.name}"?`
+    if (pCount > 0) {
+      const proceed = window.confirm(
+        `Category "${cat.name}" is currently assigned to ${pCount} product(s).\n\nIf you delete this category, these products will be reassigned to "General". Do you want to proceed?`
+      )
+      if (!proceed) return
+    } else {
+      if (!window.confirm(`Are you sure you want to delete category "${cat.name}"?`)) return
+    }
 
-    if (!window.confirm(msg)) return
-
+    const fallbackCat = categories.find((c) => c.id !== cat.id)?.name || 'General'
     const updatedCats = categories.filter((c) => c.id !== cat.id)
-    const updatedProds = products.map((p) => (p.category === cat.name ? { ...p, category: 'Other' } : p))
+    const updatedProds = products.map((p) => (p.category === cat.name ? { ...p, category: fallbackCat } : p))
 
     onSaveCategories(updatedCats, updatedProds)
   }
