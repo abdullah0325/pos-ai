@@ -27,12 +27,16 @@ import {
   Calendar,
   Package,
   Clock,
-  CheckCircle,
+  CheckCircle2,
   AlertCircle,
   Upload,
   ChevronRight,
-  Sparkles,
+  FolderTree,
+  AlertTriangle,
   ShoppingBag,
+  ExternalLink,
+  Layers,
+  Sparkles,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -40,9 +44,11 @@ import {
   type AppDatabase,
   type CustomerItem,
   type CustomerType,
+  type CustomerCategoryItem,
   type CustomerPaymentRecord,
   type InvoiceItem,
   type LedgerEntry,
+  defaultCustomerCategories,
 } from '@/lib/db'
 import {
   generateLedgerPDF,
@@ -62,22 +68,30 @@ export default function CustomerManagementView({
   onSaveDatabase,
   onNavigate,
 }: CustomerManagementViewProps) {
-  // Navigation / Active View
+  // Navigation / Selected Customer
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'products' | 'invoices' | 'ledger' | 'payments'>('products')
+  const [activeTab, setActiveTab] = useState<'ledger' | 'invoices' | 'products' | 'payments'>('ledger')
 
-  // Search and Filter in List View
+  // Search & Filter Toolbar State
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'Retailer' | 'Distributor' | 'Sales Man'>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'outstanding' | 'settled' | 'overlimit'>('all')
 
-  // Modals
+  // Modals State
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<CustomerItem | null>(null)
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
   const [isRecordingPayment, setIsRecordingPayment] = useState<CustomerItem | null>(null)
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceItem | null>(null)
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null)
-  const [quickNewSaleCustomer, setQuickNewSaleCustomer] = useState<CustomerItem | null>(null)
+  const [deleteWarningCustomer, setDeleteWarningCustomer] = useState<{ customer: CustomerItem; invoiceCount: number; ledgerCount: number } | null>(null)
+
+  // Safe Customer Categories
+  const customerCategories = useMemo(() => {
+    return db.customerCategories && db.customerCategories.length > 0
+      ? db.customerCategories
+      : defaultCustomerCategories
+  }, [db.customerCategories])
 
   // Current Selected Customer Profile
   const selectedCustomer = useMemo(() => {
@@ -85,22 +99,44 @@ export default function CustomerManagementView({
     return db.customers.find((c) => c.id === selectedCustomerId) || null
   }, [db.customers, selectedCustomerId])
 
-  // Normalizes Customer Type for Filtering and Display
-  const normalizeType = (type: CustomerType): 'Retailer' | 'Distributor' | 'Sales Man' => {
-    if (type === 'Retailer') return 'Retailer'
-    if (type === 'Distributor') return 'Distributor'
-    if (type === 'Sales Man' || type === 'Sales Representative') return 'Sales Man'
-    if (type === 'Wholesaler') return 'Retailer'
-    return 'Retailer'
+  // Helper to get Category / Parent classification
+  const getCustomerCategoryInfo = (cust: CustomerItem) => {
+    const rawType = cust.type || 'Retailer'
+    const matchedCategory = customerCategories.find(
+      (cat) => cat.name.toLowerCase() === rawType.toLowerCase() || cat.id === rawType
+    )
+    if (matchedCategory) {
+      return {
+        name: matchedCategory.name,
+        parentType: matchedCategory.parentType,
+      }
+    }
+    if (rawType === 'Distributor' || rawType === 'Sales Man' || rawType === 'Sales Representative' || rawType === 'Wholesaler' || rawType === 'Van Sales') {
+      return { name: rawType, parentType: 'Wholesaler' as const }
+    }
+    if (rawType === 'Walk-in' || rawType === 'Walk-in Customer' || rawType === 'Counter') {
+      return { name: 'Walk-in Customer', parentType: 'Walk-in' as const }
+    }
+    return { name: rawType, parentType: 'Retailer' as const }
   }
 
   // Filtered Customers List
   const filteredCustomers = useMemo(() => {
     return db.customers.filter((c) => {
-      const normType = normalizeType(c.type)
+      const catInfo = getCustomerCategoryInfo(c)
 
       // Type Filter
-      if (typeFilter !== 'all' && normType !== typeFilter) return false
+      if (typeFilter !== 'all') {
+        if (typeFilter === 'Wholesaler') {
+          if (catInfo.parentType !== 'Wholesaler' && catInfo.name !== 'Wholesaler') return false
+        } else if (typeFilter === 'Retailer') {
+          if (catInfo.parentType !== 'Retailer' && catInfo.name !== 'Retailer') return false
+        } else if (typeFilter === 'Walk-in') {
+          if (catInfo.parentType !== 'Walk-in' && catInfo.name !== 'Walk-in Customer') return false
+        } else {
+          if (catInfo.name.toLowerCase() !== typeFilter.toLowerCase()) return false
+        }
+      }
 
       // Balance Filter
       if (balanceFilter === 'outstanding' && c.currentBalance <= 0) return false
@@ -119,59 +155,30 @@ export default function CustomerManagementView({
 
       return nameMatch || businessMatch || phoneMatch || idMatch || addressMatch
     })
-  }, [db.customers, searchQuery, typeFilter, balanceFilter])
+  }, [db.customers, searchQuery, typeFilter, balanceFilter, customerCategories])
 
-  // Summary Metrics for Customer Directory
+  // Top Metrics Data
   const metrics = useMemo(() => {
     const totalCount = db.customers.length
     const totalReceivables = db.customers.reduce((acc, c) => acc + (c.currentBalance > 0 ? c.currentBalance : 0), 0)
-    const retailers = db.customers.filter((c) => normalizeType(c.type) === 'Retailer').length
-    const distributors = db.customers.filter((c) => normalizeType(c.type) === 'Distributor').length
-    const salesMen = db.customers.filter((c) => normalizeType(c.type) === 'Sales Man').length
 
-    return { totalCount, totalReceivables, retailers, distributors, salesMen }
-  }, [db.customers])
+    let distributors = 0
+    let retailers = 0
+    let salesMen = 0
+    let walkIns = 0
 
-  // Products Given/Sold to Selected Customer (Aggregated from all linked invoices)
-  const customerProducts = useMemo(() => {
-    if (!selectedCustomer) return []
-    const invoices = db.invoices.filter((inv) => inv.customerId === selectedCustomer.id || inv.partyId === selectedCustomer.id)
-
-    const list: Array<{
-      productId: string
-      name: string
-      quantity: number
-      unit: string
-      unitPrice: number
-      total: number
-      invoiceNumber: string
-      date: string
-      time?: string
-      pricingTier?: string
-    }> = []
-
-    invoices.forEach((inv) => {
-      (inv.items || []).forEach((item) => {
-        list.push({
-          productId: item.productId,
-          name: item.name,
-          quantity: item.quantity,
-          unit: item.unit || 'Cartons',
-          unitPrice: item.unitPrice,
-          total: item.total || item.quantity * item.unitPrice,
-          invoiceNumber: inv.invoiceNumber,
-          date: inv.date,
-          time: inv.time || '10:00 AM',
-          pricingTier: item.pricingTier || (inv.saleType === 'Distributor' ? 'Wholesale' : 'Retail'),
-        })
-      })
+    db.customers.forEach((c) => {
+      const catInfo = getCustomerCategoryInfo(c)
+      if (catInfo.name === 'Distributor') distributors++
+      else if (catInfo.name === 'Sales Man' || catInfo.name === 'Sales Representative') salesMen++
+      else if (catInfo.parentType === 'Retailer' || catInfo.name === 'Retailer') retailers++
+      else if (catInfo.parentType === 'Walk-in' || catInfo.name === 'Walk-in Customer') walkIns++
     })
 
-    // Sort newest date first
-    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [selectedCustomer, db.invoices])
+    return { totalCount, totalReceivables, distributors, retailers, salesMen, walkIns }
+  }, [db.customers, customerCategories])
 
-  // Invoices & Receipts Linked to Selected Customer
+  // Customer Invoices
   const customerInvoices = useMemo(() => {
     if (!selectedCustomer) return []
     return db.invoices
@@ -179,34 +186,16 @@ export default function CustomerManagementView({
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [selectedCustomer, db.invoices])
 
-  // Customer Financials Calculations (Auto-calculated)
-  const customerFinancials = useMemo(() => {
-    if (!selectedCustomer) return { totalOwed: 0, totalPaid: 0, pendingBalance: 0 }
-
-    const invoiceGrandTotals = customerInvoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0)
-    const invoicePaidTotals = customerInvoices.reduce((sum, inv) => sum + (inv.amountPaid || 0), 0)
-
-    // Payments recorded directly in customer profile
-    const extraPayments = (selectedCustomer.paymentRecords || []).reduce((sum, p) => sum + (p.amount || 0), 0)
-
-    const totalOwed = (selectedCustomer.openingBalance || 0) + invoiceGrandTotals
-    const totalPaid = invoicePaidTotals + extraPayments
-    const pendingBalance = Math.max(0, selectedCustomer.currentBalance)
-
-    return { totalOwed, totalPaid, pendingBalance }
-  }, [selectedCustomer, customerInvoices])
-
-  // Chronological Running Ledger for Selected Customer
+  // Chronological Running Ledger
   const customerLedgers = useMemo(() => {
     if (!selectedCustomer) return []
     const rawEntries = db.ledgers.filter((l) => l.partyId === selectedCustomer.id)
 
-    // If db.ledgers has entries, sort them chronologically
     if (rawEntries.length > 0) {
       return [...rawEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     }
 
-    // Auto-generate ledger if empty
+    // Auto-generate if not pre-populated
     const generated: LedgerEntry[] = []
     let runningBalance = selectedCustomer.openingBalance || 0
 
@@ -225,7 +214,7 @@ export default function CustomerManagementView({
       })
     }
 
-    // Add Invoices
+    // Invoices
     customerInvoices.forEach((inv) => {
       runningBalance += inv.grandTotal
       generated.push({
@@ -258,7 +247,7 @@ export default function CustomerManagementView({
       }
     })
 
-    // Add standalone payments
+    // Manual / Profile Payments
     ;(selectedCustomer.paymentRecords || []).forEach((pay) => {
       runningBalance -= pay.amount
       generated.push({
@@ -278,28 +267,140 @@ export default function CustomerManagementView({
     return generated.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }, [selectedCustomer, db.ledgers, customerInvoices])
 
+  // Financial Stats for Selected Customer Profile
+  const profileFinancials = useMemo(() => {
+    if (!selectedCustomer) {
+      return {
+        totalInvoiced: 0,
+        totalPaid: 0,
+        currentOutstanding: 0,
+        lastTransactionDate: '—',
+      }
+    }
+
+    const totalInvoiced = customerInvoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0)
+    const invoicePayments = customerInvoices.reduce((sum, inv) => sum + (inv.amountPaid || 0), 0)
+    const directPayments = (selectedCustomer.paymentRecords || []).reduce((sum, p) => sum + (p.amount || 0), 0)
+    const totalPaid = invoicePayments + directPayments
+    const currentOutstanding = selectedCustomer.currentBalance
+
+    // Determine last transaction date
+    let lastDate = selectedCustomer.updatedAt || selectedCustomer.createdAt || ''
+    if (customerInvoices.length > 0) {
+      lastDate = customerInvoices[0].date
+    }
+    if (selectedCustomer.paymentRecords && selectedCustomer.paymentRecords.length > 0) {
+      const lastPayDate = selectedCustomer.paymentRecords[0].date
+      if (!lastDate || new Date(lastPayDate).getTime() > new Date(lastDate).getTime()) {
+        lastDate = lastPayDate
+      }
+    }
+
+    return {
+      totalInvoiced,
+      totalPaid,
+      currentOutstanding,
+      lastTransactionDate: lastDate ? formatDate(lastDate) : 'No transactions',
+    }
+  }, [selectedCustomer, customerInvoices])
+
+  // Aggregated Products Purchased Summary (Top Products bought)
+  const productsPurchasedSummary = useMemo(() => {
+    if (!selectedCustomer) return []
+    const map = new Map<
+      string,
+      {
+        productId: string
+        name: string
+        unit: string
+        totalQuantity: number
+        totalSpent: number
+        lastUnitPrice: number
+        lastDate: string
+        orderCount: number
+      }
+    >()
+
+    customerInvoices.forEach((inv) => {
+      ;(inv.items || []).forEach((item) => {
+        const existing = map.get(item.productId || item.name)
+        const lineTotal = item.total || item.quantity * item.unitPrice
+        if (existing) {
+          existing.totalQuantity += item.quantity
+          existing.totalSpent += lineTotal
+          existing.orderCount += 1
+          if (new Date(inv.date).getTime() > new Date(existing.lastDate).getTime()) {
+            existing.lastDate = inv.date
+            existing.lastUnitPrice = item.unitPrice
+          }
+        } else {
+          map.set(item.productId || item.name, {
+            productId: item.productId,
+            name: item.name,
+            unit: item.unit || 'Cartons',
+            totalQuantity: item.quantity,
+            totalSpent: lineTotal,
+            lastUnitPrice: item.unitPrice,
+            lastDate: inv.date,
+            orderCount: 1,
+          })
+        }
+      })
+    })
+
+    return Array.from(map.values()).sort((a, b) => b.totalSpent - a.totalSpent)
+  }, [selectedCustomer, customerInvoices])
+
   // Export Customer List CSV
   const handleExportCSV = () => {
-    const headers = ['ID', 'Customer Name', 'Business / Agency', 'Type', 'Phone', 'Address', 'Opening Balance', 'Current Balance', 'Credit Limit', 'Status']
-    const rows = filteredCustomers.map((c) => [
-      c.customerId || c.id,
-      c.name,
-      c.businessName || '—',
-      normalizeType(c.type),
-      c.phone,
-      c.address,
-      c.openingBalance,
-      c.currentBalance,
-      c.creditLimit,
-      c.status,
-    ])
+    const headers = [
+      'Customer ID',
+      'Name',
+      'Business Name',
+      'Category',
+      'Parent Type',
+      'Phone',
+      'Address',
+      'City',
+      'Opening Balance',
+      'Current Balance',
+      'Credit Limit',
+      'Status',
+    ]
+    const rows = filteredCustomers.map((c) => {
+      const cat = getCustomerCategoryInfo(c)
+      return [
+        c.customerId || c.id,
+        c.name,
+        c.businessName || '—',
+        cat.name,
+        cat.parentType,
+        c.phone,
+        c.address,
+        c.city || '—',
+        c.openingBalance,
+        c.currentBalance,
+        c.creditLimit,
+        c.status,
+      ]
+    })
     exportToCSV(`Customers_${new Date().toISOString().slice(0, 10)}`, headers, rows)
   }
 
-  // Delete Customer
-  const handleDeleteCustomer = (customerId: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete customer profile "${name}"? All associated local records will be deleted.`)) return
+  // Delete Customer Handler with transaction history safety check
+  const requestDeleteCustomer = (customer: CustomerItem) => {
+    const linkedInvoices = db.invoices.filter((i) => i.customerId === customer.id || i.partyId === customer.id)
+    const linkedLedgers = db.ledgers.filter((l) => l.partyId === customer.id)
+    setDeleteWarningCustomer({
+      customer,
+      invoiceCount: linkedInvoices.length,
+      ledgerCount: linkedLedgers.length,
+    })
+  }
 
+  const confirmDeleteCustomer = () => {
+    if (!deleteWarningCustomer) return
+    const customerId = deleteWarningCustomer.customer.id
     const updatedCustomers = db.customers.filter((c) => c.id !== customerId)
     const updatedLedgers = db.ledgers.filter((l) => l.partyId !== customerId)
 
@@ -312,9 +413,10 @@ export default function CustomerManagementView({
     if (selectedCustomerId === customerId) {
       setSelectedCustomerId(null)
     }
+    setDeleteWarningCustomer(null)
   }
 
-  // Record Customer Payment Handler
+  // Record Payment Handler
   const handleSavePayment = (paymentData: {
     amount: number
     date: string
@@ -352,7 +454,9 @@ export default function CustomerManagementView({
       date: paymentData.date,
       referenceType: 'Payment',
       referenceId: receiptNumber,
-      description: `Payment received (${paymentData.paymentMethod}) ${paymentData.transactionRef ? 'Ref: ' + paymentData.transactionRef : ''}`,
+      description: `Manual Payment Received (${paymentData.paymentMethod}) ${
+        paymentData.transactionRef ? 'Ref: ' + paymentData.transactionRef : ''
+      }`,
       debit: 0,
       credit: paymentData.amount,
       balance: updatedBalance,
@@ -370,7 +474,7 @@ export default function CustomerManagementView({
         : c
     )
 
-    // Update Account Balance (Cash / Bank)
+    // Update Accounts Balance
     const updatedAccounts = db.accounts.map((acc) => {
       if (acc.id === paymentData.paymentAccount) {
         return { ...acc, balance: acc.balance + paymentData.amount, updatedAt: paymentData.date }
@@ -388,219 +492,164 @@ export default function CustomerManagementView({
     setIsRecordingPayment(null)
   }
 
-  // Quick New Sale Creation from Customer Profile
-  const handleQuickSaleSubmit = (items: Array<{ productId: string; name: string; qty: number; unitPrice: number; unit: string }>, amountPaid: number, paymentMethod: any, paymentAccount: any) => {
-    if (!quickNewSaleCustomer) return
-    const cust = quickNewSaleCustomer
-
-    const subtotal = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0)
-    const grandTotal = subtotal
-    const balanceDue = Math.max(0, grandTotal - amountPaid)
-
-    const invoiceNumber = `INV-2026-${String(db.invoices.length + 1049)}`
-    const today = new Date().toISOString().slice(0, 10)
-
-    const newInvoice: InvoiceItem = {
-      id: `inv-${Date.now()}`,
-      invoiceNumber,
-      date: today,
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      customerId: cust.id,
-      customerName: cust.name,
-      customerType: cust.type,
-      phone: cust.phone,
-      address: cust.address,
-      saleType: cust.type === 'Distributor' ? 'Distributor' : cust.type === 'Sales Man' ? 'Retail' : 'Retail',
-      items: items.map((i) => ({
-        productId: i.productId,
-        name: i.name,
-        quantity: i.qty,
-        unit: i.unit,
-        unitPrice: i.unitPrice,
-        costPrice: 0,
-        total: i.qty * i.unitPrice,
-      })),
-      subtotal,
-      discount: 0,
-      tax: 0,
-      grandTotal,
-      amountPaid,
-      balanceDue,
-      paymentMethod,
-      paymentAccount,
-      status: balanceDue === 0 ? 'Paid' : amountPaid > 0 ? 'Partial' : 'Unpaid',
-      deliveryStatus: 'Delivered',
-      createdAt: new Date().toISOString(),
-    }
-
-    // Deduct inventory products
-    const updatedProducts = db.products.map((p) => {
-      const sold = items.find((i) => i.productId === p.id)
-      if (sold) {
-        const remaining = Math.max(0, p.quantity - sold.qty)
-        return {
-          ...p,
-          quantity: remaining,
-          status: (remaining <= 0 ? 'Out of stock' : remaining <= p.reorderLevel ? 'Low stock' : 'In stock') as any,
-          updatedAt: today,
-        }
-      }
-      return p
-    })
-
-    // Update customer current balance
-    const updatedBalance = cust.currentBalance + balanceDue
-    const updatedCustomers = db.customers.map((c) => (c.id === cust.id ? { ...c, currentBalance: updatedBalance, updatedAt: today } : c))
-
-    // Update Accounts
-    const updatedAccounts = db.accounts.map((acc) => {
-      if (acc.id === paymentAccount && amountPaid > 0) {
-        return { ...acc, balance: acc.balance + amountPaid, updatedAt: today }
-      }
-      return acc
-    })
-
-    // Create Ledger entries
-    const ledgerEntries: LedgerEntry[] = [
-      {
-        id: `led-${Date.now()}-1`,
-        partyId: cust.id,
-        partyType: 'Customer',
-        date: today,
-        referenceType: 'Invoice',
-        referenceId: invoiceNumber,
-        description: `Invoice #${invoiceNumber} (${items.length} items)`,
-        debit: grandTotal,
-        credit: 0,
-        balance: cust.currentBalance + grandTotal,
-      },
-    ]
-
-    if (amountPaid > 0) {
-      ledgerEntries.push({
-        id: `led-${Date.now()}-2`,
-        partyId: cust.id,
-        partyType: 'Customer',
-        date: today,
-        referenceType: 'Payment',
-        referenceId: `REC-${invoiceNumber}`,
-        description: `Payment received against #${invoiceNumber} (${paymentMethod})`,
-        debit: 0,
-        credit: amountPaid,
-        balance: updatedBalance,
-      })
-    }
-
-    onSaveDatabase({
-      ...db,
-      invoices: [newInvoice, ...db.invoices],
-      products: updatedProducts,
-      customers: updatedCustomers,
-      accounts: updatedAccounts,
-      ledgers: [...db.ledgers, ...ledgerEntries],
-    })
-
-    setQuickNewSaleCustomer(null)
-  }
-
   return (
     <div className="space-y-6">
       {/* ========================================================================= */}
-      {/* VIEW A: LIST VIEW (When no customer is selected) */}
+      {/* 1. LIST VIEW (When no customer profile is open) */}
       {/* ========================================================================= */}
       {!selectedCustomer && (
         <>
-          {/* Header Card */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
+          {/* Header Row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
             <div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold tracking-wider uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                  <Users className="w-3.5 h-3.5" /> Unified Customer Center
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                  <Users className="w-3.5 h-3.5" /> Customer Accounts
                 </span>
               </div>
               <h1 className="text-2xl font-black text-stone-900 mt-1">Customer Management</h1>
-              <p className="text-xs text-stone-600 mt-0.5">
-                Manage all customer profiles (Retailers, Distributors, Sales Men), track running ledgers, sales, invoices, and payments offline.
+              <p className="text-xs text-stone-500 mt-0.5">
+                Maintain directory of Retailers, Wholesalers, Distributors, Sales Men, and Walk-in customers with live ledgers & dues.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="button secondary" onClick={handleExportCSV} title="Export CSV">
-                <Download className="w-4 h-4" /> Export CSV
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                className="button secondary text-xs"
+                onClick={() => setIsManagingCategories(true)}
+                title="Manage Customer Categories & Sub-types"
+              >
+                <FolderTree className="w-3.5 h-3.5 text-stone-600" /> Manage Categories
               </button>
-              <button className="button primary" onClick={() => setIsCreatingCustomer(true)}>
-                <Plus className="w-4 h-4 stroke-[3]" /> Add New Customer
+              <button className="button secondary text-xs" onClick={handleExportCSV} title="Export CSV">
+                <Download className="w-3.5 h-3.5 text-stone-600" /> Export CSV
+              </button>
+              <button className="button primary text-xs" onClick={() => setIsCreatingCustomer(true)}>
+                <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add New Customer
               </button>
             </div>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="metric-card">
-              <span className="metric-label">Total Accounts</span>
-              <strong className="metric-value text-stone-900">{metrics.totalCount}</strong>
-              <span className="metric-sub">Active profiles</span>
+          {/* Top Stats Bar — Evenly Spaced Structured Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Total Accounts</span>
+                <Users className="w-4 h-4 text-stone-400" />
+              </div>
+              <div className="mt-2">
+                <strong className="text-2xl font-black text-stone-900 block">{metrics.totalCount}</strong>
+                <span className="text-[11px] text-stone-500 font-medium">All registered profiles</span>
+              </div>
             </div>
-            <div className="metric-card">
-              <span className="metric-label">Distributors</span>
-              <strong className="metric-value text-blue-700">{metrics.distributors}</strong>
-              <span className="metric-sub">Regional wholesale hubs</span>
+
+            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Distributors</span>
+                <Building2 className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="mt-2">
+                <strong className="text-2xl font-black text-blue-700 block">{metrics.distributors}</strong>
+                <span className="text-[11px] text-stone-500 font-medium">Wholesale hub accounts</span>
+              </div>
             </div>
-            <div className="metric-card">
-              <span className="metric-label">Retailers & Shops</span>
-              <strong className="metric-value text-emerald-700">{metrics.retailers}</strong>
-              <span className="metric-sub">Retail store accounts</span>
+
+            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Retailers (Shops)</span>
+                <Store className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="mt-2">
+                <strong className="text-2xl font-black text-emerald-700 block">{metrics.retailers}</strong>
+                <span className="text-[11px] text-stone-500 font-medium">Direct retail shops & marts</span>
+              </div>
             </div>
-            <div className="metric-card">
-              <span className="metric-label">Sales Men / Reps</span>
-              <strong className="metric-value text-purple-700">{metrics.salesMen}</strong>
-              <span className="metric-sub">Route order-bookers</span>
+
+            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Sales Men / Reps</span>
+                <UserCheck className="w-4 h-4 text-purple-600" />
+              </div>
+              <div className="mt-2">
+                <strong className="text-2xl font-black text-purple-700 block">{metrics.salesMen}</strong>
+                <span className="text-[11px] text-stone-500 font-medium">Route order bookers</span>
+              </div>
             </div>
-            <div className="metric-card col-span-2 md:col-span-1 bg-amber-50/50 border-amber-200">
-              <span className="metric-label text-amber-800">Total Outstanding</span>
-              <strong className="metric-value text-amber-900">{formatPKR(metrics.totalReceivables)}</strong>
-              <span className="metric-sub text-amber-700">Receivable balance</span>
+
+            <div className="col-span-2 md:col-span-1 bg-amber-50/60 p-4 rounded-xl border border-amber-200/80 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Total Outstanding</span>
+                <DollarSign className="w-4 h-4 text-amber-700" />
+              </div>
+              <div className="mt-2">
+                <strong className="text-2xl font-black text-amber-900 block">{formatPKR(metrics.totalReceivables)}</strong>
+                <span className="text-[11px] text-amber-700 font-semibold">Total receivable dues</span>
+              </div>
             </div>
           </div>
 
-          {/* Search, Filter & Tabs Bar */}
-          <div className="panel p-4 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-            <div className="search-box max-w-md w-full">
-              <Search className="w-4 h-4 text-stone-400" />
+          {/* Unified Filter & Search Toolbar */}
+          <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search by name, ID, phone, city, address..."
+                placeholder="Search by name, business, phone, ID, city, address..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-transparent text-xs font-medium focus:outline-none"
+                className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-stone-50 rounded-lg border border-stone-200 text-stone-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-stone-400 hover:text-stone-600">
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
+            {/* Filter Tabs & Balance Dropdown */}
             <div className="flex flex-wrap items-center gap-2">
-              {/* Type Filter Buttons */}
               <div className="inline-flex rounded-lg border border-stone-200 p-1 bg-stone-50">
-                {(['all', 'Retailer', 'Distributor', 'Sales Man'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTypeFilter(t)}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
-                      typeFilter === t ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
-                    }`}
-                  >
-                    {t === 'all' ? 'All Types' : t}
-                  </button>
-                ))}
+                <button
+                  onClick={() => setTypeFilter('all')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    typeFilter === 'all' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  All ({db.customers.length})
+                </button>
+                <button
+                  onClick={() => setTypeFilter('Retailer')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    typeFilter === 'Retailer' ? 'bg-white text-emerald-800 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Retailers ({metrics.retailers})
+                </button>
+                <button
+                  onClick={() => setTypeFilter('Wholesaler')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    typeFilter === 'Wholesaler' ? 'bg-white text-blue-800 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Wholesalers ({metrics.distributors + metrics.salesMen})
+                </button>
+                <button
+                  onClick={() => setTypeFilter('Walk-in')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    typeFilter === 'Walk-in' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Walk-in ({metrics.walkIns})
+                </button>
               </div>
 
-              {/* Balance Filter Dropdown */}
               <select
                 value={balanceFilter}
                 onChange={(e) => setBalanceFilter(e.target.value as any)}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 focus:outline-none"
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               >
                 <option value="all">All Balances</option>
                 <option value="outstanding">Outstanding Receivable (&gt; 0)</option>
@@ -611,46 +660,46 @@ export default function CustomerManagementView({
           </div>
 
           {/* Customers Data Table */}
-          <div className="panel table-panel">
-            <div className="table-scroll">
-              <table>
+          <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr>
-                    <th>Customer Name & ID</th>
-                    <th>Customer Type</th>
-                    <th>Phone / WhatsApp</th>
-                    <th>Address & City</th>
-                    <th>Opening Bal.</th>
-                    <th>Credit Limit</th>
-                    <th>Outstanding Receivable</th>
-                    <th className="text-right">Actions</th>
+                  <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px] tracking-wider">
+                    <th className="py-3 px-4">Customer & Business</th>
+                    <th className="py-3 px-4">Type / Category</th>
+                    <th className="py-3 px-4">Phone / Contact</th>
+                    <th className="py-3 px-4">City / Address</th>
+                    <th className="py-3 px-4">Opening Balance</th>
+                    <th className="py-3 px-4">Current Outstanding</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-stone-100">
                   {filteredCustomers.map((c) => {
-                    const normType = normalizeType(c.type)
+                    const cat = getCustomerCategoryInfo(c)
                     const isOverLimit = c.creditLimit > 0 && c.currentBalance > c.creditLimit
 
                     return (
-                      <tr key={c.id} className="hover:bg-stone-50/70 transition-colors">
-                        <td>
-                          <div
-                            className="flex items-center gap-3 cursor-pointer group"
-                            onClick={() => setSelectedCustomerId(c.id)}
-                          >
+                      <tr
+                        key={c.id}
+                        className="hover:bg-stone-50/60 transition-colors group cursor-pointer"
+                        onClick={() => setSelectedCustomerId(c.id)}
+                      >
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
                             <div
-                              className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shadow-2xs ${
-                                normType === 'Distributor'
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shadow-2xs ${
+                                cat.parentType === 'Wholesaler'
                                   ? 'bg-blue-100 text-blue-800'
-                                  : normType === 'Sales Man'
-                                  ? 'bg-purple-100 text-purple-800'
+                                  : cat.parentType === 'Walk-in'
+                                  ? 'bg-stone-100 text-stone-700'
                                   : 'bg-emerald-100 text-emerald-800'
                               }`}
                             >
                               {c.name.slice(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <div className="font-bold text-stone-900 group-hover:text-primary transition-colors flex items-center gap-1.5">
+                              <div className="font-bold text-stone-900 group-hover:text-emerald-700 transition-colors flex items-center gap-1.5">
                                 <span>{c.name}</span>
                                 {c.customerId && (
                                   <span className="text-[10px] bg-stone-100 text-stone-600 px-1.5 py-0.2 rounded font-mono font-normal">
@@ -659,105 +708,106 @@ export default function CustomerManagementView({
                                 )}
                               </div>
                               <div className="text-[11px] text-stone-500 font-medium">
-                                {c.businessName || `${normType} Account`}
+                                {c.businessName || `${cat.name} Account`}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td>
+
+                        <td className="py-3.5 px-4">
                           <span
                             className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                              normType === 'Distributor'
+                              cat.parentType === 'Wholesaler'
                                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : normType === 'Sales Man'
-                                ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                : cat.parentType === 'Walk-in'
+                                ? 'bg-stone-100 text-stone-700 border border-stone-200'
                                 : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             }`}
                           >
-                            {normType === 'Distributor' && <Building2 className="w-3 h-3" />}
-                            {normType === 'Sales Man' && <UserCheck className="w-3 h-3" />}
-                            {normType === 'Retailer' && <Store className="w-3 h-3" />}
-                            {normType}
+                            {cat.name === 'Distributor' && <Building2 className="w-3 h-3" />}
+                            {cat.name === 'Sales Man' && <UserCheck className="w-3 h-3" />}
+                            {cat.parentType === 'Retailer' && <Store className="w-3 h-3" />}
+                            {cat.parentType === 'Walk-in' && <Users className="w-3 h-3" />}
+                            {cat.name}
                           </span>
                         </td>
-                        <td>
+
+                        <td className="py-3.5 px-4">
                           <div className="text-xs font-mono font-semibold text-stone-800 flex items-center gap-1">
                             <Phone className="w-3 h-3 text-stone-400" />
-                            {c.phone}
+                            {c.phone || '—'}
                           </div>
-                          {c.altPhone && <div className="text-[10px] text-stone-400 font-mono">{c.altPhone}</div>}
+                          {c.altPhone && <div className="text-[10px] text-stone-400 font-mono">WA: {c.altPhone}</div>}
                         </td>
-                        <td>
+
+                        <td className="py-3.5 px-4">
                           <div className="text-xs text-stone-700 max-w-[200px] truncate" title={c.address}>
                             {c.city && <span className="font-bold text-stone-900">{c.city} · </span>}
                             {c.address || '—'}
                           </div>
                         </td>
-                        <td className="text-xs text-stone-600 font-medium">{formatPKR(c.openingBalance)}</td>
-                        <td className="text-xs text-stone-600 font-medium">
-                          {c.creditLimit > 0 ? formatPKR(c.creditLimit) : <span className="text-stone-400">No limit</span>}
+
+                        <td className="py-3.5 px-4 text-xs text-stone-600 font-medium">
+                          {formatPKR(c.openingBalance)}
                         </td>
-                        <td>
+
+                        <td className="py-3.5 px-4">
                           <div className="flex flex-col">
                             <strong
                               className={`text-xs ${
                                 c.currentBalance > 0
-                                  ? isOverLimit
-                                    ? 'text-rose-700 font-black'
-                                    : 'text-amber-700 font-bold'
-                                  : 'text-emerald-700 font-semibold'
+                                  ? 'text-rose-700 font-black'
+                                  : 'text-emerald-700 font-bold'
                               }`}
                             >
                               {formatPKR(c.currentBalance)}
                             </strong>
+                            {c.currentBalance <= 0 && (
+                              <span className="text-[10px] text-emerald-700 font-medium">Clear / Settled</span>
+                            )}
                             {isOverLimit && (
                               <span className="text-[10px] text-rose-600 font-bold flex items-center gap-0.5">
-                                <AlertCircle className="w-3 h-3" /> Over Limit
+                                <AlertCircle className="w-3 h-3" /> Over Limit ({formatPKR(c.creditLimit)})
                               </span>
                             )}
                           </div>
                         </td>
-                        <td>
-                          <div className="row-actions justify-end">
+
+                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
                             <button
-                              className="row-action text-primary"
-                              title="View Full Profile & Ledgers"
+                              className="px-2.5 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-colors flex items-center gap-1"
+                              title="Open Customer Profile"
                               onClick={() => setSelectedCustomerId(c.id)}
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" /> View Profile
                             </button>
                             <button
-                              className="row-action text-emerald-700"
-                              title="Record Payment"
-                              onClick={() => setIsRecordingPayment(c)}
-                            >
-                              <CreditCard className="w-4 h-4" />
-                            </button>
-                            <button
-                              className="row-action"
-                              title="Edit Customer Profile"
+                              className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+                              title="Edit Customer Details"
                               onClick={() => setEditingCustomer(c)}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              className="row-action danger"
-                              title="Delete Customer"
-                              onClick={() => handleDeleteCustomer(c.id, c.name)}
+                              className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete Customer Profile"
+                              onClick={() => requestDeleteCustomer(c)}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
                       </tr>
                     )
                   })}
+
                   {filteredCustomers.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center py-10 text-stone-400">
-                        <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                        <p className="font-semibold text-stone-600">No customer profiles found.</p>
-                        <p className="text-xs text-stone-400 mt-0.5">Try adjusting your filters or click Add New Customer.</p>
+                      <td colSpan={7} className="text-center py-12 text-stone-400">
+                        <Users className="w-9 h-9 mx-auto mb-2 opacity-40" />
+                        <p className="font-semibold text-stone-700 text-sm">No customer accounts match your filter.</p>
+                        <p className="text-xs text-stone-400 mt-0.5">Try clearing search or click "Add New Customer".</p>
                       </td>
                     </tr>
                   )}
@@ -769,65 +819,59 @@ export default function CustomerManagementView({
       )}
 
       {/* ========================================================================= */}
-      {/* VIEW B: PROFILE DETAIL PAGE (Full Responsive Record View) */}
+      {/* 2. DEDICATED INDIVIDUAL CUSTOMER PROFILE PAGE */}
       {/* ========================================================================= */}
       {selectedCustomer && (
         <div className="space-y-6">
-          {/* Top Bar Navigation */}
-          <div className="flex items-center justify-between gap-3">
+          {/* Back Button & Action Toolbar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <button
               onClick={() => setSelectedCustomerId(null)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 bg-white border border-stone-200 px-3 py-2 rounded-xl transition-all shadow-xs"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-700 hover:text-stone-900 bg-white border border-stone-200 px-3.5 py-2 rounded-xl transition-all shadow-2xs hover:bg-stone-50"
             >
-              <ArrowLeft className="w-4 h-4" /> Back to Customers List
+              <ArrowLeft className="w-4 h-4" /> Back to Customer List
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
-                className="button secondary"
+                className="button secondary text-xs"
                 onClick={() => generateLedgerPDF(selectedCustomer, customerLedgers, true)}
               >
-                <Download className="w-4 h-4" /> Account Statement PDF
+                <Download className="w-3.5 h-3.5" /> Download Statement PDF
               </button>
               <button
-                className="button secondary"
-                onClick={() => setQuickNewSaleCustomer(selectedCustomer)}
-              >
-                <ShoppingBag className="w-4 h-4" /> New Sale / Invoice
-              </button>
-              <button
-                className="button primary"
+                className="button primary text-xs"
                 onClick={() => setIsRecordingPayment(selectedCustomer)}
               >
-                <CreditCard className="w-4 h-4 stroke-[2.5]" /> Record Payment
+                <CreditCard className="w-3.5 h-3.5 stroke-[2.5]" /> Record Payment / Settlement
               </button>
               <button
-                className="icon-button"
-                title="Edit Profile"
+                className="p-2 bg-white border border-stone-200 rounded-xl text-stone-700 hover:bg-stone-50 shadow-2xs transition-colors"
+                title="Edit Customer Profile"
                 onClick={() => setEditingCustomer(selectedCustomer)}
               >
                 <Edit className="w-4 h-4" />
               </button>
               <button
-                className="icon-button danger"
-                title="Delete Profile"
-                onClick={() => handleDeleteCustomer(selectedCustomer.id, selectedCustomer.name)}
+                className="p-2 bg-white border border-stone-200 rounded-xl text-rose-600 hover:bg-rose-50 shadow-2xs transition-colors"
+                title="Delete Customer Profile"
+                onClick={() => requestDeleteCustomer(selectedCustomer)}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Profile Master Card */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-stone-100">
+          {/* Profile Header Master Card */}
+          <div className="bg-white rounded-2xl border border-stone-200 p-5 sm:p-6 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-5 border-b border-stone-100">
               <div className="flex items-start gap-4">
                 <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-xs ${
-                    normalizeType(selectedCustomer.type) === 'Distributor'
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-2xs flex-shrink-0 ${
+                    getCustomerCategoryInfo(selectedCustomer).parentType === 'Wholesaler'
                       ? 'bg-blue-100 text-blue-800'
-                      : normalizeType(selectedCustomer.type) === 'Sales Man'
-                      ? 'bg-purple-100 text-purple-800'
+                      : getCustomerCategoryInfo(selectedCustomer).parentType === 'Walk-in'
+                      ? 'bg-stone-100 text-stone-700'
                       : 'bg-emerald-100 text-emerald-800'
                   }`}
                 >
@@ -838,14 +882,14 @@ export default function CustomerManagementView({
                     <h1 className="text-2xl font-black text-stone-900">{selectedCustomer.name}</h1>
                     <span
                       className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                        normalizeType(selectedCustomer.type) === 'Distributor'
+                        getCustomerCategoryInfo(selectedCustomer).parentType === 'Wholesaler'
                           ? 'bg-blue-100 text-blue-800'
-                          : normalizeType(selectedCustomer.type) === 'Sales Man'
-                          ? 'bg-purple-100 text-purple-800'
+                          : getCustomerCategoryInfo(selectedCustomer).parentType === 'Walk-in'
+                          ? 'bg-stone-100 text-stone-700'
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      {normalizeType(selectedCustomer.type)}
+                      {getCustomerCategoryInfo(selectedCustomer).name}
                     </span>
                     {selectedCustomer.customerId && (
                       <span className="text-xs bg-stone-100 text-stone-700 font-mono px-2 py-0.5 rounded-md font-semibold">
@@ -858,11 +902,11 @@ export default function CustomerManagementView({
                   </p>
                   <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 mt-2">
                     <span className="flex items-center gap-1 font-mono font-semibold">
-                      <Phone className="w-3.5 h-3.5 text-stone-400" /> {selectedCustomer.phone}
+                      <Phone className="w-3.5 h-3.5 text-stone-400" /> {selectedCustomer.phone || 'No phone'}
                     </span>
                     {selectedCustomer.altPhone && (
-                      <span className="flex items-center gap-1 font-mono text-stone-400">
-                        Alt: {selectedCustomer.altPhone}
+                      <span className="flex items-center gap-1 font-mono text-stone-500">
+                        WA: {selectedCustomer.altPhone}
                       </span>
                     )}
                     <span className="flex items-center gap-1">
@@ -874,156 +918,196 @@ export default function CustomerManagementView({
                 </div>
               </div>
 
-              {/* Financial Status Summary Pills */}
+              {/* Opening & Credit Limits */}
               <div className="flex items-center gap-3">
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 text-right min-w-[130px]">
-                  <span className="text-[11px] font-bold text-stone-500 block uppercase tracking-wider">Opening Bal</span>
+                <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[120px]">
+                  <span className="text-[10px] font-bold text-stone-500 block uppercase tracking-wider">Opening Bal</span>
                   <strong className="text-sm font-black text-stone-800">{formatPKR(selectedCustomer.openingBalance)}</strong>
                 </div>
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 text-right min-w-[130px]">
-                  <span className="text-[11px] font-bold text-stone-500 block uppercase tracking-wider">Credit Limit</span>
+                <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[120px]">
+                  <span className="text-[10px] font-bold text-stone-500 block uppercase tracking-wider">Credit Limit</span>
                   <strong className="text-sm font-black text-stone-800">
-                    {selectedCustomer.creditLimit > 0 ? formatPKR(selectedCustomer.creditLimit) : 'None'}
+                    {selectedCustomer.creditLimit > 0 ? formatPKR(selectedCustomer.creditLimit) : 'No Limit'}
                   </strong>
-                </div>
-                <div
-                  className={`p-3.5 rounded-xl border text-right min-w-[150px] ${
-                    selectedCustomer.currentBalance > 0
-                      ? 'bg-amber-50 border-amber-200 text-amber-900'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                  }`}
-                >
-                  <span className="text-[11px] font-bold block uppercase tracking-wider">
-                    {selectedCustomer.currentBalance > 0 ? 'Pending Balance' : 'Account Balance'}
-                  </span>
-                  <strong className="text-base font-black">{formatPKR(selectedCustomer.currentBalance)}</strong>
                 </div>
               </div>
             </div>
 
-            {/* Financial Totals Breakdown Bar */}
-            <div className="grid grid-cols-3 gap-4 pt-4 text-center">
-              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
-                <span className="text-[11px] text-stone-500 block font-semibold">Total Amount Billed / Owed</span>
-                <strong className="text-base font-black text-stone-900">{formatPKR(customerFinancials.totalOwed)}</strong>
+            {/* 4 Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 pt-5">
+              <div className="p-3.5 rounded-xl bg-stone-50/80 border border-stone-200">
+                <span className="text-[11px] text-stone-500 block font-semibold">Total Invoiced (Lifetime)</span>
+                <strong className="text-lg font-black text-stone-900 block mt-0.5">
+                  {formatPKR(profileFinancials.totalInvoiced)}
+                </strong>
+                <span className="text-[10px] text-stone-400">{customerInvoices.length} POS sales recorded</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100">
-                <span className="text-[11px] text-emerald-700 block font-semibold">Total Amount Paid</span>
-                <strong className="text-base font-black text-emerald-800">{formatPKR(customerFinancials.totalPaid)}</strong>
+
+              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
+                <span className="text-[11px] text-emerald-800 block font-semibold">Total Paid</span>
+                <strong className="text-lg font-black text-emerald-800 block mt-0.5">
+                  {formatPKR(profileFinancials.totalPaid)}
+                </strong>
+                <span className="text-[10px] text-emerald-700">Invoices & direct settlements</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-amber-50/60 border border-amber-100">
-                <span className="text-[11px] text-amber-700 block font-semibold">Remaining Outstanding Balance</span>
-                <strong className="text-base font-black text-amber-800">{formatPKR(selectedCustomer.currentBalance)}</strong>
+
+              <div
+                className={`p-3.5 rounded-xl border ${
+                  profileFinancials.currentOutstanding > 0
+                    ? 'bg-rose-50/70 border-rose-200/80'
+                    : 'bg-emerald-50/70 border-emerald-200/80'
+                }`}
+              >
+                <span
+                  className={`text-[11px] block font-semibold ${
+                    profileFinancials.currentOutstanding > 0 ? 'text-rose-800' : 'text-emerald-800'
+                  }`}
+                >
+                  Current Outstanding Balance
+                </span>
+                <strong
+                  className={`text-lg font-black block mt-0.5 ${
+                    profileFinancials.currentOutstanding > 0 ? 'text-rose-800' : 'text-emerald-800'
+                  }`}
+                >
+                  {formatPKR(profileFinancials.currentOutstanding)}
+                </strong>
+                <span
+                  className={`text-[10px] ${
+                    profileFinancials.currentOutstanding > 0 ? 'text-rose-700 font-semibold' : 'text-emerald-700'
+                  }`}
+                >
+                  {profileFinancials.currentOutstanding > 0 ? 'Pending receivable' : 'Account all clear'}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-50/80 border border-stone-200">
+                <span className="text-[11px] text-stone-500 block font-semibold">Last Transaction Date</span>
+                <strong className="text-sm font-bold text-stone-900 block mt-1">
+                  {profileFinancials.lastTransactionDate}
+                </strong>
+                <span className="text-[10px] text-stone-400">Most recent activity</span>
               </div>
             </div>
           </div>
 
           {/* Sub-Navigation Tabs */}
-          <div className="bg-white rounded-xl border border-stone-200 p-1.5 shadow-xs flex items-center gap-2 overflow-x-auto">
+          <div className="bg-white rounded-xl border border-stone-200 p-1.5 shadow-2xs flex items-center gap-1.5 overflow-x-auto">
             <button
-              onClick={() => setActiveTab('products')}
+              onClick={() => setActiveTab('ledger')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'products' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
+                activeTab === 'ledger'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
               }`}
             >
-              <Package className="w-4 h-4" /> Products Given / Sold ({customerProducts.length})
+              <FileText className="w-3.5 h-3.5" /> Ledger / Transaction History ({customerLedgers.length})
             </button>
             <button
               onClick={() => setActiveTab('invoices')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'invoices' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
+                activeTab === 'invoices'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
               }`}
             >
-              <Receipt className="w-4 h-4" /> Invoices & Receipts ({customerInvoices.length})
+              <Receipt className="w-3.5 h-3.5" /> Invoices ({customerInvoices.length})
             </button>
             <button
-              onClick={() => setActiveTab('ledger')}
+              onClick={() => setActiveTab('products')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'ledger' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
+                activeTab === 'products'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
               }`}
             >
-              <FileText className="w-4 h-4" /> Running Account Ledger ({customerLedgers.length})
+              <Package className="w-3.5 h-3.5" /> Products Purchased ({productsPurchasedSummary.length})
             </button>
             <button
               onClick={() => setActiveTab('payments')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'payments' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
+                activeTab === 'payments'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
               }`}
             >
-              <CreditCard className="w-4 h-4" /> Payment History & Receipts ({selectedCustomer.paymentRecords?.length || 0})
+              <CreditCard className="w-3.5 h-3.5" /> Payments & Receipts ({selectedCustomer.paymentRecords?.length || 0})
             </button>
           </div>
 
           {/* ========================================================================= */}
-          {/* TAB 1: ALL PRODUCTS GIVEN / SOLD TO CUSTOMER */}
+          {/* TAB 1: LEDGER / TRANSACTION HISTORY */}
           {/* ========================================================================= */}
-          {activeTab === 'products' && (
-            <div className="panel table-panel">
-              <div className="p-4 bg-stone-50/50 border-b border-stone-200 flex items-center justify-between">
+          {activeTab === 'ledger' && (
+            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+              <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-stone-900 text-sm">Product Dispatch & Sales Log</h3>
-                  <p className="text-xs text-stone-500">Every product line delivered or sold to {selectedCustomer.name}</p>
+                  <h3 className="font-bold text-stone-900 text-sm">Statement of Account & Running Balance</h3>
+                  <p className="text-xs text-stone-500">
+                    Chronological audit ledger of all debits (sales invoices) and credits (payments received)
+                  </p>
                 </div>
                 <button
                   className="button secondary text-xs"
-                  onClick={() => {
-                    const headers = ['Date', 'Invoice #', 'Product Name', 'Quantity', 'Unit', 'Unit Price', 'Total']
-                    const rows = customerProducts.map((p) => [p.date, p.invoiceNumber, p.name, p.quantity, p.unit, p.unitPrice, p.total])
-                    exportToCSV(`Products_${selectedCustomer.name}_${new Date().toISOString().slice(0, 10)}`, headers, rows)
-                  }}
+                  onClick={() => generateLedgerPDF(selectedCustomer, customerLedgers, true)}
                 >
-                  <Download className="w-3.5 h-3.5" /> Export Products CSV
+                  <Download className="w-3.5 h-3.5" /> Export Statement PDF
                 </button>
               </div>
-              <div className="table-scroll">
-                <table>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr>
-                      <th>Date / Time</th>
-                      <th>Linked Invoice #</th>
-                      <th>Product Name</th>
-                      <th>Pricing Tier</th>
-                      <th>Quantity Delivered</th>
-                      <th>Unit Price</th>
-                      <th className="text-right">Total Amount</th>
+                    <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Ref Type</th>
+                      <th className="py-3 px-4">Voucher / Invoice #</th>
+                      <th className="py-3 px-4">Description</th>
+                      <th className="py-3 px-4">Debit (Billed)</th>
+                      <th className="py-3 px-4">Credit (Paid)</th>
+                      <th className="py-3 px-4 text-right">Running Balance</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {customerProducts.map((item, idx) => (
-                      <tr key={idx}>
-                        <td>
-                          <div className="text-xs font-bold text-stone-900">{formatDate(item.date)}</div>
-                          <div className="text-[10px] text-stone-400">{item.time}</div>
-                        </td>
-                        <td>
+                  <tbody className="divide-y divide-stone-100">
+                    {customerLedgers.map((entry, idx) => (
+                      <tr key={entry.id || idx} className="hover:bg-stone-50/50">
+                        <td className="py-3 px-4 text-stone-400 font-mono text-[11px]">{idx + 1}</td>
+                        <td className="py-3 px-4 font-semibold text-stone-800">{formatDate(entry.date)}</td>
+                        <td className="py-3 px-4">
                           <span
-                            className="font-mono text-xs font-bold text-primary hover:underline cursor-pointer"
-                            onClick={() => {
-                              const inv = db.invoices.find((i) => i.invoiceNumber === item.invoiceNumber)
-                              if (inv) setViewingInvoice(inv)
-                            }}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                              entry.referenceType === 'Invoice'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : entry.referenceType === 'Payment'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-stone-100 text-stone-700'
+                            }`}
                           >
-                            #{item.invoiceNumber}
+                            {entry.referenceType}
                           </span>
                         </td>
-                        <td className="font-semibold text-stone-900">{item.name}</td>
-                        <td>
-                          <span className="text-[11px] bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-medium">
-                            {item.pricingTier}
-                          </span>
+                        <td className="py-3 px-4 font-mono font-bold text-stone-900">
+                          {entry.referenceId ? `#${entry.referenceId}` : '—'}
                         </td>
-                        <td className="font-bold text-stone-900">
-                          {item.quantity} {item.unit}
+                        <td className="py-3 px-4 text-stone-700 font-medium">{entry.description}</td>
+                        <td className="py-3 px-4 font-bold text-stone-900">
+                          {entry.debit > 0 ? formatPKR(entry.debit) : '—'}
                         </td>
-                        <td className="text-xs font-semibold text-stone-800">{formatPKR(item.unitPrice)}</td>
-                        <td className="text-right font-black text-stone-900">{formatPKR(item.total)}</td>
+                        <td className="py-3 px-4 font-bold text-emerald-700">
+                          {entry.credit > 0 ? formatPKR(entry.credit) : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-black text-stone-900">
+                          {formatPKR(entry.balance)}
+                        </td>
                       </tr>
                     ))}
-                    {customerProducts.length === 0 && (
+
+                    {customerLedgers.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="text-center py-8 text-stone-400">
-                          <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                          No product deliveries recorded yet. Click "New Sale / Invoice" to create a delivery.
+                        <td colSpan={8} className="text-center py-10 text-stone-400">
+                          <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          No ledger history recorded for this customer yet.
                         </td>
                       </tr>
                     )}
@@ -1034,54 +1118,54 @@ export default function CustomerManagementView({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 2: LINKED INVOICES & RECEIPTS */}
+          {/* TAB 2: INVOICES LIST (From POS) */}
           {/* ========================================================================= */}
           {activeTab === 'invoices' && (
-            <div className="panel table-panel">
-              <div className="p-4 bg-stone-50/50 border-b border-stone-200 flex items-center justify-between">
+            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+              <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-stone-900 text-sm">Commercial Invoices & Sales Receipts</h3>
-                  <p className="text-xs text-stone-500">Auto-generated invoices linked to {selectedCustomer.name}</p>
+                  <h3 className="font-bold text-stone-900 text-sm">Commercial Invoices from POS</h3>
+                  <p className="text-xs text-stone-500">Every sales invoice generated against {selectedCustomer.name}</p>
                 </div>
-                <button
-                  className="button primary text-xs"
-                  onClick={() => setQuickNewSaleCustomer(selectedCustomer)}
-                >
-                  <Plus className="w-3.5 h-3.5" /> Create New Invoice
-                </button>
               </div>
-              <div className="table-scroll">
-                <table>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr>
-                      <th>Invoice #</th>
-                      <th>Date</th>
-                      <th>Items Summary</th>
-                      <th>Grand Total</th>
-                      <th>Amount Paid</th>
-                      <th>Balance Due</th>
-                      <th>Payment Status</th>
-                      <th>Proof / Attachment</th>
-                      <th className="text-right">Actions</th>
+                    <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Invoice #</th>
+                      <th className="py-3 px-4">Items Summary</th>
+                      <th className="py-3 px-4">Grand Total</th>
+                      <th className="py-3 px-4">Amount Paid</th>
+                      <th className="py-3 px-4">Balance Due</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Attachment</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-stone-100">
                     {customerInvoices.map((inv) => (
-                      <tr key={inv.id}>
-                        <td>
-                          <span className="font-mono font-bold text-xs text-stone-900">{inv.invoiceNumber}</span>
+                      <tr key={inv.id} className="hover:bg-stone-50/60 transition-colors">
+                        <td className="py-3 px-4 text-stone-800 font-medium">{formatDate(inv.date)}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-stone-900">
+                          <button
+                            onClick={() => setViewingInvoice(inv)}
+                            className="text-emerald-800 hover:underline font-bold"
+                          >
+                            #{inv.invoiceNumber}
+                          </button>
                         </td>
-                        <td>{formatDate(inv.date)}</td>
-                        <td>
-                          <div className="text-xs text-stone-700 max-w-[200px] truncate">
-                            {inv.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                        <td className="py-3 px-4">
+                          <div className="text-xs text-stone-700 max-w-[220px] truncate" title={inv.items?.map((i) => `${i.quantity}x ${i.name}`).join(', ')}>
+                            {inv.items?.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
                           </div>
-                          <span className="text-[10px] text-stone-400">{inv.items.length} items</span>
+                          <span className="text-[10px] text-stone-400">{inv.items?.length || 0} line items</span>
                         </td>
-                        <td className="font-bold text-stone-900">{formatPKR(inv.grandTotal)}</td>
-                        <td className="font-semibold text-emerald-700">{formatPKR(inv.amountPaid)}</td>
-                        <td className="font-bold text-amber-700">{formatPKR(inv.balanceDue)}</td>
-                        <td>
+                        <td className="py-3 px-4 font-bold text-stone-900">{formatPKR(inv.grandTotal)}</td>
+                        <td className="py-3 px-4 font-semibold text-emerald-700">{formatPKR(inv.amountPaid)}</td>
+                        <td className="py-3 px-4 font-bold text-rose-700">{formatPKR(inv.balanceDue)}</td>
+                        <td className="py-3 px-4">
                           <span
                             className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
                               inv.status === 'Paid'
@@ -1094,16 +1178,16 @@ export default function CustomerManagementView({
                             {inv.status}
                           </span>
                         </td>
-                        <td>
+                        <td className="py-3 px-4">
                           {inv.invoiceImage || inv.paymentScreenshot ? (
                             <button
                               onClick={() =>
                                 setPreviewImage({
                                   src: (inv.invoiceImage || inv.paymentScreenshot)!,
-                                  title: `Invoice #${inv.invoiceNumber} Proof`,
+                                  title: `Invoice #${inv.invoiceNumber} Attachment`,
                                 })
                               }
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:underline"
                             >
                               <ImageIcon className="w-3.5 h-3.5" /> View Photo
                             </button>
@@ -1111,31 +1195,32 @@ export default function CustomerManagementView({
                             <span className="text-stone-400 text-xs">—</span>
                           )}
                         </td>
-                        <td>
-                          <div className="row-actions justify-end">
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
                             <button
-                              className="row-action text-primary"
-                              title="View Invoice Receipt"
+                              className="px-2 py-1 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors flex items-center gap-1"
+                              title="View Invoice"
                               onClick={() => setViewingInvoice(inv)}
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" /> View
                             </button>
                             <button
-                              className="row-action"
+                              className="p-1 text-stone-600 hover:text-stone-900"
                               title="Download PDF"
                               onClick={() => generateInvoicePDF(inv, selectedCustomer)}
                             >
-                              <Download className="w-4 h-4" />
+                              <Download className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
                       </tr>
                     ))}
+
                     {customerInvoices.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="text-center py-8 text-stone-400">
+                        <td colSpan={9} className="text-center py-10 text-stone-400">
                           <Receipt className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                          No invoices generated for this customer yet.
+                          No sales invoices created against this customer profile yet.
                         </td>
                       </tr>
                     )}
@@ -1146,68 +1231,72 @@ export default function CustomerManagementView({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 3: RUNNING ACCOUNT LEDGER / STATEMENT */}
+          {/* TAB 3: PRODUCTS PURCHASED (Reorder summary & pattern) */}
           {/* ========================================================================= */}
-          {activeTab === 'ledger' && (
-            <div className="panel table-panel">
-              <div className="p-4 bg-stone-50/50 border-b border-stone-200 flex items-center justify-between">
+          {activeTab === 'products' && (
+            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+              <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-stone-900 text-sm">Chronological Running Balance Statement</h3>
-                  <p className="text-xs text-stone-500">Live running balance for {selectedCustomer.name}</p>
+                  <h3 className="font-bold text-stone-900 text-sm">Product Buying & Reorder Summary</h3>
+                  <p className="text-xs text-stone-500">
+                    Aggregated view of products and quantities this customer purchases most
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="button secondary text-xs"
-                    onClick={() => generateLedgerPDF(selectedCustomer, customerLedgers, true)}
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download Ledger PDF
-                  </button>
-                </div>
+                <button
+                  className="button secondary text-xs"
+                  onClick={() => {
+                    const headers = ['Product Name', 'Total Qty Bought', 'Unit', 'Total Spend (Rs)', 'Last Unit Price', 'Last Purchased Date', 'Total Orders']
+                    const rows = productsPurchasedSummary.map((p) => [
+                      p.name,
+                      p.totalQuantity,
+                      p.unit,
+                      p.totalSpent,
+                      p.lastUnitPrice,
+                      p.lastDate,
+                      p.orderCount,
+                    ])
+                    exportToCSV(`Purchased_Products_${selectedCustomer.name}_${new Date().toISOString().slice(0, 10)}`, headers, rows)
+                  }}
+                >
+                  <Download className="w-3.5 h-3.5" /> Export Products CSV
+                </button>
               </div>
-              <div className="table-scroll">
-                <table>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Date</th>
-                      <th>Ref Type</th>
-                      <th>Voucher / Ref #</th>
-                      <th>Description</th>
-                      <th>Debit (Sale / Bill)</th>
-                      <th>Credit (Payment Received)</th>
-                      <th className="text-right">Running Balance Due</th>
+                    <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Product Name</th>
+                      <th className="py-3 px-4">Total Quantity Bought</th>
+                      <th className="py-3 px-4">Total Amount Spent</th>
+                      <th className="py-3 px-4">Last Unit Price</th>
+                      <th className="py-3 px-4">Last Purchased Date</th>
+                      <th className="py-3 px-4 text-right">Orders Count</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {customerLedgers.map((entry, idx) => (
-                      <tr key={entry.id || idx}>
-                        <td className="text-stone-400 text-xs font-mono">{idx + 1}</td>
-                        <td className="text-xs font-semibold text-stone-800">{formatDate(entry.date)}</td>
-                        <td>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                              entry.referenceType === 'Invoice'
-                                ? 'bg-blue-50 text-blue-700'
-                                : entry.referenceType === 'Payment'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-stone-100 text-stone-700'
-                            }`}
-                          >
-                            {entry.referenceType}
-                          </span>
+                  <tbody className="divide-y divide-stone-100">
+                    {productsPurchasedSummary.map((prod, idx) => (
+                      <tr key={idx} className="hover:bg-stone-50/50">
+                        <td className="py-3 px-4 text-stone-400 font-mono">{idx + 1}</td>
+                        <td className="py-3 px-4 font-bold text-stone-900">{prod.name}</td>
+                        <td className="py-3 px-4 font-black text-emerald-800 text-sm">
+                          {prod.totalQuantity} {prod.unit}
                         </td>
-                        <td className="font-mono text-xs font-bold text-stone-900">{entry.referenceId || '—'}</td>
-                        <td className="text-xs text-stone-800 font-medium">{entry.description}</td>
-                        <td className="font-semibold text-stone-900">{entry.debit > 0 ? formatPKR(entry.debit) : '—'}</td>
-                        <td className="font-semibold text-emerald-700">{entry.credit > 0 ? formatPKR(entry.credit) : '—'}</td>
-                        <td className="text-right font-black text-stone-900">{formatPKR(entry.balance)}</td>
+                        <td className="py-3 px-4 font-bold text-stone-900">{formatPKR(prod.totalSpent)}</td>
+                        <td className="py-3 px-4 font-medium text-stone-700">{formatPKR(prod.lastUnitPrice)}</td>
+                        <td className="py-3 px-4 text-stone-600">{formatDate(prod.lastDate)}</td>
+                        <td className="py-3 px-4 text-right font-mono font-semibold text-stone-700">
+                          {prod.orderCount} times
+                        </td>
                       </tr>
                     ))}
-                    {customerLedgers.length === 0 && (
+
+                    {productsPurchasedSummary.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="text-center py-8 text-stone-400">
-                          <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                          No ledger transactions recorded yet.
+                        <td colSpan={7} className="text-center py-10 text-stone-400">
+                          <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                          No product purchase records found for this customer.
                         </td>
                       </tr>
                     )}
@@ -1218,14 +1307,14 @@ export default function CustomerManagementView({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 4: PAYMENT RECORDS & PROOF SCREENSHOTS */}
+          {/* TAB 4: PAYMENTS & MANUAL SETTLEMENTS */}
           {/* ========================================================================= */}
           {activeTab === 'payments' && (
-            <div className="panel table-panel">
-              <div className="p-4 bg-stone-50/50 border-b border-stone-200 flex items-center justify-between">
+            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+              <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-stone-900 text-sm">Payment Receipts & Screenshot Attachments</h3>
-                  <p className="text-xs text-stone-500">Payments recorded across Cash, Card, Online (Raast/IBFT), and Cheque</p>
+                  <h3 className="font-bold text-stone-900 text-sm">Direct Payment Receipts & Dues Clearance</h3>
+                  <p className="text-xs text-stone-500">Record cash / online payments received against outstanding dues</p>
                 </div>
                 <button
                   className="button primary text-xs"
@@ -1234,27 +1323,28 @@ export default function CustomerManagementView({
                   <Plus className="w-3.5 h-3.5 stroke-[3]" /> Record New Payment
                 </button>
               </div>
-              <div className="table-scroll">
-                <table>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr>
-                      <th>Receipt #</th>
-                      <th>Date</th>
-                      <th>Payment Method</th>
-                      <th>Amount Received</th>
-                      <th>Account Credited</th>
-                      <th>Transaction Ref</th>
-                      <th>Receipt / Screenshot</th>
-                      <th>Notes</th>
-                      <th className="text-right">Actions</th>
+                    <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
+                      <th className="py-3 px-4">Receipt #</th>
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Payment Method</th>
+                      <th className="py-3 px-4">Amount Received</th>
+                      <th className="py-3 px-4">Account Credited</th>
+                      <th className="py-3 px-4">Transaction Ref</th>
+                      <th className="py-3 px-4">Slip / Proof</th>
+                      <th className="py-3 px-4">Notes</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-stone-100">
                     {(selectedCustomer.paymentRecords || []).map((pay) => (
-                      <tr key={pay.id}>
-                        <td className="font-mono font-bold text-xs text-stone-900">{pay.receiptNumber}</td>
-                        <td>{formatDate(pay.date)}</td>
-                        <td>
+                      <tr key={pay.id} className="hover:bg-stone-50/50">
+                        <td className="py-3 px-4 font-mono font-bold text-stone-900">#{pay.receiptNumber}</td>
+                        <td className="py-3 px-4 text-stone-800 font-medium">{formatDate(pay.date)}</td>
+                        <td className="py-3 px-4">
                           <span
                             className={`text-xs font-bold px-2 py-0.5 rounded-md ${
                               pay.paymentMethod === 'Cash'
@@ -1267,45 +1357,44 @@ export default function CustomerManagementView({
                             {pay.paymentMethod}
                           </span>
                         </td>
-                        <td className="font-black text-emerald-700 text-xs">{formatPKR(pay.amount)}</td>
-                        <td className="text-xs font-mono text-stone-600">{pay.paymentAccount}</td>
-                        <td className="font-mono text-xs text-stone-800">{pay.transactionRef || '—'}</td>
-                        <td>
+                        <td className="py-3 px-4 font-black text-emerald-700 text-sm">{formatPKR(pay.amount)}</td>
+                        <td className="py-3 px-4 font-mono text-stone-600 text-[11px]">{pay.paymentAccount}</td>
+                        <td className="py-3 px-4 font-mono text-stone-800">{pay.transactionRef || '—'}</td>
+                        <td className="py-3 px-4">
                           {pay.receiptImage ? (
                             <button
                               onClick={() =>
                                 setPreviewImage({
                                   src: pay.receiptImage!,
-                                  title: `Payment Receipt #${pay.receiptNumber} Screenshot`,
+                                  title: `Payment Receipt #${pay.receiptNumber} Slip`,
                                 })
                               }
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline"
                             >
-                              <ImageIcon className="w-3.5 h-3.5" /> View Proof
+                              <ImageIcon className="w-3.5 h-3.5" /> View Slip
                             </button>
                           ) : (
-                            <span className="text-stone-400 text-xs">No image</span>
+                            <span className="text-stone-400 text-xs">—</span>
                           )}
                         </td>
-                        <td className="text-xs text-stone-600 max-w-[150px] truncate">{pay.notes || '—'}</td>
-                        <td>
-                          <div className="row-actions justify-end">
-                            <button
-                              className="row-action text-primary"
-                              title="Download Payment Voucher PDF"
-                              onClick={() => generateCustomerPaymentReceiptPDF(selectedCustomer, pay)}
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                          </div>
+                        <td className="py-3 px-4 text-stone-600 max-w-[160px] truncate">{pay.notes || '—'}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            className="p-1 text-stone-600 hover:text-stone-900"
+                            title="Download Payment Voucher PDF"
+                            onClick={() => generateCustomerPaymentReceiptPDF(selectedCustomer, pay)}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     ))}
+
                     {(!selectedCustomer.paymentRecords || selectedCustomer.paymentRecords.length === 0) && (
                       <tr>
-                        <td colSpan={9} className="text-center py-8 text-stone-400">
+                        <td colSpan={9} className="text-center py-10 text-stone-400">
                           <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                          No payment entries recorded yet. Click "Record New Payment" to log a settlement.
+                          No direct payment entries recorded yet. Click "Record New Payment" to log cash received against dues.
                         </td>
                       </tr>
                     )}
@@ -1321,19 +1410,20 @@ export default function CustomerManagementView({
       {/* MODAL 1: ADD / EDIT CUSTOMER PROFILE */}
       {/* ========================================================================= */}
       {(isCreatingCustomer || editingCustomer) && (
-        <CustomerProfileModal
+        <CustomerFormModal
           customer={editingCustomer}
+          categories={customerCategories}
           onClose={() => {
             setIsCreatingCustomer(false)
             setEditingCustomer(null)
           }}
-          onSave={(profileData) => {
+          onSave={(formData) => {
             if (editingCustomer) {
               const updated = db.customers.map((c) =>
                 c.id === editingCustomer.id
                   ? {
                       ...c,
-                      ...profileData,
+                      ...formData,
                       updatedAt: new Date().toISOString().slice(0, 10),
                     }
                   : c
@@ -1342,19 +1432,19 @@ export default function CustomerManagementView({
             } else {
               const newCustomer: CustomerItem = {
                 id: `cust-${Date.now()}`,
-                customerId: profileData.customerId || `CUST-${String(db.customers.length + 1001)}`,
-                name: profileData.name,
-                businessName: profileData.businessName || '',
-                type: profileData.type,
-                phone: profileData.phone,
-                altPhone: profileData.altPhone,
-                address: profileData.address,
-                city: profileData.city,
-                openingBalance: profileData.openingBalance || 0,
-                currentBalance: profileData.openingBalance || 0,
-                creditLimit: profileData.creditLimit || 0,
+                customerId: formData.customerId || `CUST-${String(db.customers.length + 1001)}`,
+                name: formData.name,
+                businessName: formData.businessName,
+                type: formData.type,
+                phone: formData.phone,
+                altPhone: formData.altPhone,
+                address: formData.address,
+                city: formData.city,
+                openingBalance: formData.openingBalance || 0,
+                currentBalance: formData.openingBalance || 0,
+                creditLimit: formData.creditLimit || 0,
                 status: 'Active',
-                notes: profileData.notes,
+                notes: formData.notes,
                 paymentRecords: [],
                 createdAt: new Date().toISOString().slice(0, 10),
                 updatedAt: new Date().toISOString().slice(0, 10),
@@ -1368,7 +1458,24 @@ export default function CustomerManagementView({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: RECORD PAYMENT MODAL (WITH ONLINE SCREENSHOT ATTACHMENT) */}
+      {/* MODAL 2: CATEGORY MANAGEMENT (CRUD) */}
+      {/* ========================================================================= */}
+      {isManagingCategories && (
+        <CategoryManagementModal
+          categories={customerCategories}
+          customers={db.customers}
+          onClose={() => setIsManagingCategories(false)}
+          onSaveCategories={(updatedCategories) => {
+            onSaveDatabase({
+              ...db,
+              customerCategories: updatedCategories,
+            })
+          }}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: RECORD PAYMENT */}
       {/* ========================================================================= */}
       {isRecordingPayment && (
         <RecordPaymentModal
@@ -1380,7 +1487,7 @@ export default function CustomerManagementView({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: INVOICE RECEIPT MODAL VIEWER & PRINT */}
+      {/* MODAL 4: INVOICE RECEIPT VIEWER */}
       {/* ========================================================================= */}
       {viewingInvoice && (
         <InvoiceReceiptModal
@@ -1391,27 +1498,63 @@ export default function CustomerManagementView({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 4: QUICK NEW SALE FOR THIS CUSTOMER */}
+      {/* MODAL 5: DELETE SAFETY WARNING WITH TRANSACTION HISTORY CHECK */}
       {/* ========================================================================= */}
-      {quickNewSaleCustomer && (
-        <QuickSaleModal
-          customer={quickNewSaleCustomer}
-          products={db.products}
-          accounts={db.accounts}
-          onClose={() => setQuickNewSaleCustomer(null)}
-          onSubmit={handleQuickSaleSubmit}
-        />
+      {deleteWarningCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-lg font-black text-stone-900">Delete Customer Profile?</h3>
+              <p className="text-xs text-stone-600 mt-1">
+                You are about to delete <strong>{deleteWarningCustomer.customer.name}</strong>.
+              </p>
+            </div>
+
+            {deleteWarningCustomer.invoiceCount > 0 && (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <AlertCircle className="w-4 h-4" /> Transaction History Detected
+                </div>
+                <p>
+                  This customer has <strong>{deleteWarningCustomer.invoiceCount} commercial invoices</strong> and{' '}
+                  <strong>{deleteWarningCustomer.ledgerCount} ledger entries</strong>. Deleting will unbind this customer profile.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                className="button secondary flex-1"
+                onClick={() => setDeleteWarningCustomer(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button bg-rose-600 hover:bg-rose-700 text-white font-bold flex-1"
+                onClick={confirmDeleteCustomer}
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 5: FULLSCREEN LIGHTBOX IMAGE PREVIEW */}
+      {/* MODAL 6: IMAGE LIGHTBOX PREVIEW */}
       {/* ========================================================================= */}
       {previewImage && (
-        <div className="editor-overlay z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-2xs">
           <div className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl relative">
             <div className="flex items-center justify-between pb-3 border-b border-stone-200">
               <h3 className="font-bold text-stone-900 text-sm">{previewImage.title}</h3>
-              <button onClick={() => setPreviewImage(null)} className="icon-button">
+              <button onClick={() => setPreviewImage(null)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1420,7 +1563,7 @@ export default function CustomerManagementView({
             </div>
             <div className="mt-4 flex justify-end">
               <button className="button primary text-xs" onClick={() => setPreviewImage(null)}>
-                Close Preview
+                Close
               </button>
             </div>
           </div>
@@ -1431,14 +1574,16 @@ export default function CustomerManagementView({
 }
 
 // -----------------------------------------------------------------------------
-// MODAL: ADD / EDIT CUSTOMER PROFILE
+// MODAL: ADD / EDIT CUSTOMER (Clean & Non-Cramped)
 // -----------------------------------------------------------------------------
-function CustomerProfileModal({
+function CustomerFormModal({
   customer,
+  categories,
   onClose,
   onSave,
 }: {
   customer: CustomerItem | null
+  categories: CustomerCategoryItem[]
   onClose: () => void
   onSave: (data: {
     customerId?: string
@@ -1486,135 +1631,214 @@ function CustomerProfileModal({
   }
 
   return (
-    <div className="editor-overlay">
-      <form className="editor-modal" onSubmit={handleSubmit}>
-        <div className="editor-header">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs overflow-y-auto">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-stone-200 space-y-5 my-8 animate-in fade-in zoom-in-95 duration-150"
+      >
+        <div className="flex items-center justify-between pb-3 border-b border-stone-200">
           <div>
-            <p className="eyebrow">Customer Directory</p>
-            <h2>{customer ? `Edit ${customer.name}` : 'Add New Customer Profile'}</h2>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Customer Directory</span>
+            <h2 className="text-lg font-black text-stone-900">
+              {customer ? `Edit ${customer.name}` : 'Add New Customer Profile'}
+            </h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
-            <X />
+          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="form-grid">
-          <label>
-            Full Name *
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Haji Noor Muhammad / Kashif Mehmood"
-              required
-            />
-          </label>
+        <div className="space-y-4 text-xs">
+          {/* Section 1: Basic Info */}
+          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-emerald-700" /> 1. Basic Information
+            </h3>
 
-          <label>
-            Customer Type (Selectable) *
-            <select value={type} onChange={(e) => setType(e.target.value as any)} required>
-              <option value="Retailer">Retailer (Grocery Mart / Bakery / General Store)</option>
-              <option value="Distributor">Distributor (Bulk Regional Wholesale Hub)</option>
-              <option value="Sales Man">Sales Man / Field Sales Representative</option>
-            </select>
-          </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">Full Name *</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Haji Noor Muhammad"
+                  required
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                />
+              </div>
 
-          <label>
-            Customer ID (Auto / Manual)
-            <input
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              placeholder="e.g. CUST-1048 or leave blank for auto"
-            />
-          </label>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">Business / Shop Name</label>
+                <input
+                  type="text"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="e.g. Noor Beverages & Distribution"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                />
+              </div>
 
-          <label>
-            Shop / Business / Agency Name
-            <input
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="e.g. Noor Beverages & Distribution Hub"
-            />
-          </label>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">Customer Type / Category *</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-medium"
+                >
+                  <optgroup label="Wholesaler (Bulk)">
+                    {categories
+                      .filter((c) => c.parentType === 'Wholesaler')
+                      .map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name} (Wholesaler)
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Retailer (Shops & Marts)">
+                    {categories
+                      .filter((c) => c.parentType === 'Retailer')
+                      .map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Walk-in & Counter">
+                    {categories
+                      .filter((c) => c.parentType === 'Walk-in')
+                      .map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                </select>
+              </div>
 
-          <label>
-            Primary Phone / WhatsApp *
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="0344 XXXXXXX"
-              required
-            />
-          </label>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">Customer ID (Auto/Manual)</label>
+                <input
+                  type="text"
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                  placeholder="Leave blank for auto CUST-xxxx"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono"
+                />
+              </div>
 
-          <label>
-            Secondary Phone (Optional)
-            <input
-              value={altPhone}
-              onChange={(e) => setAltPhone(e.target.value)}
-              placeholder="0300 XXXXXXX"
-            />
-          </label>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">Primary Phone *</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="0344 XXXXXXX"
+                  required
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono"
+                />
+              </div>
 
-          <label>
-            City *
-            <input
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="e.g. Peshawar, Lahore, Rawalpindi"
-              required
-            />
-          </label>
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">WhatsApp / Alt Phone</label>
+                <input
+                  type="text"
+                  value={altPhone}
+                  onChange={(e) => setAltPhone(e.target.value)}
+                  placeholder="0300 XXXXXXX (Optional)"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono"
+                />
+              </div>
+            </div>
+          </div>
 
-          <label>
-            Address / Location *
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Shop #, Street, Market Name"
-              required
-            />
-          </label>
+          {/* Section 2: Location */}
+          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-emerald-700" /> 2. Location & Address
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">City *</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="e.g. Peshawar / Lahore"
+                  required
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">Address / Market Location *</label>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Shop #, Street, Market Name"
+                  required
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                />
+              </div>
+            </div>
+          </div>
 
-          {!customer && (
-            <label>
-              Opening Balance (Rs)
-              <input
-                type="number"
-                min="0"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(Number(e.target.value))}
-                placeholder="0"
-              />
-            </label>
-          )}
+          {/* Section 3: Financials */}
+          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-700" /> 3. Financials & Credit Terms
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {!customer && (
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 mb-1 block">Opening Balance (Rs)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={openingBalance}
+                    onChange={(e) => setOpeningBalance(Number(e.target.value))}
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-bold"
+                  />
+                  <span className="text-[10px] text-stone-400 mt-1 block">Initial balance carried forward</span>
+                </div>
+              )}
+              <div className={customer ? 'sm:col-span-2' : ''}>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">Credit Limit (Rs - Optional)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={creditLimit}
+                  onChange={(e) => setCreditLimit(Number(e.target.value))}
+                  placeholder="e.g. 500000 (0 for no limit)"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-bold"
+                />
+                <span className="text-[10px] text-stone-400 mt-1 block">Alert when balance exceeds this amount</span>
+              </div>
+            </div>
+          </div>
 
-          <label>
-            Credit Limit (Rs - Optional)
-            <input
-              type="number"
-              min="0"
-              value={creditLimit}
-              onChange={(e) => setCreditLimit(Number(e.target.value))}
-              placeholder="e.g. 500000"
-            />
-          </label>
-
-          <label className="col-span-2">
-            Special Notes / Route Information
-            <input
+          {/* Section 4: Notes */}
+          <div>
+            <label className="text-xs font-semibold text-stone-700 mb-1 block">Special Notes / Route Info</label>
+            <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Payment terms, delivery route, or van assignment"
+              placeholder="Delivery route, preferred payment days, or van driver instructions"
+              rows={2}
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
             />
-          </label>
+          </div>
         </div>
 
-        <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+        {/* Fixed Footer Actions */}
+        <div className="flex items-center justify-end gap-2 pt-4 border-t border-stone-200">
+          <button type="button" onClick={onClose} className="button secondary text-xs">
             Cancel
           </button>
-          <button type="submit" className="button primary">
-            {customer ? 'Update Customer Profile' : 'Save Customer Profile'}
+          <button type="submit" className="button primary text-xs">
+            {customer ? 'Save Changes' : 'Create Customer Profile'}
           </button>
         </div>
       </form>
@@ -1623,7 +1847,251 @@ function CustomerProfileModal({
 }
 
 // -----------------------------------------------------------------------------
-// MODAL: RECORD PAYMENT (WITH OFFLINE SCREENSHOT ATTACHMENT)
+// MODAL: CATEGORY MANAGEMENT (CRUD with Safety Warning on Delete)
+// -----------------------------------------------------------------------------
+function CategoryManagementModal({
+  categories,
+  customers,
+  onClose,
+  onSaveCategories,
+}: {
+  categories: CustomerCategoryItem[]
+  customers: CustomerItem[]
+  onClose: () => void
+  onSaveCategories: (cats: CustomerCategoryItem[]) => void
+}) {
+  const [list, setList] = useState<CustomerCategoryItem[]>(categories)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatParent, setNewCatParent] = useState<'Wholesaler' | 'Retailer' | 'Walk-in'>('Wholesaler')
+  const [newCatDescription, setNewCatDescription] = useState('')
+  const [editingCatId, setEditingCatId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [deleteWarning, setDeleteWarning] = useState<string | null>(null)
+
+  const getCountForCategory = (catName: string) => {
+    return customers.filter((c) => (c.type || '').toLowerCase() === catName.toLowerCase()).length
+  }
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCatName.trim()) return
+
+    const newCategory: CustomerCategoryItem = {
+      id: `ccat-${Date.now()}`,
+      name: newCatName.trim(),
+      parentType: newCatParent,
+      description: newCatDescription.trim() || undefined,
+      createdAt: new Date().toISOString().slice(0, 10),
+    }
+
+    const updated = [...list, newCategory]
+    setList(updated)
+    onSaveCategories(updated)
+
+    setNewCatName('')
+    setNewCatDescription('')
+  }
+
+  const handleStartEdit = (cat: CustomerCategoryItem) => {
+    setEditingCatId(cat.id)
+    setEditName(cat.name)
+    setEditDesc(cat.description || '')
+  }
+
+  const handleSaveEdit = (catId: string) => {
+    if (!editName.trim()) return
+    const updated = list.map((c) => (c.id === catId ? { ...c, name: editName.trim(), description: editDesc.trim() || undefined } : c))
+    setList(updated)
+    onSaveCategories(updated)
+    setEditingCatId(null)
+  }
+
+  const handleDeleteCategory = (cat: CustomerCategoryItem) => {
+    const assignedCount = getCountForCategory(cat.name)
+    if (assignedCount > 0) {
+      setDeleteWarning(
+        `Cannot delete category "${cat.name}". There are currently ${assignedCount} customer profiles assigned to it. Please reassign those customers to another category first.`
+      )
+      return
+    }
+
+    const updated = list.filter((c) => c.id !== cat.id)
+    setList(updated)
+    onSaveCategories(updated)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-stone-200 space-y-5 my-8 animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Account Classification</span>
+            <h2 className="text-lg font-black text-stone-900">Manage Customer Categories</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {deleteWarning && (
+          <div className="p-3.5 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <strong className="block font-bold">Deletion Blocked</strong>
+              <span>{deleteWarning}</span>
+            </div>
+            <button onClick={() => setDeleteWarning(null)} className="text-rose-600 hover:text-rose-900">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Existing Categories List */}
+        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+          {list.map((cat) => {
+            const count = getCountForCategory(cat.name)
+            const isEditing = editingCatId === cat.id
+
+            return (
+              <div
+                key={cat.id}
+                className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between gap-3 text-xs"
+              >
+                {isEditing ? (
+                  <div className="flex-1 space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="px-2.5 py-1 border border-stone-300 rounded-lg text-xs bg-white font-bold flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEdit(cat.id)}
+                        className="button primary text-xs py-1 px-3"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingCatId(null)}
+                        className="button secondary text-xs py-1 px-2"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                      placeholder="Category description"
+                      className="w-full px-2.5 py-1 border border-stone-300 rounded-lg text-[11px] bg-white"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <strong className="text-stone-900 font-bold">{cat.name}</strong>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-stone-200/70 text-stone-700">
+                          {cat.parentType}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                          {count} {count === 1 ? 'customer' : 'customers'}
+                        </span>
+                      </div>
+                      {cat.description && <p className="text-[11px] text-stone-500 mt-0.5">{cat.description}</p>}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(cat)}
+                        className="p-1 text-stone-600 hover:text-stone-900 rounded"
+                        title="Edit category"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="p-1 text-rose-600 hover:text-rose-800 rounded"
+                        title="Delete category"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Add New Category Form */}
+        <form onSubmit={handleAddCategory} className="p-4 bg-stone-50 rounded-xl border border-stone-200 space-y-3">
+          <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5 text-emerald-700" /> Add New Sub-Category
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">Category Name *</label>
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="e.g. Van Sales / Modern Trade"
+                required
+                className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">Main Type Hierarchy *</label>
+              <select
+                value={newCatParent}
+                onChange={(e) => setNewCatParent(e.target.value as any)}
+                className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
+              >
+                <option value="Wholesaler">Wholesaler (Distributor / Reps / Van Sales)</option>
+                <option value="Retailer">Retailer (Shop / Mart / Bakery)</option>
+                <option value="Walk-in">Walk-in Customer (Counter / Occasional)</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">Description (Optional)</label>
+              <input
+                type="text"
+                value={newCatDescription}
+                onChange={(e) => setNewCatDescription(e.target.value)}
+                placeholder="Brief description of this customer category"
+                className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button type="submit" className="button primary text-xs">
+              <Plus className="w-3.5 h-3.5" /> Add Category
+            </button>
+          </div>
+        </form>
+
+        <div className="flex justify-end pt-2 border-t border-stone-200">
+          <button type="button" onClick={onClose} className="button secondary text-xs">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// MODAL: RECORD PAYMENT AGAINST CUSTOMER DUES
 // -----------------------------------------------------------------------------
 function RecordPaymentModal({
   customer,
@@ -1646,8 +2114,8 @@ function RecordPaymentModal({
 }) {
   const [amount, setAmount] = useState(customer.currentBalance > 0 ? customer.currentBalance : 10000)
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque'>('Online')
-  const [paymentAccount, setPaymentAccount] = useState<'cash-in-hand' | 'meezan-bank' | 'hbl-bank'>('meezan-bank')
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque'>('Cash')
+  const [paymentAccount, setPaymentAccount] = useState<'cash-in-hand' | 'meezan-bank' | 'hbl-bank'>('cash-in-hand')
   const [transactionRef, setTransactionRef] = useState('')
   const [receiptImage, setReceiptImage] = useState<string | undefined>(undefined)
   const [notes, setNotes] = useState('')
@@ -1678,92 +2146,113 @@ function RecordPaymentModal({
   }
 
   return (
-    <div className="editor-overlay">
-      <form className="editor-modal" onSubmit={handleSubmit}>
-        <div className="editor-header">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs overflow-y-auto">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150"
+      >
+        <div className="flex items-center justify-between pb-3 border-b border-stone-200">
           <div>
-            <p className="eyebrow">Payment Collection</p>
-            <h2>Record Payment from {customer.name}</h2>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Payment Collection</span>
+            <h2 className="text-lg font-black text-stone-900">Record Payment from {customer.name}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
-            <X />
+          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 mb-4 grid grid-cols-2 gap-3 text-xs">
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 grid grid-cols-2 gap-3 text-xs">
           <div>
-            <span className="text-stone-500 block">Current Balance Due:</span>
-            <strong className="text-base text-amber-800">{formatPKR(customer.currentBalance)}</strong>
+            <span className="text-stone-500 block font-semibold">Current Balance Due:</span>
+            <strong className="text-base text-rose-700 font-black">{formatPKR(customer.currentBalance)}</strong>
           </div>
           <div>
-            <span className="text-stone-500 block">Customer Phone:</span>
-            <strong className="text-sm text-stone-900 font-mono">{customer.phone}</strong>
+            <span className="text-stone-500 block font-semibold">Contact Phone:</span>
+            <strong className="text-xs text-stone-900 font-mono">{customer.phone}</strong>
           </div>
         </div>
 
-        <div className="form-grid">
-          <label>
-            Amount Received (Rs) *
+        <div className="space-y-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">Amount Received (Rs) *</label>
+              <input
+                type="number"
+                min="1"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                required
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm bg-white font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">Payment Date *</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">Payment Method *</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as any)}
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
+              >
+                <option value="Cash">Cash in Hand</option>
+                <option value="Online">Online / Raast App</option>
+                <option value="Bank Transfer">Bank Transfer / IBFT</option>
+                <option value="Card">Card POS</option>
+                <option value="Cheque">Cross Cheque</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">Deposit Account *</label>
+              <select
+                value={paymentAccount}
+                onChange={(e) => setPaymentAccount(e.target.value as any)}
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
+              >
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} ({formatPKR(acc.balance)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-stone-700 mb-1 block">
+              Transaction Reference / Cheque # (Optional)
+            </label>
             <input
-              type="number"
-              min="1"
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              required
-            />
-          </label>
-
-          <label>
-            Payment Date *
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-          </label>
-
-          <label>
-            Payment Mode *
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)}>
-              <option value="Online">Online (Raast / Bank App Transfer)</option>
-              <option value="Cash">Cash in Hand</option>
-              <option value="Card">Credit / Debit Card POS</option>
-              <option value="Bank Transfer">Bank Cheque / IBFT</option>
-              <option value="Cheque">Cross Cheque</option>
-            </select>
-          </label>
-
-          <label>
-            Deposit Account *
-            <select value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)}>
-              {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name} (Bal: {formatPKR(acc.balance)})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="col-span-2">
-            Transaction Reference / Bank Ref / Cheque #
-            <input
+              type="text"
               value={transactionRef}
               onChange={(e) => setTransactionRef(e.target.value)}
-              placeholder="e.g. MZB-IBFT-889123 or Raast Ref"
+              placeholder="e.g. Raast Ref / IBFT # / Cheque # 8829"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             />
-          </label>
+          </div>
 
-          {/* Screenshot / Photo Attachment for Online / Bank Transfer */}
-          <div className="col-span-2 space-y-2">
-            <label className="block text-xs font-bold text-stone-700">
-              Attach Payment Receipt / Screenshot {paymentMethod === 'Online' && '(Recommended for Online)'}
-            </label>
-            <div className="flex items-center gap-4">
-              <label className="button secondary cursor-pointer text-xs">
-                <Upload className="w-3.5 h-3.5" /> Upload Screenshot / Slip
+          <div>
+            <label className="text-xs font-semibold text-stone-700 mb-1 block">Attach Payment Receipt / Slip</label>
+            <div className="flex items-center gap-3">
+              <label className="button secondary cursor-pointer text-xs py-1.5 px-3">
+                <Upload className="w-3.5 h-3.5" /> Choose Image
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
               </label>
               {receiptImage && (
                 <div className="flex items-center gap-2">
-                  <img src={receiptImage} alt="Proof" className="w-10 h-10 object-cover rounded-lg border border-stone-200" />
+                  <img src={receiptImage} alt="Receipt" className="w-8 h-8 object-cover rounded-lg border border-stone-200" />
                   <span className="text-xs text-emerald-700 font-bold flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" /> Screenshot Attached
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Slip Attached
                   </span>
                   <button type="button" onClick={() => setReceiptImage(undefined)} className="text-rose-600 text-xs hover:underline">
                     Remove
@@ -1773,22 +2262,24 @@ function RecordPaymentModal({
             </div>
           </div>
 
-          <label className="col-span-2">
-            Notes / Remarks
+          <div>
+            <label className="text-xs font-semibold text-stone-700 mb-1 block">Remarks / Notes</label>
             <input
+              type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Partial advance against invoice clearance"
+              placeholder="e.g. Full settlement against previous month ledger"
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             />
-          </label>
+          </div>
         </div>
 
-        <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+          <button type="button" onClick={onClose} className="button secondary text-xs">
             Cancel
           </button>
-          <button type="submit" className="button primary">
-            Record Payment Voucher
+          <button type="submit" className="button primary text-xs">
+            Save Payment Receipt
           </button>
         </div>
       </form>
@@ -1797,192 +2288,7 @@ function RecordPaymentModal({
 }
 
 // -----------------------------------------------------------------------------
-// MODAL: QUICK SALE / INVOICE CREATION FOR CUSTOMER
-// -----------------------------------------------------------------------------
-function QuickSaleModal({
-  customer,
-  products,
-  accounts,
-  onClose,
-  onSubmit,
-}: {
-  customer: CustomerItem
-  products: AppDatabase['products']
-  accounts: AppDatabase['accounts']
-  onClose: () => void
-  onSubmit: (items: Array<{ productId: string; name: string; qty: number; unitPrice: number; unit: string }>, amountPaid: number, paymentMethod: any, paymentAccount: any) => void
-}) {
-  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '')
-  const [qty, setQty] = useState(10)
-  const [cart, setCart] = useState<Array<{ productId: string; name: string; qty: number; unitPrice: number; unit: string }>>([])
-  const [amountPaid, setAmountPaid] = useState(0)
-  const [paymentMethod, setPaymentMethod] = useState('Online')
-  const [paymentAccount, setPaymentAccount] = useState('meezan-bank')
-
-  const currentProduct = products.find((p) => p.id === selectedProductId)
-  const priceToUse = customer.type === 'Distributor' ? currentProduct?.wholesalePrice || 0 : currentProduct?.retailPrice || 0
-
-  const handleAddToCart = () => {
-    if (!currentProduct || qty <= 0) return
-    const existing = cart.find((i) => i.productId === currentProduct.id)
-    if (existing) {
-      setCart(cart.map((i) => (i.productId === currentProduct.id ? { ...i, qty: i.qty + qty } : i)))
-    } else {
-      setCart([...cart, { productId: currentProduct.id, name: currentProduct.name, qty, unitPrice: priceToUse, unit: currentProduct.unit }])
-    }
-  }
-
-  const grandTotal = cart.reduce((sum, i) => sum + i.qty * i.unitPrice, 0)
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (cart.length === 0) return
-    onSubmit(cart, amountPaid, paymentMethod, paymentAccount)
-  }
-
-  return (
-    <div className="editor-overlay">
-      <form className="editor-modal large" onSubmit={handleFormSubmit}>
-        <div className="editor-header">
-          <div>
-            <p className="eyebrow">Commercial Invoice</p>
-            <h2>Create Sale for {customer.name}</h2>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose}>
-            <X />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div className="col-span-2 space-y-3">
-            <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-end gap-3">
-              <label className="flex-1">
-                Select Product
-                <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} (Stock: {p.quantity} {p.unit})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="w-24">
-                Qty ({currentProduct?.unit || 'Units'})
-                <input type="number" min="1" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
-              </label>
-              <button type="button" className="button primary text-xs h-10" onClick={handleAddToCart}>
-                <Plus className="w-4 h-4" /> Add
-              </button>
-            </div>
-
-            {/* Cart Table */}
-            <div className="table-scroll border border-stone-200 rounded-xl max-h-56">
-              <table className="text-xs">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Rate</th>
-                    <th>Total</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="font-bold">{item.name}</td>
-                      <td>
-                        {item.qty} {item.unit}
-                      </td>
-                      <td>{formatPKR(item.unitPrice)}</td>
-                      <td className="font-bold">{formatPKR(item.qty * item.unitPrice)}</td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => setCart(cart.filter((_, i) => i !== idx))}
-                          className="text-rose-600 hover:text-rose-800"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {cart.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center py-6 text-stone-400">
-                        Add products from the selector above.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Payment & Settlement Column */}
-          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-3">
-            <h4 className="font-bold text-stone-900 text-xs">Payment & Settlement</h4>
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs text-stone-600">
-                <span>Invoice Total:</span>
-                <strong className="text-stone-900">{formatPKR(grandTotal)}</strong>
-              </div>
-            </div>
-
-            <label className="text-xs">
-              Amount Paid Now (Rs)
-              <input
-                type="number"
-                min="0"
-                max={grandTotal}
-                value={amountPaid}
-                onChange={(e) => setAmountPaid(Number(e.target.value))}
-              />
-            </label>
-
-            <label className="text-xs">
-              Payment Method
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                <option value="Online">Online / Raast</option>
-                <option value="Cash">Cash in Hand</option>
-                <option value="Card">Card POS</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-              </select>
-            </label>
-
-            <label className="text-xs">
-              Deposit Account
-              <select value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value)}>
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="pt-2 border-t border-stone-200 text-xs flex justify-between">
-              <span className="font-bold">Remaining Added to Balance:</span>
-              <strong className="text-amber-800 font-bold">{formatPKR(Math.max(0, grandTotal - amountPaid))}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="button primary" disabled={cart.length === 0}>
-            Issue Invoice & Update Stock
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-// -----------------------------------------------------------------------------
-// MODAL: INVOICE RECEIPT MODAL VIEWER
+// MODAL: INVOICE RECEIPT VIEWER
 // -----------------------------------------------------------------------------
 function InvoiceReceiptModal({
   invoice,
@@ -1994,36 +2300,40 @@ function InvoiceReceiptModal({
   onClose: () => void
 }) {
   return (
-    <div className="editor-overlay">
-      <div className="editor-modal large">
-        <div className="editor-header">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-stone-200 space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between pb-3 border-b border-stone-200">
           <div>
-            <p className="eyebrow">Commercial Invoice</p>
-            <h2>Invoice #{invoice.invoiceNumber}</h2>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Commercial Invoice</span>
+            <h2 className="text-lg font-black text-stone-900">Invoice #{invoice.invoiceNumber}</h2>
           </div>
-          <button className="icon-button" onClick={onClose}>
-            <X />
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div>
-            <span className="text-stone-500 block">Customer Name</span>
-            <strong className="text-sm text-stone-900">{invoice.customerName}</strong>
+            <span className="text-stone-500 block font-semibold">Customer</span>
+            <strong className="text-stone-900 block font-bold mt-0.5">{invoice.customerName}</strong>
           </div>
           <div>
-            <span className="text-stone-500 block">Invoice Date</span>
-            <strong className="text-sm text-stone-900">{formatDate(invoice.date)}</strong>
+            <span className="text-stone-500 block font-semibold">Date</span>
+            <strong className="text-stone-900 block font-bold mt-0.5">{formatDate(invoice.date)}</strong>
           </div>
           <div>
-            <span className="text-stone-500 block">Payment Mode & Account</span>
-            <strong className="text-sm text-stone-900">{invoice.paymentMethod} ({invoice.paymentAccount})</strong>
+            <span className="text-stone-500 block font-semibold">Payment Method</span>
+            <strong className="text-stone-900 block font-bold mt-0.5">{invoice.paymentMethod}</strong>
           </div>
           <div>
-            <span className="text-stone-500 block">Payment Status</span>
+            <span className="text-stone-500 block font-semibold">Status</span>
             <span
-              className={`inline-block font-bold text-xs px-2 py-0.5 rounded ${
-                invoice.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+              className={`inline-block font-bold text-xs px-2 py-0.5 rounded mt-0.5 ${
+                invoice.status === 'Paid'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : invoice.status === 'Partial'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-rose-100 text-rose-800'
               }`}
             >
               {invoice.status}
@@ -2031,55 +2341,59 @@ function InvoiceReceiptModal({
           </div>
         </div>
 
-        <div className="table-scroll border border-stone-200 rounded-xl mb-4">
-          <table className="text-xs">
+        <div className="border border-stone-200 rounded-xl overflow-hidden">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr>
-                <th>#</th>
-                <th>Product Description</th>
-                <th>Quantity</th>
-                <th>Unit Price</th>
-                <th className="text-right">Line Total</th>
+              <tr className="bg-stone-50 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
+                <th className="py-2.5 px-3">#</th>
+                <th className="py-2.5 px-3">Product</th>
+                <th className="py-2.5 px-3">Qty</th>
+                <th className="py-2.5 px-3">Rate</th>
+                <th className="py-2.5 px-3 text-right">Line Total</th>
               </tr>
             </thead>
-            <tbody>
-              {invoice.items.map((item, idx) => (
+            <tbody className="divide-y divide-stone-100">
+              {(invoice.items || []).map((item, idx) => (
                 <tr key={idx}>
-                  <td>{idx + 1}</td>
-                  <td className="font-bold">{item.name}</td>
-                  <td>
+                  <td className="py-2 px-3 text-stone-400 font-mono">{idx + 1}</td>
+                  <td className="py-2 px-3 font-bold text-stone-900">{item.name}</td>
+                  <td className="py-2 px-3">
                     {item.quantity} {item.unit}
                   </td>
-                  <td>{formatPKR(item.unitPrice)}</td>
-                  <td className="text-right font-bold">{formatPKR(item.total)}</td>
+                  <td className="py-2 px-3">{formatPKR(item.unitPrice)}</td>
+                  <td className="py-2 px-3 text-right font-bold text-stone-900">{formatPKR(item.total)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div className="flex justify-end gap-6 text-xs border-t border-stone-200 pt-3">
-          <div className="text-right space-y-1">
-            <div>
-              <span className="text-stone-500">Grand Total: </span>
-              <strong className="text-sm font-black">{formatPKR(invoice.grandTotal)}</strong>
+        <div className="flex justify-end text-xs border-t border-stone-200 pt-3">
+          <div className="text-right space-y-1 min-w-[200px]">
+            <div className="flex justify-between">
+              <span className="text-stone-500">Grand Total:</span>
+              <strong className="font-bold text-stone-900">{formatPKR(invoice.grandTotal)}</strong>
             </div>
-            <div>
-              <span className="text-stone-500">Amount Paid: </span>
-              <strong className="text-emerald-700">{formatPKR(invoice.amountPaid)}</strong>
+            <div className="flex justify-between">
+              <span className="text-stone-500">Amount Paid:</span>
+              <strong className="font-bold text-emerald-700">{formatPKR(invoice.amountPaid)}</strong>
             </div>
-            <div>
-              <span className="text-stone-500">Balance Due: </span>
-              <strong className="text-amber-800 font-black">{formatPKR(invoice.balanceDue)}</strong>
+            <div className="flex justify-between text-sm pt-1 border-t border-stone-100">
+              <span className="font-bold text-stone-700">Balance Due:</span>
+              <strong className="font-black text-rose-700">{formatPKR(invoice.balanceDue)}</strong>
             </div>
           </div>
         </div>
 
-        <div className="editor-actions flex justify-between items-center mt-4">
-          <button className="button secondary" onClick={() => generateInvoicePDF(invoice, customer)}>
-            <Download className="w-4 h-4" /> Download Tax Invoice PDF
+        <div className="flex items-center justify-between pt-3 border-t border-stone-200">
+          <button
+            type="button"
+            className="button secondary text-xs"
+            onClick={() => generateInvoicePDF(invoice, customer)}
+          >
+            <Download className="w-3.5 h-3.5" /> Download Tax Invoice PDF
           </button>
-          <button className="button primary" onClick={onClose}>
+          <button type="button" className="button primary text-xs" onClick={onClose}>
             Close
           </button>
         </div>

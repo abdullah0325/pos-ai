@@ -5,8 +5,17 @@ export type Status = 'Active' | 'In stock' | 'Low stock' | 'Out of stock' | 'In 
 
 export type ProductCategory = string
 export type RawMaterialCategory = 'Ingredients' | 'Packaging' | 'Chemicals & Minerals' | 'Flavors' | 'Other'
-export type CustomerType = 'Retailer' | 'Distributor' | 'Sales Man' | 'Sales Representative' | 'Wholesaler' | 'Other' | 'Counter'
+export type CustomerType = 'Retailer' | 'Distributor' | 'Sales Man' | 'Sales Representative' | 'Wholesaler' | 'Other' | 'Counter' | 'Walk-in' | string
 export type SupplierSupplyCategory = 'Raw Material' | 'Product' | 'Both' | string
+
+export interface CustomerCategoryItem {
+  id: string
+  name: string
+  parentType: 'Walk-in' | 'Retailer' | 'Wholesaler'
+  description?: string
+  color?: string
+  createdAt?: string
+}
 export type ExpenseCategory =
   | 'Rent'
   | 'Bills/Utilities'
@@ -432,6 +441,7 @@ export interface EmployeeItem {
 
 export interface AppDatabase {
   categories: CategoryItem[]
+  customerCategories?: CustomerCategoryItem[]
   products: ProductItem[]
   rawMaterials: RawMaterialItem[]
   productionRuns: ProductionRun[]
@@ -459,6 +469,14 @@ export const defaultProductCategories: CategoryItem[] = [
   { id: 'cat-7', name: 'Other', description: 'General merchandise and new trial products', createdAt: '2026-08-01' },
 ]
 
+export const defaultCustomerCategories: CustomerCategoryItem[] = [
+  { id: 'ccat-1', name: 'Retailer', parentType: 'Retailer', description: 'Retail stores, marts, bakeries, general shops', createdAt: '2026-08-01' },
+  { id: 'ccat-2', name: 'Distributor', parentType: 'Wholesaler', description: 'Bulk regional wholesale distributors', createdAt: '2026-08-01' },
+  { id: 'ccat-3', name: 'Sales Man', parentType: 'Wholesaler', description: 'Field sales representatives & route order bookers', createdAt: '2026-08-01' },
+  { id: 'ccat-4', name: 'Walk-in Customer', parentType: 'Walk-in', description: 'Walk-in counter buyers & occasional clients', createdAt: '2026-08-01' },
+  { id: 'ccat-5', name: 'Van Sales', parentType: 'Wholesaler', description: 'Direct mobile van route sales & wholesale delivery', createdAt: '2026-08-01' },
+]
+
 export const DB_STORAGE_KEY = 'al_farooq_foods_db_v2'
 
 // Initial Default Food Manufacturing Dataset
@@ -466,6 +484,7 @@ export const initialDatabase: AppDatabase = {
   version: 2,
   lastBackupDate: '2026-08-21T10:00:00.000Z',
   categories: defaultProductCategories,
+  customerCategories: defaultCustomerCategories,
   accounts: [
     { id: 'cash-in-hand', name: 'Cash in Hand (Factory Register)', type: 'Cash', balance: 345200, updatedAt: '2026-08-25' },
     { id: 'meezan-bank', name: 'Meezan Bank Ltd (A/C: 010203040510)', type: 'Bank', accountNumber: '010203040510', balance: 1680450, updatedAt: '2026-08-25' },
