@@ -9,27 +9,15 @@ import {
   Trash2,
   CheckCircle2,
   Printer,
-  FileText,
   Download,
   Share2,
   Upload,
   X,
-  CreditCard,
   Building2,
   Truck,
   User,
-  AlertTriangle,
-  RotateCcw,
-  Sparkles,
-  DollarSign,
   Package,
-  Layers,
-  ArrowRight,
   Receipt,
-  Phone,
-  MapPin,
-  Check,
-  ShieldCheck,
   ChevronDown,
   UserPlus,
   PauseCircle,
@@ -37,7 +25,9 @@ import {
   TrendingUp,
   Banknote,
   Clock,
-  Eye,
+  Store,
+  Check,
+  ExternalLink,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -59,7 +49,8 @@ interface PosViewProps {
   onNavigate?: (module: string, subTab?: string) => void
 }
 
-export type CustomerCategoryType = 'Retail' | 'Distributor' | 'Sales Man'
+export type MainBuyerCategory = 'Customer' | 'Retailer Shop' | 'Wholesaler'
+export type WholesalerSubFilter = 'All' | 'Distributor' | 'Sales Man'
 
 export interface CartItem {
   product: ProductItem
@@ -75,7 +66,8 @@ export interface CartItem {
 export interface PosDraft {
   id: string
   savedAt: string
-  customerCategory: CustomerCategoryType
+  buyerCategory: MainBuyerCategory
+  wholesalerSubFilter?: WholesalerSubFilter
   selectedCustomerId?: string
   customerName: string
   cart: CartItem[]
@@ -85,23 +77,25 @@ export interface PosDraft {
 }
 
 export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps) {
-  // 1. Customer Category Selection: Retail (Walk-in) / Distributor / Sales Man
-  const [customerCategory, setCustomerCategory] = useState<CustomerCategoryType>('Retail')
+  // 1. Exactly 3 Main Buyer Categories: 'Customer' (Default) | 'Retailer Shop' | 'Wholesaler'
+  const [buyerCategory, setBuyerCategory] = useState<MainBuyerCategory>('Customer')
 
-  // Selected Profile for Distributor / Sales Man
+  // Wholesaler internal sub-filter / tag distinction (Distributor vs Salesman)
+  const [wholesalerSubFilter, setWholesalerSubFilter] = useState<WholesalerSubFilter>('All')
+
+  // Selected Profile for Retailer Shop or Wholesaler
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [customerSearchQuery, setCustomerSearchQuery] = useState('')
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false)
 
-  // Retail walk-in customer details
-  const [retailCustomerName, setRetailCustomerName] = useState('Walk-in Retail Customer')
-  const [retailCustomerPhone, setRetailCustomerPhone] = useState('')
-  const [retailCustomerAddress, setRetailCustomerAddress] = useState('Factory Gate Counter')
+  // Customer (Direct / Walk-in) details - default pre-filled
+  const [walkinCustomerName, setWalkinCustomerName] = useState('Walk-in Retail Customer')
+  const [walkinCustomerPhone, setWalkinCustomerPhone] = useState('')
 
-  // On-the-fly New Customer Creation Modal
+  // Quick Add Customer Modal
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false)
   const [newCustName, setNewCustName] = useState('')
-  const [newCustType, setNewCustType] = useState<CustomerType>('Distributor')
+  const [newCustType, setNewCustType] = useState<CustomerType>('Retailer')
   const [newCustPhone, setNewCustPhone] = useState('')
   const [newCustAddress, setNewCustAddress] = useState('')
   const [newCustCity, setNewCustCity] = useState('')
@@ -130,7 +124,6 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
   // 6. Post-Checkout Confirmation & Print Modal
   const [completedInvoice, setCompletedInvoice] = useState<InvoiceItem | null>(null)
   const [printMode, setPrintMode] = useState<'thermal' | 'a4'>('thermal')
-  const [viewingScreenshotModal, setViewingScreenshotModal] = useState<string | null>(null)
 
   // 7. Drafts / Hold Sales
   const [drafts, setDrafts] = useState<PosDraft[]>([])
@@ -138,15 +131,31 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Filtered customer profiles for Distributor / Sales Man dropdown
+  // Filtered customer profiles based on active Buyer Type
   const filteredProfiles = useMemo(() => {
     let pool: CustomerItem[] = []
-    if (customerCategory === 'Distributor') {
-      pool = db.customers.filter((c) => c.type === 'Distributor')
-    } else if (customerCategory === 'Sales Man') {
-      pool = db.customers.filter((c) => c.type === 'Sales Man' || c.type === 'Sales Representative')
+
+    if (buyerCategory === 'Retailer Shop') {
+      pool = db.customers.filter((c) => c.type === 'Retailer' || c.type === 'Other')
+      if (pool.length === 0) {
+        pool = db.customers.filter((c) => c.type !== 'Distributor' && c.type !== 'Sales Man' && c.type !== 'Sales Representative')
+      }
+    } else if (buyerCategory === 'Wholesaler') {
+      if (wholesalerSubFilter === 'Distributor') {
+        pool = db.customers.filter((c) => c.type === 'Distributor')
+      } else if (wholesalerSubFilter === 'Sales Man') {
+        pool = db.customers.filter((c) => c.type === 'Sales Man' || c.type === 'Sales Representative')
+      } else {
+        pool = db.customers.filter(
+          (c) =>
+            c.type === 'Wholesaler' ||
+            c.type === 'Distributor' ||
+            c.type === 'Sales Man' ||
+            c.type === 'Sales Representative'
+        )
+      }
     } else {
-      pool = db.customers
+      pool = db.customers.filter((c) => c.type === 'Counter' || c.type === 'Other')
     }
 
     const q = customerSearchQuery.trim().toLowerCase()
@@ -160,15 +169,15 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         c.phone.includes(q) ||
         (c.city && c.city.toLowerCase().includes(q))
     )
-  }, [db.customers, customerCategory, customerSearchQuery])
+  }, [db.customers, buyerCategory, wholesalerSubFilter, customerSearchQuery])
 
-  // Selected customer object
+  // Currently selected customer profile
   const selectedCustomer = useMemo(() => {
-    if (customerCategory === 'Retail') return null
+    if (buyerCategory === 'Customer') return null
     return db.customers.find((c) => c.id === selectedCustomerId) || null
-  }, [db.customers, customerCategory, selectedCustomerId])
+  }, [db.customers, buyerCategory, selectedCustomerId])
 
-  // Extract all categories from products & categories db
+  // Extract all categories from products & categories
   const availableCategories = useMemo(() => {
     const set = new Set<string>()
     db.products.forEach((p) => {
@@ -195,7 +204,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     })
   }, [db.products, selectedCategory, productQuery])
 
-  // POS Top Bar Metrics (Today's sales count, total revenue, pending payments)
+  // POS Top Bar Metrics
   const posMetrics = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
     let todayCount = 0
@@ -220,16 +229,17 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     }
   }, [db.invoices])
 
-  // Helper: determine unit price based on qty, product limits, and customer category
+  // Pricing Rule: Retailer (Shop) & Wholesaler auto-apply Wholesale rate; Customer applies Retail rate
   const getProductPriceForQty = (
     product: ProductItem,
     qty: number,
-    currentCat: CustomerCategoryType
+    cat: MainBuyerCategory
   ): { price: number; tier: 'Retail' | 'Wholesale' } => {
-    const wholesaleLimit = product.wholesaleMinQty && product.wholesaleMinQty > 0 ? product.wholesaleMinQty : 12
-
-    // Auto-apply wholesale price when qty >= wholesaleMinQty OR if Distributor / Sales Man category
-    if (currentCat === 'Distributor' || currentCat === 'Sales Man' || qty >= wholesaleLimit) {
+    if (cat === 'Retailer Shop' || cat === 'Wholesaler') {
+      return { price: product.wholesalePrice, tier: 'Wholesale' }
+    }
+    const wholesaleLimit = product.wholesaleMinQty && product.wholesaleMinQty > 0 ? product.wholesaleMinQty : 999999
+    if (qty >= wholesaleLimit) {
       return { price: product.wholesalePrice, tier: 'Wholesale' }
     }
     return { price: product.retailPrice, tier: 'Retail' }
@@ -239,7 +249,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
   const calculateItemLine = (
     product: ProductItem,
     qty: number,
-    currentCat: CustomerCategoryType,
+    cat: MainBuyerCategory,
     discountType: 'percent' | 'fixed' = 'fixed',
     discountValue: number = 0,
     forcedTier?: 'Retail' | 'Wholesale'
@@ -251,7 +261,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       tier = forcedTier
       unitPrice = forcedTier === 'Wholesale' ? product.wholesalePrice : product.retailPrice
     } else {
-      const calculated = getProductPriceForQty(product, qty, currentCat)
+      const calculated = getProductPriceForQty(product, qty, cat)
       tier = calculated.tier
       unitPrice = calculated.price
     }
@@ -280,14 +290,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     }
   }
 
-  // Add product to cart (or increment qty) with stock check
+  // One-click add to cart: if already in cart, increases quantity
   const handleAddToCart = (product: ProductItem) => {
     const existingIndex = cart.findIndex((item) => item.product.id === product.id)
+
     if (existingIndex >= 0) {
       const existing = cart[existingIndex]
       const newQty = existing.quantity + 1
 
-      // Stock check warning / cap
       if (newQty > product.quantity) {
         alert(`Stock limit reached! Only ${product.quantity} ${product.unit} available in warehouse.`)
         return
@@ -296,7 +306,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       const updatedItem = calculateItemLine(
         product,
         newQty,
-        customerCategory,
+        buyerCategory,
         existing.discountType,
         existing.discountValue
       )
@@ -308,7 +318,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         alert(`Product is currently Out of Stock (${product.quantity} in inventory).`)
         return
       }
-      const newItem = calculateItemLine(product, 1, customerCategory, 'fixed', 0)
+      const newItem = calculateItemLine(product, 1, buyerCategory, 'fixed', 0)
       setCart([...cart, newItem])
     }
   }
@@ -327,7 +337,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const updated = calculateItemLine(
       current.product,
       newQty,
-      customerCategory,
+      buyerCategory,
       current.discountType,
       current.discountValue
     )
@@ -346,7 +356,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const updated = calculateItemLine(
       current.product,
       current.quantity,
-      customerCategory,
+      buyerCategory,
       type,
       val
     )
@@ -355,14 +365,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     setCart(newCart)
   }
 
-  // Toggle Pricing Tier manually
+  // Toggle Pricing Tier manually (Retail vs Wholesale)
   const handleToggleItemTier = (index: number) => {
     const current = cart[index]
     const nextTier: 'Retail' | 'Wholesale' = current.pricingTier === 'Retail' ? 'Wholesale' : 'Retail'
     const updated = calculateItemLine(
       current.product,
       current.quantity,
-      customerCategory,
+      buyerCategory,
       current.discountType,
       current.discountValue,
       nextTier
@@ -377,14 +387,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     setCart(cart.filter((_, i) => i !== index))
   }
 
-  // Switch Customer Category
-  const handleCategoryChange = (newCat: CustomerCategoryType) => {
-    setCustomerCategory(newCat)
+  // Switch Main Buyer Category (3 Categories: 'Customer' | 'Retailer Shop' | 'Wholesaler')
+  const handleBuyerCategoryChange = (newCat: MainBuyerCategory) => {
+    setBuyerCategory(newCat)
     setSelectedCustomerId('')
     setCustomerSearchQuery('')
     setIsCustomerDropdownOpen(false)
 
-    // Re-evaluate pricing for items in cart
+    // Re-evaluate pricing for items in cart based on newly selected buyer category
     const reevaluatedCart = cart.map((item) =>
       calculateItemLine(
         item.product,
@@ -397,7 +407,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     setCart(reevaluatedCart)
   }
 
-  // On-the-fly Save New Customer and Continue Sale
+  // Save New Customer On-The-Fly
   const handleSaveNewCustomer = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCustName.trim()) {
@@ -424,22 +434,25 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       createdAt: new Date().toISOString(),
     }
 
-    // Add to DB
     onSaveDatabase({
       ...db,
       customers: [newCustomer, ...db.customers],
     })
 
     // Auto-select this newly created customer
-    if (newCustType === 'Distributor') {
-      setCustomerCategory('Distributor')
-    } else if (newCustType === 'Sales Man' || newCustType === 'Sales Representative') {
-      setCustomerCategory('Sales Man')
+    if (newCustType === 'Retailer') {
+      setBuyerCategory('Retailer Shop')
+    } else if (newCustType === 'Distributor' || newCustType === 'Sales Man' || newCustType === 'Wholesaler') {
+      setBuyerCategory('Wholesaler')
+      if (newCustType === 'Distributor') setWholesalerSubFilter('Distributor')
+      if (newCustType === 'Sales Man') setWholesalerSubFilter('Sales Man')
+    } else {
+      setBuyerCategory('Customer')
     }
+
     setSelectedCustomerId(newId)
     setShowNewCustomerModal(false)
 
-    // Reset fields
     setNewCustName('')
     setNewCustPhone('')
     setNewCustAddress('')
@@ -478,14 +491,15 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     }
 
     const draftName =
-      customerCategory === 'Retail'
-        ? retailCustomerName
-        : selectedCustomer?.name || `${customerCategory} Sale`
+      buyerCategory === 'Customer'
+        ? walkinCustomerName || 'Customer Sale'
+        : selectedCustomer?.name || `${buyerCategory} Sale`
 
     const newDraft: PosDraft = {
       id: `draft-${Date.now()}`,
       savedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      customerCategory,
+      buyerCategory,
+      wholesalerSubFilter,
       selectedCustomerId: selectedCustomerId || undefined,
       customerName: draftName,
       cart: [...cart],
@@ -497,12 +511,13 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     setDrafts([newDraft, ...drafts])
     setCart([])
     setCartDiscountValue(0)
-    alert(`Sale held as Draft for "${draftName}". You can resume it anytime.`)
+    alert(`Sale held as Draft for "${draftName}".`)
   }
 
   // Resume Draft Sale
   const handleResumeDraft = (draft: PosDraft) => {
-    setCustomerCategory(draft.customerCategory)
+    setBuyerCategory(draft.buyerCategory || 'Customer')
+    if (draft.wholesalerSubFilter) setWholesalerSubFilter(draft.wholesalerSubFilter)
     if (draft.selectedCustomerId) {
       setSelectedCustomerId(draft.selectedCustomerId)
     }
@@ -511,7 +526,6 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     setCartDiscountValue(draft.cartDiscountValue)
     if (draft.notes) setOrderNotes(draft.notes)
 
-    // Remove resumed draft from drafts list
     setDrafts(drafts.filter((d) => d.id !== draft.id))
     setShowDraftsModal(false)
   }
@@ -523,8 +537,8 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       return
     }
 
-    if ((customerCategory === 'Distributor' || customerCategory === 'Sales Man') && !selectedCustomer) {
-      alert(`Please select an existing ${customerCategory} profile from the dropdown before checkout.`)
+    if ((buyerCategory === 'Retailer Shop' || buyerCategory === 'Wholesaler') && !selectedCustomer) {
+      alert(`Please select an existing ${buyerCategory === 'Retailer Shop' ? 'Retailer (Shop)' : 'Wholesaler / Distributor'} profile before checkout, or switch to Customer (Retail).`)
       return
     }
 
@@ -560,30 +574,30 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const nextInvoiceNumber = `INV-${now.getFullYear()}-${1000 + db.invoices.length + 1}`
 
     const customerId =
-      customerCategory === 'Retail'
-        ? 'cust-retail-walkin'
+      buyerCategory === 'Customer'
+        ? 'cust-direct-customer'
         : selectedCustomer?.id || `cust-${Date.now()}`
 
     const customerName =
-      customerCategory === 'Retail'
-        ? retailCustomerName.trim() || 'Walk-in Retail Customer'
-        : selectedCustomer?.businessName || selectedCustomer?.name || 'Commercial Client'
+      buyerCategory === 'Customer'
+        ? walkinCustomerName.trim() || 'Walk-in Retail Customer'
+        : selectedCustomer?.businessName || selectedCustomer?.name || `${buyerCategory} Client`
 
     const customerType: CustomerType =
-      customerCategory === 'Distributor'
-        ? 'Distributor'
-        : customerCategory === 'Sales Man'
-        ? 'Sales Man'
+      buyerCategory === 'Wholesaler'
+        ? (selectedCustomer?.type as CustomerType) || 'Wholesaler'
+        : buyerCategory === 'Retailer Shop'
+        ? 'Retailer'
         : 'Counter'
 
     const phone =
-      customerCategory === 'Retail'
-        ? retailCustomerPhone || '—'
+      buyerCategory === 'Customer'
+        ? walkinCustomerPhone || '—'
         : selectedCustomer?.phone || '—'
 
     const address =
-      customerCategory === 'Retail'
-        ? retailCustomerAddress || 'Factory Gate Counter'
+      buyerCategory === 'Customer'
+        ? 'Factory Gate Counter'
         : selectedCustomer?.address || 'Pakistan'
 
     const effectiveAmountPaid =
@@ -622,7 +636,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       partyId: selectedCustomer?.id || undefined,
       phone,
       address,
-      saleType: customerCategory === 'Distributor' ? 'Distributor' : customerCategory === 'Sales Man' ? 'Retail' : 'Counter',
+      saleType: buyerCategory === 'Wholesaler' ? 'Distributor' : buyerCategory === 'Retailer Shop' ? 'Retail' : 'Counter',
       items: invoiceLines,
       subtotal: grossSubtotal,
       discount: totalDiscountsCombined,
@@ -637,11 +651,11 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       paymentAccount,
       status: paymentStatus,
       deliveryStatus: 'Delivered',
-      notes: orderNotes.trim() || `POS Point-of-Sale (${customerCategory})`,
+      notes: orderNotes.trim() || `POS Sale (${buyerCategory})`,
       createdAt: now.toISOString(),
     }
 
-    // 1. Post-Sale Automation: Auto-deduct sold quantities from Product Management
+    // 1. Post-Sale Automation: Auto-deduct warehouse stock
     const updatedProducts = db.products.map((p) => {
       const matched = cart.find((item) => item.product.id === p.id)
       if (matched) {
@@ -656,7 +670,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       return p
     })
 
-    // 2. Post-Sale Automation: Update Customer Outstanding Balance & Running Ledger (Universal Profile)
+    // 2. Post-Sale Automation: Update Customer Outstanding Balance & Ledger
     let updatedCustomers = [...db.customers]
     const newLedgerEntries: LedgerEntry[] = []
 
@@ -686,7 +700,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         balance: selectedCustomer.currentBalance + grandTotal,
       })
 
-      // Add Ledger Entry for Payment Credit if any paid
+      // Add Ledger Entry for Payment Credit
       if (effectiveAmountPaid > 0) {
         newLedgerEntries.push({
           id: `led-${Date.now()}-pay`,
@@ -703,7 +717,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       }
     }
 
-    // 3. Post-Sale Automation: Update Cash/Bank Account Balance
+    // 3. Post-Sale Automation: Update Financial Account Balance
     const updatedAccounts = db.accounts.map((acc) => {
       if (acc.id === paymentAccount && effectiveAmountPaid > 0) {
         return {
@@ -727,11 +741,8 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
     onSaveDatabase(updatedDb)
 
-    // Set completed invoice for immediate printing and confirmation
     setCompletedInvoice(newInvoice)
     setShowCheckoutModal(false)
-
-    // Reset checkout form fields
     setPaymentScreenshot('')
     setOrderNotes('')
   }
@@ -747,7 +758,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     setPaymentScreenshot('')
   }
 
-  // Print invoice directly
+  // Direct Print
   const handleDirectPrint = () => {
     window.print()
   }
@@ -785,56 +796,62 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       `_Thank you for choosing Al-Farooq Foods!_`
 
     navigator.clipboard.writeText(text)
-    alert('Receipt text copied to clipboard! You can paste it directly into WhatsApp.')
+    alert('Receipt text copied to clipboard! Ready to paste into WhatsApp.')
+  }
+
+  // Quick navigation helper to customer management
+  const handleNavigateToCustomerManagement = (type: 'retailers' | 'distributors') => {
+    if (onNavigate) {
+      onNavigate('customer-management', type)
+    } else {
+      setNewCustType(type === 'retailers' ? 'Retailer' : 'Distributor')
+      setShowNewCustomerModal(true)
+    }
   }
 
   return (
-    <div className="space-y-6" id="pos-terminal-root">
-      {/* 1. TOP POS DASHBOARD BAR */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-        {/* Metric 1: Today's Sales Count */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border border-stone-100">
-          <div className="w-10 h-10 rounded-xl bg-lime-100 flex items-center justify-center text-lime-700 shrink-0">
-            <ShoppingCart className="w-5 h-5" />
+    <div className="space-y-4" id="pos-terminal-root">
+      {/* 1. MINIMAL POS METRICS BAR */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white p-3 rounded-2xl shadow-xs border border-stone-100">
+        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50/80">
+          <div className="w-8 h-8 rounded-lg bg-lime-100/80 flex items-center justify-center text-lime-700 shrink-0">
+            <ShoppingCart className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">Today&apos;s Sales</span>
-            <span className="text-xl font-bold text-stone-900">{posMetrics.todayCount} Invoices</span>
+            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Today&apos;s Sales</span>
+            <span className="text-sm font-bold text-stone-900">{posMetrics.todayCount} Invoices</span>
           </div>
         </div>
 
-        {/* Metric 2: Today's Total Revenue */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border border-stone-100">
-          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700 shrink-0">
-            <TrendingUp className="w-5 h-5" />
+        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50/80">
+          <div className="w-8 h-8 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-700 shrink-0">
+            <TrendingUp className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">Today&apos;s Revenue</span>
-            <span className="text-xl font-bold text-stone-900">{formatPKR(posMetrics.todayRevenue)}</span>
+            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Revenue</span>
+            <span className="text-sm font-bold text-stone-900">{formatPKR(posMetrics.todayRevenue)}</span>
           </div>
         </div>
 
-        {/* Metric 3: Cash Collected */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border border-stone-100">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
-            <Banknote className="w-5 h-5" />
+        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50/80">
+          <div className="w-8 h-8 rounded-lg bg-emerald-100/80 flex items-center justify-center text-emerald-700 shrink-0">
+            <Banknote className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">Cash Collected</span>
-            <span className="text-xl font-bold text-emerald-800">{formatPKR(posMetrics.todayCollected)}</span>
+            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Cash Collected</span>
+            <span className="text-sm font-bold text-emerald-800">{formatPKR(posMetrics.todayCollected)}</span>
           </div>
         </div>
 
-        {/* Metric 4: Pending Receivables / Drafts */}
-        <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 border border-stone-100">
+        <div className="flex items-center justify-between p-2 rounded-xl bg-stone-50/80">
           <div>
-            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">Pending Receivables</span>
-            <span className="text-xl font-bold text-amber-800">{formatPKR(posMetrics.todayPending)}</span>
+            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Pending Credit</span>
+            <span className="text-sm font-bold text-amber-800">{formatPKR(posMetrics.todayPending)}</span>
           </div>
           {drafts.length > 0 && (
             <button
               onClick={() => setShowDraftsModal(true)}
-              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-sm flex items-center gap-1 transition"
+              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold flex items-center gap-1 transition shadow-xs"
             >
               <PauseCircle className="w-3.5 h-3.5" />
               Drafts ({drafts.length})
@@ -843,183 +860,159 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         </div>
       </div>
 
-      {/* 2. CUSTOMER SELECTION & SALE TYPE BAR */}
-      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
-          <div>
-            <h2 className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <User className="w-4 h-4 text-lime-600" />
-              1. Customer Selection
-            </h2>
-            <p className="text-xs text-stone-500">Choose customer category or link to customer profile ledger</p>
+      {/* 2. CUSTOMER SELECTION: 3 CATEGORIES (CUSTOMER RETAIL | RETAILER SHOP | WHOLESALER) */}
+      <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-stone-100 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          {/* 3 Main Buyer Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-stone-100/80 rounded-xl w-full sm:w-auto">
+            {/* 1. Customer (Retail) */}
+            <button
+              type="button"
+              onClick={() => handleBuyerCategoryChange('Customer')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                buyerCategory === 'Customer'
+                  ? 'bg-white text-stone-900 shadow-xs ring-1 ring-stone-200/60'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <User className={`w-3.5 h-3.5 ${buyerCategory === 'Customer' ? 'text-lime-600' : 'text-stone-400'}`} />
+              <span>Customer (Retail)</span>
+            </button>
+
+            {/* 2. Retailer (Shop) */}
+            <button
+              type="button"
+              onClick={() => handleBuyerCategoryChange('Retailer Shop')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                buyerCategory === 'Retailer Shop'
+                  ? 'bg-white text-stone-900 shadow-xs ring-1 ring-stone-200/60'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Store className={`w-3.5 h-3.5 ${buyerCategory === 'Retailer Shop' ? 'text-lime-600' : 'text-stone-400'}`} />
+              <span>Retailer (Shop)</span>
+            </button>
+
+            {/* 3. Wholesaler */}
+            <button
+              type="button"
+              onClick={() => handleBuyerCategoryChange('Wholesaler')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                buyerCategory === 'Wholesaler'
+                  ? 'bg-white text-stone-900 shadow-xs ring-1 ring-stone-200/60'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Building2 className={`w-3.5 h-3.5 ${buyerCategory === 'Wholesaler' ? 'text-lime-600' : 'text-stone-400'}`} />
+              <span>Wholesaler</span>
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             {drafts.length > 0 && (
               <button
                 onClick={() => setShowDraftsModal(true)}
-                className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1.5 transition"
+                className="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition"
               >
                 <Clock className="w-3.5 h-3.5" />
-                Resume Draft ({drafts.length})
+                Drafts ({drafts.length})
               </button>
             )}
-            <button
-              onClick={() => setShowNewCustomerModal(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-lime-600 hover:bg-lime-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
-              id="btn-pos-add-customer"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              + Add New Customer
-            </button>
           </div>
         </div>
 
-        {/* Category Selector Tabs */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Retail Button */}
-          <button
-            type="button"
-            onClick={() => handleCategoryChange('Retail')}
-            className={`p-3.5 rounded-xl border-2 text-left transition flex items-center gap-3 ${
-              customerCategory === 'Retail'
-                ? 'border-lime-600 bg-lime-50/70 text-stone-900 shadow-sm'
-                : 'border-stone-200 hover:border-stone-300 bg-stone-50 text-stone-600'
-            }`}
-          >
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${customerCategory === 'Retail' ? 'bg-lime-600 text-white' : 'bg-stone-200 text-stone-600'}`}>
-              <User className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">Immediate Sale</span>
-              <strong className="text-xs font-bold text-stone-900 block">Retail (Walk-in)</strong>
-              <span className="text-[11px] text-stone-500">Counter walk-in, retail rate</span>
-            </div>
-          </button>
-
-          {/* Distributor Button */}
-          <button
-            type="button"
-            onClick={() => handleCategoryChange('Distributor')}
-            className={`p-3.5 rounded-xl border-2 text-left transition flex items-center gap-3 ${
-              customerCategory === 'Distributor'
-                ? 'border-lime-600 bg-lime-50/70 text-stone-900 shadow-sm'
-                : 'border-stone-200 hover:border-stone-300 bg-stone-50 text-stone-600'
-            }`}
-          >
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${customerCategory === 'Distributor' ? 'bg-blue-600 text-white' : 'bg-stone-200 text-stone-600'}`}>
-              <Truck className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">Account Ledger</span>
-              <strong className="text-xs font-bold text-stone-900 block">Distributor Profile</strong>
-              <span className="text-[11px] text-stone-500">Wholesale pricing & balance ledger</span>
-            </div>
-          </button>
-
-          {/* Sales Man Button */}
-          <button
-            type="button"
-            onClick={() => handleCategoryChange('Sales Man')}
-            className={`p-3.5 rounded-xl border-2 text-left transition flex items-center gap-3 ${
-              customerCategory === 'Sales Man'
-                ? 'border-lime-600 bg-lime-50/70 text-stone-900 shadow-sm'
-                : 'border-stone-200 hover:border-stone-300 bg-stone-50 text-stone-600'
-            }`}
-          >
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${customerCategory === 'Sales Man' ? 'bg-purple-600 text-white' : 'bg-stone-200 text-stone-600'}`}>
-              <Building2 className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">Route Dispatch</span>
-              <strong className="text-xs font-bold text-stone-900 block">Sales Man / Rep</strong>
-              <span className="text-[11px] text-stone-500">Stock distribution & sales reps</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Category Specific Input Fields */}
-        {customerCategory === 'Retail' ? (
-          <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 flex flex-col sm:flex-row items-center gap-3">
+        {/* Dynamic Buyer Profile Selector Area */}
+        {buyerCategory === 'Customer' ? (
+          /* Customer (Retail) - Walk-in Buyer */
+          <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-stone-100">
             <div className="w-full sm:w-1/2">
-              <label className="block text-[11px] font-bold text-stone-600 mb-1">Customer / Buyer Name (Optional)</label>
               <input
                 type="text"
-                value={retailCustomerName}
-                onChange={(e) => setRetailCustomerName(e.target.value)}
-                placeholder="Walk-in Retail Customer"
-                className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                value={walkinCustomerName}
+                onChange={(e) => setWalkinCustomerName(e.target.value)}
+                placeholder="Walk-in Retail Customer Name"
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-stone-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
               />
             </div>
             <div className="w-full sm:w-1/2">
-              <label className="block text-[11px] font-bold text-stone-600 mb-1">Contact Phone (Optional)</label>
               <input
                 type="text"
-                value={retailCustomerPhone}
-                onChange={(e) => setRetailCustomerPhone(e.target.value)}
-                placeholder="0300 0000000"
-                className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                value={walkinCustomerPhone}
+                onChange={(e) => setWalkinCustomerPhone(e.target.value)}
+                placeholder="Phone (Optional)"
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-stone-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
               />
             </div>
           </div>
-        ) : (
-          <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <label className="text-xs font-bold text-stone-700">
-                Select {customerCategory} Profile (Search by Name, Business, or ID):
-              </label>
-              <span className="text-[11px] text-stone-500">{filteredProfiles.length} registered profiles available</span>
+        ) : buyerCategory === 'Retailer Shop' ? (
+          /* Retailer (Shop) - Searchable Profile Dropdown + Inline Link to Customer Management */
+          <div className="space-y-2 pt-2 border-t border-stone-100">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-stone-500">Select Registered Retailer / Shop Profile:</span>
+              <button
+                type="button"
+                onClick={() => handleNavigateToCustomerManagement('retailers')}
+                className="text-[11px] font-bold text-lime-700 hover:text-lime-800 hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                + New Retailer
+              </button>
             </div>
 
             <div className="relative">
               <div
                 onClick={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 bg-white cursor-pointer flex items-center justify-between shadow-sm"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/60 hover:bg-white cursor-pointer flex items-center justify-between transition"
               >
                 {selectedCustomer ? (
-                  <div className="flex items-center gap-2 font-medium text-stone-900">
-                    <span className="font-bold text-lime-700">{selectedCustomer.customerId || selectedCustomer.id}:</span>
-                    <span>{selectedCustomer.name}</span>
-                    {selectedCustomer.businessName && <span className="text-stone-500 text-[11px]">({selectedCustomer.businessName})</span>}
-                    <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10px]">
-                      Balance Due: {formatPKR(selectedCustomer.currentBalance)}
+                  <div className="flex items-center gap-2 font-medium text-stone-900 truncate">
+                    <Store className="w-3.5 h-3.5 text-lime-600 shrink-0" />
+                    <span className="font-bold">{selectedCustomer.name}</span>
+                    {selectedCustomer.businessName && (
+                      <span className="text-stone-500 text-[11px]">({selectedCustomer.businessName})</span>
+                    )}
+                    <span className="text-stone-400 text-[10px]">• {selectedCustomer.city || selectedCustomer.address}</span>
+                    <span className="ml-auto px-2 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[10px] font-bold">
+                      Balance: {formatPKR(selectedCustomer.currentBalance)}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-stone-400">Click to search and select {customerCategory}...</span>
+                  <span className="text-stone-400 flex items-center gap-1.5">
+                    <Store className="w-3.5 h-3.5 text-stone-400" />
+                    Select retailer / shop profile... ({filteredProfiles.length} available)
+                  </span>
                 )}
-                <ChevronDown className="w-4 h-4 text-stone-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0 ml-2" />
               </div>
 
-              {/* Dropdown Menu */}
               {isCustomerDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 z-40 mt-1 bg-white rounded-xl shadow-xl border border-stone-200 max-h-60 overflow-y-auto p-2 space-y-1">
-                  <div className="sticky top-0 bg-white pb-2">
+                <div className="absolute top-full left-0 right-0 z-40 mt-1 bg-white rounded-xl shadow-lg border border-stone-200 max-h-56 overflow-y-auto p-1.5 space-y-1">
+                  <div className="sticky top-0 bg-white pb-1.5">
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-stone-400" />
                       <input
                         type="text"
                         autoFocus
                         value={customerSearchQuery}
                         onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                        placeholder={`Search ${customerCategory} name, phone, city...`}
-                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
+                        placeholder="Search retailer shop name, phone, city..."
+                        className="w-full pl-7 pr-3 py-1.5 text-xs rounded-md border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
                       />
                     </div>
                   </div>
 
                   {filteredProfiles.length === 0 ? (
                     <div className="p-3 text-center text-xs text-stone-500">
-                      No matching {customerCategory} found.
+                      No matching retailer found.
                       <button
                         type="button"
                         onClick={() => {
                           setIsCustomerDropdownOpen(false)
-                          setShowNewCustomerModal(true)
+                          handleNavigateToCustomerManagement('retailers')
                         }}
-                        className="block mx-auto mt-1.5 text-lime-700 font-bold hover:underline"
+                        className="block mx-auto mt-1 text-lime-700 font-bold hover:underline text-[11px]"
                       >
-                        + Create &quot;{customerSearchQuery}&quot; Now
+                        + Create Retailer Profile in Customer Management
                       </button>
                     </div>
                   ) : (
@@ -1034,16 +1027,13 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                           selectedCustomerId === cust.id ? 'bg-lime-50 text-lime-900 font-bold' : 'hover:bg-stone-50 text-stone-800'
                         }`}
                       >
-                        <div>
+                        <div className="truncate">
                           <span className="font-bold text-stone-900">{cust.name}</span>
                           {cust.businessName && <span className="text-stone-500 text-[11px] ml-1">({cust.businessName})</span>}
-                          <span className="text-[10px] block text-stone-400">
-                            {cust.customerId || cust.id} • {cust.phone} • {cust.city || cust.address}
-                          </span>
+                          <span className="text-[10px] block text-stone-400">{cust.city || cust.address} • {cust.phone}</span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-stone-400 block uppercase">Outstanding</span>
-                          <span className={`font-bold ${cust.currentBalance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        <div className="text-right shrink-0 ml-2">
+                          <span className={`text-[11px] font-bold ${cust.currentBalance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                             {formatPKR(cust.currentBalance)}
                           </span>
                         </div>
@@ -1053,61 +1043,182 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 </div>
               )}
             </div>
-
-            {selectedCustomer && (
-              <div className="flex flex-wrap items-center justify-between text-xs bg-white p-2.5 rounded-lg border border-stone-200">
-                <div className="space-x-3 text-stone-600">
-                  <span><strong>Territory / City:</strong> {selectedCustomer.city || selectedCustomer.address}</span>
-                  <span><strong>Phone:</strong> {selectedCustomer.phone}</span>
-                </div>
-                <div className="font-semibold text-stone-800">
-                  Current Ledger Balance: <span className="text-stone-900 font-bold">{formatPKR(selectedCustomer.currentBalance)}</span>
+          </div>
+        ) : (
+          /* Wholesaler - Covers both Distributors and Salesmen */
+          <div className="space-y-2 pt-2 border-t border-stone-100">
+            <div className="flex items-center justify-between">
+              {/* Optional small toggle / tag for labeling */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-stone-500">Filter Wholesaler:</span>
+                <div className="flex items-center gap-1 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setWholesalerSubFilter('All')}
+                    className={`px-2 py-0.5 rounded-md font-semibold transition ${
+                      wholesalerSubFilter === 'All' ? 'bg-stone-800 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWholesalerSubFilter('Distributor')}
+                    className={`px-2 py-0.5 rounded-md font-semibold transition flex items-center gap-1 ${
+                      wholesalerSubFilter === 'Distributor' ? 'bg-blue-600 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
+                    }`}
+                  >
+                    <Truck className="w-2.5 h-2.5" />
+                    Distributor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWholesalerSubFilter('Sales Man')}
+                    className={`px-2 py-0.5 rounded-md font-semibold transition flex items-center gap-1 ${
+                      wholesalerSubFilter === 'Sales Man' ? 'bg-purple-600 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
+                    }`}
+                  >
+                    <User className="w-2.5 h-2.5" />
+                    Salesman
+                  </button>
                 </div>
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={() => handleNavigateToCustomerManagement('distributors')}
+                className="text-[11px] font-bold text-lime-700 hover:text-lime-800 hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                + New Wholesaler
+              </button>
+            </div>
+
+            {/* Profile Dropdown */}
+            <div className="relative">
+              <div
+                onClick={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/60 hover:bg-white cursor-pointer flex items-center justify-between transition"
+              >
+                {selectedCustomer ? (
+                  <div className="flex items-center gap-2 font-medium text-stone-900 truncate">
+                    <span className="px-1.5 py-0.2 rounded bg-lime-100 text-lime-800 text-[9px] font-bold uppercase">
+                      {selectedCustomer.type || 'Wholesaler'}
+                    </span>
+                    <span className="font-bold">{selectedCustomer.name}</span>
+                    {selectedCustomer.businessName && (
+                      <span className="text-stone-500 text-[11px]">({selectedCustomer.businessName})</span>
+                    )}
+                    <span className="text-stone-400 text-[10px]">• {selectedCustomer.city || selectedCustomer.address}</span>
+                    <span className="ml-auto px-2 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[10px] font-bold">
+                      Balance: {formatPKR(selectedCustomer.currentBalance)}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-stone-400 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-stone-400" />
+                    Select {wholesalerSubFilter === 'All' ? 'wholesaler / distributor / salesman' : wholesalerSubFilter} profile... ({filteredProfiles.length} available)
+                  </span>
+                )}
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0 ml-2" />
+              </div>
+
+              {isCustomerDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 z-40 mt-1 bg-white rounded-xl shadow-lg border border-stone-200 max-h-56 overflow-y-auto p-1.5 space-y-1">
+                  <div className="sticky top-0 bg-white pb-1.5">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-stone-400" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={customerSearchQuery}
+                        onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                        placeholder="Search distributor / salesman name, phone, city..."
+                        className="w-full pl-7 pr-3 py-1.5 text-xs rounded-md border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
+                      />
+                    </div>
+                  </div>
+
+                  {filteredProfiles.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-stone-500">
+                      No matching profile found.
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomerDropdownOpen(false)
+                          handleNavigateToCustomerManagement('distributors')
+                        }}
+                        className="block mx-auto mt-1 text-lime-700 font-bold hover:underline text-[11px]"
+                      >
+                        + Create Wholesaler / Distributor in Customer Management
+                      </button>
+                    </div>
+                  ) : (
+                    filteredProfiles.map((cust) => (
+                      <div
+                        key={cust.id}
+                        onClick={() => {
+                          setSelectedCustomerId(cust.id)
+                          setIsCustomerDropdownOpen(false)
+                        }}
+                        className={`p-2 rounded-lg cursor-pointer text-xs flex items-center justify-between transition ${
+                          selectedCustomerId === cust.id ? 'bg-lime-50 text-lime-900 font-bold' : 'hover:bg-stone-50 text-stone-800'
+                        }`}
+                      >
+                        <div className="truncate">
+                          <span className="px-1.5 py-0.2 rounded bg-stone-100 text-stone-600 text-[9px] font-bold uppercase mr-1.5">
+                            {cust.type || 'Wholesale'}
+                          </span>
+                          <span className="font-bold text-stone-900">{cust.name}</span>
+                          {cust.businessName && <span className="text-stone-500 text-[11px] ml-1">({cust.businessName})</span>}
+                          <span className="text-[10px] block text-stone-400">{cust.city || cust.address} • {cust.phone}</span>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                          <span className={`text-[11px] font-bold ${cust.currentBalance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {formatPKR(cust.currentBalance)}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
 
-      {/* 3. MAIN WORKSPACE: PRODUCT CATALOG (LEFT) + LIVE CART (RIGHT) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT: PRODUCT CATALOG BROWSER */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-bold text-stone-900 flex items-center gap-2">
-                <Package className="w-4 h-4 text-lime-600" />
-                2. Product Selection
-              </h2>
-              <span className="text-xs text-stone-500 font-medium">{filteredProducts.length} items available</span>
-            </div>
-
-            {/* Search Bar */}
+      {/* 3. PRODUCT CATALOG (LEFT) + CLEAN CART (RIGHT) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        {/* LEFT: SIMPLIFIED PRODUCT CATALOG */}
+        <div className="lg:col-span-7 space-y-3">
+          {/* Search & Category Pills */}
+          <div className="bg-white p-3 rounded-2xl shadow-xs border border-stone-100 space-y-2.5">
             <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
               <input
                 type="text"
                 value={productQuery}
                 onChange={(e) => setProductQuery(e.target.value)}
-                placeholder="Search products by title, SKU, beverage size, candy..."
-                className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                placeholder="Search products by name or SKU..."
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
               />
               {productQuery && (
-                <button onClick={() => setProductQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                <button onClick={() => setProductQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
             {/* Category Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs scrollbar-none">
               {availableCategories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition ${
+                  className={`px-3 py-1 rounded-xl font-semibold text-xs whitespace-nowrap transition ${
                     selectedCategory === cat
-                      ? 'bg-lime-600 text-white shadow-sm'
+                      ? 'bg-lime-600 text-white shadow-2xs'
                       : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
                   }`}
                 >
@@ -1117,104 +1228,85 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
             </div>
           </div>
 
-          {/* Product Grid Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[600px] overflow-y-auto pr-1">
+          {/* SIMPLIFIED PRODUCT CARDS GRID: FLAT & MINIMAL */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 max-h-[660px] overflow-y-auto p-1">
             {filteredProducts.map((p) => {
               const inCartItem = cart.find((item) => item.product.id === p.id)
               const isOut = p.quantity <= 0
-              const isLow = p.quantity > 0 && p.quantity <= p.reorderLevel
+              const isWholesaleActive = buyerCategory === 'Retailer Shop' || buyerCategory === 'Wholesaler'
+              const currentPrice = isWholesaleActive ? p.wholesalePrice : p.retailPrice
 
               return (
                 <div
                   key={p.id}
-                  className={`bg-white p-3.5 rounded-2xl border transition flex flex-col justify-between ${
-                    inCartItem ? 'border-lime-500 ring-1 ring-lime-500 bg-lime-50/20' : 'border-stone-200 hover:border-stone-300'
+                  onClick={() => {
+                    if (!isOut) handleAddToCart(p)
+                  }}
+                  className={`group relative bg-white rounded-2xl p-2.5 flex flex-col justify-between transition-all duration-150 select-none shadow-xs hover:shadow-md ${
+                    isOut
+                      ? 'opacity-50 cursor-not-allowed'
+                      : inCartItem
+                      ? 'cursor-pointer ring-2 ring-lime-500/80 bg-lime-50/20'
+                      : 'cursor-pointer hover:-translate-y-0.5'
                   }`}
                 >
-                  <div>
-                    {/* Top Badges */}
-                    <div className="flex items-center justify-between gap-1 mb-2">
-                      <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider bg-stone-100 px-2 py-0.5 rounded-md">
-                        {p.category}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          isOut
-                            ? 'bg-red-100 text-red-700'
-                            : isLow
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {isOut ? 'Out of stock' : `${p.quantity} ${p.unit} in stock`}
-                      </span>
-                    </div>
+                  {/* Top Image Box */}
+                  <div className="aspect-square w-full rounded-xl bg-stone-100/70 overflow-hidden relative mb-2 flex items-center justify-center">
+                    {p.image ? (
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-200"
+                      />
+                    ) : (
+                      <Package className="w-8 h-8 text-stone-300 group-hover:text-lime-600 transition" />
+                    )}
 
-                    {/* Title & SKU */}
-                    <h3 className="font-bold text-xs text-stone-900 line-clamp-2 leading-tight">{p.name}</h3>
-                    <span className="text-[10px] font-mono text-stone-400 block mt-0.5">{p.sku}</span>
+                    {/* Out of Stock Overlay */}
+                    {isOut && (
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
+                        <span className="px-2 py-0.5 rounded bg-red-600 text-white text-[9px] font-bold">Out of stock</span>
+                      </div>
+                    )}
 
-                    {/* Pricing Tiers Display */}
-                    <div className="mt-3 grid grid-cols-2 gap-2 bg-stone-50 p-2 rounded-xl border border-stone-100 text-[11px]">
-                      <div>
-                        <span className="text-[10px] text-stone-400 block">Retail Rate:</span>
-                        <strong className="text-stone-900 font-bold">{formatPKR(p.retailPrice)}</strong>
+                    {/* In-cart count indicator badge */}
+                    {inCartItem && (
+                      <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-lime-600 text-white text-[10px] font-black shadow-xs flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5" />
+                        {inCartItem.quantity}
                       </div>
-                      <div>
-                        <span className="text-[10px] text-stone-400 block">
-                          Wholesale (Min {p.wholesaleMinQty || 12}):
-                        </span>
-                        <strong className="text-lime-700 font-bold">{formatPKR(p.wholesalePrice)}</strong>
-                      </div>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Add to Cart Actions */}
-                  <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between gap-2">
-                    {inCartItem ? (
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateQty(cart.indexOf(inCartItem), inCartItem.quantity - 1)}
-                            className="w-7 h-7 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center text-xs font-bold"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            value={inCartItem.quantity}
-                            onChange={(e) =>
-                              handleUpdateQty(cart.indexOf(inCartItem), Number(e.target.value) || 1)
-                            }
-                            className="w-12 text-center text-xs font-bold py-1 rounded-md border border-stone-200 focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateQty(cart.indexOf(inCartItem), inCartItem.quantity + 1)}
-                            className="w-7 h-7 rounded-lg bg-lime-600 hover:bg-lime-700 text-white flex items-center justify-center text-xs font-bold"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-                        <span className="text-xs font-bold text-lime-800">{formatPKR(inCartItem.lineTotal)}</span>
-                      </div>
-                    ) : (
+                  {/* Product Details: Name, Single Applicable Price, Single Icon Action */}
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-xs text-stone-900 line-clamp-1 leading-snug group-hover:text-lime-700 transition" title={p.name}>
+                      {p.name}
+                    </h3>
+
+                    <div className="flex items-center justify-between pt-0.5">
+                      <span className="text-xs font-black text-lime-700">
+                        {formatPKR(currentPrice)}
+                      </span>
+
+                      {/* Single Add-to-Cart Icon Button */}
                       <button
                         type="button"
                         disabled={isOut}
-                        onClick={() => handleAddToCart(p)}
-                        className={`w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!isOut) handleAddToCart(p)
+                        }}
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition ${
                           isOut
-                            ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                            : 'bg-lime-600 hover:bg-lime-700 text-white shadow-sm'
+                            ? 'bg-stone-100 text-stone-300'
+                            : 'bg-lime-50 text-lime-700 hover:bg-lime-600 hover:text-white group-hover:bg-lime-600 group-hover:text-white shadow-2xs'
                         }`}
+                        title="Add to cart"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        Add to Cart
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               )
@@ -1222,15 +1314,16 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
           </div>
         </div>
 
-        {/* RIGHT: INTERACTIVE CART & DISCOUNTS & CHECKOUT */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-4 sticky top-4">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+        {/* RIGHT: STREAMLINED LIVE CART */}
+        <div className="lg:col-span-5 space-y-3">
+          <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-stone-100 space-y-3 sticky top-3">
+            {/* Cart Header */}
+            <div className="flex items-center justify-between pb-2.5 border-b border-stone-100">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 text-lime-600" />
-                <h2 className="text-base font-bold text-stone-900">Cart & Discounts</h2>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-lime-100 text-lime-800">
-                  {cart.length} items ({totalUnitsCount} units)
+                <h2 className="text-sm font-bold text-stone-900">Current Sale</h2>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-lime-100 text-lime-800">
+                  {cart.length} ({totalUnitsCount} units)
                 </span>
               </div>
 
@@ -1238,23 +1331,23 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 <div className="flex items-center gap-1">
                   <button
                     onClick={handleHoldSale}
-                    className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-50 text-xs font-semibold flex items-center gap-1 transition"
+                    className="p-1 rounded-md text-amber-700 hover:bg-amber-50 text-xs font-semibold flex items-center gap-1 transition"
                     title="Hold Sale as Draft"
                   >
-                    <PauseCircle className="w-4 h-4" />
+                    <PauseCircle className="w-3.5 h-3.5" />
                     Hold
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm('Clear current sale cart?')) {
+                      if (confirm('Clear sale cart?')) {
                         setCart([])
                         setCartDiscountValue(0)
                       }
                     }}
-                    className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 text-xs transition"
+                    className="p-1 rounded-md text-rose-600 hover:bg-rose-50 text-xs transition"
                     title="Clear Cart"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               )}
@@ -1263,35 +1356,35 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
             {/* Cart Items List */}
             {cart.length === 0 ? (
               <div className="py-12 text-center text-stone-400">
-                <ShoppingCart className="w-10 h-10 mx-auto text-stone-300 mb-2" />
-                <p className="text-xs font-medium text-stone-600">Sale cart is currently empty</p>
-                <p className="text-[11px] text-stone-400 mt-0.5">Click &quot;Add to Cart&quot; on products to begin sale</p>
+                <ShoppingCart className="w-8 h-8 mx-auto text-stone-300 mb-1.5" />
+                <p className="text-xs font-medium text-stone-600">Cart is empty</p>
+                <p className="text-[11px] text-stone-400">Click any product on the left to add</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
                 {cart.map((item, index) => (
-                  <div key={item.product.id} className="bg-stone-50 p-3 rounded-xl border border-stone-200/80 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="font-bold text-xs text-stone-900 leading-tight">{item.product.name}</h4>
-                        <div className="flex items-center gap-2 mt-1">
+                  <div key={item.product.id} className="bg-stone-50/80 p-2.5 rounded-xl border border-stone-200/50 space-y-1.5">
+                    <div className="flex items-start justify-between gap-1.5">
+                      <div className="truncate">
+                        <h4 className="font-bold text-xs text-stone-900 leading-snug truncate">{item.product.name}</h4>
+                        <div className="flex items-center gap-1.5 mt-0.5">
                           <button
                             type="button"
                             onClick={() => handleToggleItemTier(index)}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase transition ${
+                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase transition ${
                               item.pricingTier === 'Wholesale'
                                 ? 'bg-lime-600 text-white'
                                 : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
                             }`}
-                            title="Click to toggle Retail / Wholesale price tier"
+                            title="Toggle Retail / Wholesale price tier"
                           >
-                            {item.pricingTier} Rate ({formatPKR(item.unitPrice)})
+                            {item.pricingTier} ({formatPKR(item.unitPrice)})
                           </button>
-                          <span className="text-[10px] text-stone-400">× {item.quantity} {item.product.unit}</span>
+                          <span className="text-[10px] text-stone-400">× {item.quantity}</span>
                         </div>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <span className="text-xs font-bold text-stone-900 block">{formatPKR(item.lineTotal)}</span>
                         {item.discountAmount > 0 && (
                           <span className="text-[10px] text-rose-600 font-semibold block">
@@ -1301,14 +1394,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       </div>
                     </div>
 
-                    {/* Quantity and Discount Controls */}
-                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/60">
+                    {/* Quantity Modifier & Line Discount */}
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/50">
                       {/* Qty +/- */}
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() => handleUpdateQty(index, item.quantity - 1)}
-                          className="w-6 h-6 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
+                          className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
                         >
                           -
                         </button>
@@ -1317,12 +1410,12 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                           min="1"
                           value={item.quantity}
                           onChange={(e) => handleUpdateQty(index, Number(e.target.value) || 1)}
-                          className="w-10 text-center text-xs font-bold py-0.5 rounded border border-stone-200 bg-white"
+                          className="w-9 text-center text-xs font-bold py-0.2 rounded border border-stone-200 bg-white"
                         />
                         <button
                           type="button"
                           onClick={() => handleUpdateQty(index, item.quantity + 1)}
-                          className="w-6 h-6 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
+                          className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
                         >
                           +
                         </button>
@@ -1330,14 +1423,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
                       {/* Line Discount Input */}
                       <div className="flex items-center gap-1 text-[11px]">
-                        <span className="text-stone-500">Disc:</span>
+                        <span className="text-stone-500 text-[10px]">Disc:</span>
                         <input
                           type="number"
                           min="0"
                           value={item.discountValue || ''}
                           onChange={(e) => handleUpdateItemDiscount(index, item.discountType, Number(e.target.value) || 0)}
                           placeholder="0"
-                          className="w-12 text-center text-xs font-medium py-0.5 rounded border border-stone-200 bg-white"
+                          className="w-10 text-center text-xs font-medium py-0.2 rounded border border-stone-200 bg-white"
                         />
                         <button
                           type="button"
@@ -1348,18 +1441,18 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                               item.discountValue
                             )
                           }
-                          className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 font-bold text-[10px]"
+                          className="px-1 py-0.2 rounded bg-stone-200 text-stone-700 font-bold text-[9px]"
                           title="Toggle Rs. / %"
                         >
                           {item.discountType === 'fixed' ? 'Rs' : '%'}
                         </button>
                       </div>
 
-                      {/* Delete */}
+                      {/* Delete item */}
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(index)}
-                        className="text-stone-400 hover:text-red-600 p-1"
+                        className="text-stone-400 hover:text-red-600 p-0.5"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1371,23 +1464,23 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
             {/* Cart Summary & Overall Discount */}
             {cart.length > 0 && (
-              <div className="pt-3 border-t border-stone-100 space-y-3">
-                {/* Overall Discount Row */}
+              <div className="pt-2.5 border-t border-stone-100 space-y-2.5">
+                {/* Total Bill Discount */}
                 <div className="flex items-center justify-between bg-stone-50 p-2 rounded-xl text-xs">
-                  <span className="font-bold text-stone-700">Total Bill Discount:</span>
-                  <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-stone-700">Bill Discount:</span>
+                  <div className="flex items-center gap-1">
                     <input
                       type="number"
                       min="0"
                       value={cartDiscountValue || ''}
                       onChange={(e) => setCartDiscountValue(Number(e.target.value) || 0)}
                       placeholder="0"
-                      className="w-16 text-center text-xs font-bold py-1 rounded-lg border border-stone-200 bg-white"
+                      className="w-14 text-center text-xs font-bold py-0.5 rounded border border-stone-200 bg-white"
                     />
                     <button
                       type="button"
                       onClick={() => setCartDiscountType(cartDiscountType === 'fixed' ? 'percent' : 'fixed')}
-                      className="px-2 py-1 rounded-lg bg-stone-200 text-stone-700 font-bold text-[11px]"
+                      className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 font-bold text-[10px]"
                     >
                       {cartDiscountType === 'fixed' ? 'PKR' : '%'}
                     </button>
@@ -1395,24 +1488,20 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 </div>
 
                 {/* Subtotal & Totals Table */}
-                <div className="space-y-1.5 text-xs">
+                <div className="space-y-1 text-xs">
                   <div className="flex justify-between text-stone-600">
-                    <span>Subtotal ({totalUnitsCount} units):</span>
+                    <span>Subtotal:</span>
                     <span className="font-semibold text-stone-900">{formatPKR(grossSubtotal)}</span>
                   </div>
                   {totalDiscountsCombined > 0 && (
                     <div className="flex justify-between text-rose-600 font-medium">
-                      <span>Total Discounts:</span>
+                      <span>Discounts:</span>
                       <span>-{formatPKR(totalDiscountsCombined)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-stone-600">
-                    <span>Sales Tax (0% Exempt):</span>
-                    <span>Rs. 0</span>
-                  </div>
-                  <div className="flex justify-between text-base font-bold text-stone-900 pt-2 border-t border-stone-200">
+                  <div className="flex justify-between text-sm font-bold text-stone-900 pt-1.5 border-t border-stone-200">
                     <span>Grand Total:</span>
-                    <span className="text-lime-700 text-lg font-black">{formatPKR(grandTotal)}</span>
+                    <span className="text-lime-700 text-base font-black">{formatPKR(grandTotal)}</span>
                   </div>
                 </div>
 
@@ -1420,10 +1509,10 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 <button
                   type="button"
                   onClick={handleOpenCheckout}
-                  className="w-full py-3 rounded-xl bg-lime-600 hover:bg-lime-700 text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-xl bg-lime-600 hover:bg-lime-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5"
                   id="btn-pos-checkout"
                 >
-                  <Receipt className="w-4 h-4" />
+                  <Receipt className="w-3.5 h-3.5" />
                   Proceed to Checkout ({formatPKR(grandTotal)})
                 </button>
               </div>
@@ -1432,52 +1521,48 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         </div>
       </div>
 
-      {/* MODAL 1: CHECKOUT & INVOICE PAYMENT */}
+      {/* MODAL 1: CHECKOUT & SETTLEMENT */}
       {showCheckoutModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8">
-            <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Receipt className="w-5 h-5 text-lime-400" />
-                <div>
-                  <h3 className="font-bold text-base">Complete Sale & Issue Invoice</h3>
-                  <p className="text-xs text-stone-400">Payment settlement, ledger update, and stock deduction</p>
-                </div>
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden my-6">
+            <div className="bg-stone-900 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-lime-400" />
+                <h3 className="font-bold text-sm">Complete Sale & Issue Invoice</h3>
               </div>
               <button onClick={() => setShowCheckoutModal(false)} className="text-stone-400 hover:text-white p-1 rounded-lg">
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto text-xs">
-              {/* Summary box */}
-              <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 flex items-center justify-between">
+            <div className="p-4 space-y-3 max-h-[80vh] overflow-y-auto text-xs">
+              <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 flex items-center justify-between">
                 <div>
-                  <span className="text-stone-500 block text-[11px]">Customer / Account:</span>
-                  <strong className="text-sm font-bold text-stone-900">
-                    {customerCategory === 'Retail'
-                      ? retailCustomerName
+                  <span className="text-stone-500 block text-[10px]">Buyer / Account:</span>
+                  <strong className="text-xs font-bold text-stone-900">
+                    {buyerCategory === 'Customer'
+                      ? walkinCustomerName
                       : selectedCustomer?.name || 'Commercial Client'}
                   </strong>
-                  <span className="text-[10px] text-stone-400 block">{customerCategory} Sale</span>
+                  <span className="text-[10px] text-stone-400 block">{buyerCategory}</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-stone-500 block text-[11px]">Total Payable:</span>
-                  <strong className="text-lg font-black text-lime-700">{formatPKR(grandTotal)}</strong>
+                  <span className="text-stone-500 block text-[10px]">Total Payable:</span>
+                  <strong className="text-base font-black text-lime-700">{formatPKR(grandTotal)}</strong>
                 </div>
               </div>
 
-              {/* Payment Status (Paid / Partial / Unpaid) */}
+              {/* Payment Status */}
               <div>
-                <label className="block font-bold text-stone-700 mb-1.5">Payment Status</label>
-                <div className="grid grid-cols-3 gap-2">
+                <label className="block font-bold text-stone-700 mb-1">Payment Status</label>
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
                       setPaymentStatus('Paid')
                       setAmountPaid(grandTotal)
                     }}
-                    className={`py-2 px-3 rounded-xl border-2 font-bold text-xs transition ${
+                    className={`py-1.5 px-2 rounded-lg border font-bold text-xs transition ${
                       paymentStatus === 'Paid'
                         ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
                         : 'border-stone-200 bg-white text-stone-700'
@@ -1491,7 +1576,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       setPaymentStatus('Partial')
                       setAmountPaid(Math.round(grandTotal / 2))
                     }}
-                    className={`py-2 px-3 rounded-xl border-2 font-bold text-xs transition ${
+                    className={`py-1.5 px-2 rounded-lg border font-bold text-xs transition ${
                       paymentStatus === 'Partial'
                         ? 'border-amber-600 bg-amber-50 text-amber-800'
                         : 'border-stone-200 bg-white text-stone-700'
@@ -1505,7 +1590,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       setPaymentStatus('Unpaid')
                       setAmountPaid(0)
                     }}
-                    className={`py-2 px-3 rounded-xl border-2 font-bold text-xs transition ${
+                    className={`py-1.5 px-2 rounded-lg border font-bold text-xs transition ${
                       paymentStatus === 'Unpaid'
                         ? 'border-rose-600 bg-rose-50 text-rose-800'
                         : 'border-stone-200 bg-white text-stone-700'
@@ -1516,29 +1601,29 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 </div>
               </div>
 
-              {/* Payment Method & Account */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Payment Method & Deposit Account */}
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">Payment Method</label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-lime-500"
                   >
                     <option value="Cash">Cash in Hand</option>
                     <option value="Online">Online / Raast</option>
                     <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Card">Debit / Credit Card</option>
+                    <option value="Card">Card</option>
                     <option value="Cheque">Cheque</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Deposit To Account</label>
+                  <label className="block font-bold text-stone-700 mb-1">Deposit To</label>
                   <select
                     value={paymentAccount}
                     onChange={(e) => setPaymentAccount(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-lime-500"
                   >
                     {db.accounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
@@ -1549,10 +1634,10 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 </div>
               </div>
 
-              {/* Amount Paid and Balance Due */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-stone-50 p-3 rounded-xl border border-stone-200">
+              {/* Amount Paid & Remaining Balance */}
+              <div className="grid grid-cols-2 gap-2 bg-stone-50 p-2.5 rounded-lg border border-stone-200">
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Amount Received (PKR)</label>
+                  <label className="block font-bold text-stone-700 mb-0.5">Amount Received</label>
                   <input
                     type="number"
                     min="0"
@@ -1565,22 +1650,22 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       else if (val <= 0) setPaymentStatus('Unpaid')
                       else setPaymentStatus('Partial')
                     }}
-                    className="w-full px-3 py-2 text-sm font-bold rounded-lg border border-stone-300 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20"
+                    className="w-full px-2.5 py-1.5 text-xs font-bold rounded-md border border-stone-300 bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Balance Remaining Due</label>
-                  <div className="px-3 py-2 text-sm font-bold text-rose-700 bg-white rounded-lg border border-stone-300">
+                  <label className="block font-bold text-stone-700 mb-0.5">Balance Due</label>
+                  <div className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-white rounded-md border border-stone-300">
                     {formatPKR(Math.max(0, grandTotal - (Number(amountPaid) || 0)))}
                   </div>
                 </div>
               </div>
 
-              {/* Screenshot Attachment (if Online or Bank) */}
+              {/* Screenshot Attachment */}
               {(paymentMethod === 'Online' || paymentMethod === 'Bank Transfer') && (
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Transaction Proof / Screenshot (Optional)</label>
+                  <label className="block font-bold text-stone-700 mb-1">Receipt Screenshot (Optional)</label>
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -1589,27 +1674,27 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                     className="hidden"
                   />
                   {paymentScreenshot ? (
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-lime-50 border border-lime-200">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-lime-50 border border-lime-200">
                       <div className="flex items-center gap-2">
-                        <img src={paymentScreenshot} alt="Proof" className="w-8 h-8 rounded object-cover" />
+                        <img src={paymentScreenshot} alt="Proof" className="w-7 h-7 rounded object-cover" />
                         <span className="text-xs font-semibold text-lime-900">Proof attached</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setPaymentScreenshot('')}
-                        className="text-red-500 hover:text-red-700 p-1"
+                        className="text-red-500 hover:text-red-700 p-0.5"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ) : (
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full p-2.5 border border-dashed border-stone-300 hover:border-lime-500 rounded-xl text-center bg-stone-50 hover:bg-lime-50/50 flex items-center justify-center gap-1.5 transition"
+                      className="w-full p-2 border border-dashed border-stone-300 hover:border-lime-500 rounded-lg text-center bg-stone-50 hover:bg-lime-50/50 flex items-center justify-center gap-1.5 transition"
                     >
-                      <Upload className="w-4 h-4 text-stone-400" />
-                      <span className="text-xs font-medium text-stone-600">Upload Raast / Bank Slip Photo</span>
+                      <Upload className="w-3.5 h-3.5 text-stone-400" />
+                      <span className="text-xs font-medium text-stone-600">Upload Slip Photo</span>
                     </button>
                   )}
                 </div>
@@ -1617,32 +1702,32 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
               {/* Order Notes */}
               <div>
-                <label className="block font-bold text-stone-700 mb-1">Order Notes (Optional)</label>
+                <label className="block font-bold text-stone-700 mb-0.5">Notes (Optional)</label>
                 <input
                   type="text"
                   value={orderNotes}
                   onChange={(e) => setOrderNotes(e.target.value)}
-                  placeholder="e.g. Delivered by Van # 4 / Gate clearance..."
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  placeholder="e.g. Counter gate clearance / Driver dispatch..."
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-lime-500"
                 />
               </div>
 
               {/* Submit CTA */}
-              <div className="pt-3 border-t border-stone-100 flex items-center justify-end gap-2">
+              <div className="pt-2 border-t border-stone-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowCheckoutModal(false)}
-                  className="px-4 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
+                  className="px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleCompleteSale}
-                  className="px-5 py-2 rounded-xl bg-lime-600 hover:bg-lime-700 text-white font-bold shadow-sm"
+                  className="px-4 py-1.5 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold shadow-xs"
                   id="btn-confirm-pos-sale"
                 >
-                  Confirm Sale & Print Invoice
+                  Confirm & Print
                 </button>
               </div>
             </div>
@@ -1650,90 +1735,82 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         </div>
       )}
 
-      {/* MODAL 2: POST-CHECKOUT COMPLETED INVOICE & PRINT PREVIEW */}
+      {/* MODAL 2: POST-CHECKOUT CONFIRMATION & PRINT */}
       {completedInvoice && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8">
-            <div className="bg-emerald-700 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <CheckCircle2 className="w-6 h-6 text-emerald-200" />
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden my-6">
+            <div className="bg-emerald-700 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-200" />
                 <div>
-                  <h3 className="font-bold text-base">Sale Completed Successfully!</h3>
-                  <p className="text-xs text-emerald-100">
-                    Invoice #{completedInvoice.invoiceNumber} recorded & stock deducted
-                  </p>
+                  <h3 className="font-bold text-sm">Sale Completed!</h3>
+                  <p className="text-[11px] text-emerald-100">Invoice #{completedInvoice.invoiceNumber}</p>
                 </div>
               </div>
               <button onClick={handleResetPOS} className="text-emerald-200 hover:text-white p-1 rounded-lg">
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs">
-              {/* Print format tabs */}
-              <div className="flex items-center justify-between bg-stone-100 p-1.5 rounded-xl">
-                <span className="text-[11px] font-bold text-stone-600 px-2">Print Layout:</span>
+            <div className="p-4 space-y-3 text-xs">
+              {/* Print layout selector */}
+              <div className="flex items-center justify-between bg-stone-100 p-1 rounded-lg">
+                <span className="text-[10px] font-bold text-stone-600 px-2">Layout:</span>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setPrintMode('thermal')}
-                    className={`px-3 py-1 rounded-lg font-bold transition ${
-                      printMode === 'thermal' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'
+                    className={`px-2.5 py-1 rounded-md font-bold transition text-[11px] ${
+                      printMode === 'thermal' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600'
                     }`}
                   >
-                    Thermal Receipt (80mm)
+                    Thermal (80mm)
                   </button>
                   <button
                     onClick={() => setPrintMode('a4')}
-                    className={`px-3 py-1 rounded-lg font-bold transition ${
-                      printMode === 'a4' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'
+                    className={`px-2.5 py-1 rounded-md font-bold transition text-[11px] ${
+                      printMode === 'a4' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600'
                     }`}
                   >
-                    Commercial A4 Tax Invoice
+                    Commercial A4
                   </button>
                 </div>
               </div>
 
-              {/* Printable Slip Container */}
+              {/* Printable Receipt Preview */}
               <div
                 id="pos-printable-invoice"
-                className={`border border-stone-300 rounded-xl p-4 bg-white font-mono mx-auto ${
-                  printMode === 'thermal' ? 'max-w-xs text-[11px]' : 'max-w-full text-xs font-sans'
+                className={`border border-stone-300 rounded-lg p-3 bg-white font-mono mx-auto ${
+                  printMode === 'thermal' ? 'max-w-xs text-[10px]' : 'max-w-full text-xs font-sans'
                 }`}
               >
                 <div className="text-center pb-2 border-b border-stone-200">
-                  <h2 className="font-black text-sm text-stone-900">AL FAROOQ FOODS</h2>
-                  <p className="text-[10px] text-stone-500">Pure Mineral Water, Juices, Candies & Snacks</p>
-                  <p className="text-[10px] text-stone-500">Phone: 0344 9549051 | 0346 9829900</p>
+                  <h2 className="font-black text-xs text-stone-900">AL FAROOQ FOODS</h2>
+                  <p className="text-[9px] text-stone-500">Pure Mineral Water, Juices, Candies & Snacks</p>
+                  <p className="text-[9px] text-stone-500">Phone: 0344 9549051 | 0346 9829900</p>
                 </div>
 
-                <div className="py-2 border-b border-stone-200 space-y-0.5 text-[11px]">
+                <div className="py-1.5 border-b border-stone-200 space-y-0.5 text-[10px]">
                   <div className="flex justify-between">
                     <span>Invoice #:</span>
                     <strong>{completedInvoice.invoiceNumber}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span>Date / Time:</span>
+                    <span>Date:</span>
                     <span>{formatDate(completedInvoice.date)} {completedInvoice.time}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Customer:</span>
                     <strong>{completedInvoice.customerName}</strong>
                   </div>
-                  {completedInvoice.phone && completedInvoice.phone !== '—' && (
-                    <div className="flex justify-between">
-                      <span>Phone:</span>
-                      <span>{completedInvoice.phone}</span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Items */}
-                <div className="py-2 border-b border-stone-200 space-y-1">
+                {/* Line Items */}
+                <div className="py-1.5 border-b border-stone-200 space-y-1">
                   {completedInvoice.items.map((it, idx) => (
-                    <div key={idx} className="flex justify-between text-[11px]">
+                    <div key={idx} className="flex justify-between text-[10px]">
                       <div>
                         <span>{it.name}</span>
-                        <div className="text-[10px] text-stone-500">
+                        <div className="text-[9px] text-stone-500">
                           {it.quantity} {it.unit} × {formatPKR(it.unitPrice)}
                         </div>
                       </div>
@@ -1743,7 +1820,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 </div>
 
                 {/* Totals */}
-                <div className="py-2 space-y-1 text-[11px]">
+                <div className="py-1.5 space-y-0.5 text-[10px]">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
                     <span>{formatPKR(completedInvoice.subtotal)}</span>
@@ -1759,7 +1836,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                     <span>{formatPKR(completedInvoice.grandTotal)}</span>
                   </div>
                   <div className="flex justify-between text-emerald-700">
-                    <span>Amount Paid ({completedInvoice.paymentMethod}):</span>
+                    <span>Paid ({completedInvoice.paymentMethod}):</span>
                     <span>{formatPKR(completedInvoice.amountPaid)}</span>
                   </div>
                   {completedInvoice.balanceDue > 0 && (
@@ -1769,41 +1846,37 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                     </div>
                   )}
                 </div>
-
-                <div className="text-center pt-2 border-t border-stone-200 text-[10px] text-stone-500">
-                  Thank you for your business!
-                </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+              <div className="grid grid-cols-3 gap-1.5 pt-1">
                 <button
                   type="button"
                   onClick={handleDirectPrint}
-                  className="py-2.5 px-3 rounded-xl bg-stone-900 hover:bg-black text-white font-bold flex items-center justify-center gap-1.5 transition"
+                  className="py-2 px-2 rounded-lg bg-stone-900 hover:bg-black text-white font-bold flex items-center justify-center gap-1 transition text-xs"
                 >
-                  <Printer className="w-4 h-4" />
-                  Print Receipt
+                  <Printer className="w-3.5 h-3.5" />
+                  Print
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadPDF}
-                  className="py-2.5 px-3 rounded-xl bg-lime-600 hover:bg-lime-700 text-white font-bold flex items-center justify-center gap-1.5 transition"
+                  className="py-2 px-2 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold flex items-center justify-center gap-1 transition text-xs"
                 >
-                  <Download className="w-4 h-4" />
-                  Download PDF
+                  <Download className="w-3.5 h-3.5" />
+                  PDF
                 </button>
                 <button
                   type="button"
                   onClick={handleCopyWhatsApp}
-                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1.5 transition"
+                  className="py-2 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1 transition text-xs"
                 >
-                  <Share2 className="w-4 h-4" />
-                  Share WhatsApp
+                  <Share2 className="w-3.5 h-3.5" />
+                  WhatsApp
                 </button>
               </div>
 
-              <div className="text-center pt-2">
+              <div className="text-center pt-1">
                 <button
                   type="button"
                   onClick={handleResetPOS}
@@ -1818,108 +1891,109 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         </div>
       )}
 
-      {/* MODAL 3: ON-THE-FLY NEW CUSTOMER CREATION */}
+      {/* MODAL 3: QUICK ADD CUSTOMER MODAL (FALLBACK IF NOT USING NAVIGATION) */}
       {showNewCustomerModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-stone-200 overflow-hidden">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
             <div className="bg-stone-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-lime-400" />
-                <h3 className="font-bold text-sm">Add New Customer On-the-Fly</h3>
+                <UserPlus className="w-4 h-4 text-lime-400" />
+                <h3 className="font-bold text-sm">Add New Customer Profile</h3>
               </div>
               <button onClick={() => setShowNewCustomerModal(false)} className="text-stone-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveNewCustomer} className="p-5 space-y-3 text-xs">
+            <form onSubmit={handleSaveNewCustomer} className="p-4 space-y-2.5 text-xs">
               <div>
-                <label className="block font-bold text-stone-700 mb-1">Customer / Business Name *</label>
+                <label className="block font-bold text-stone-700 mb-0.5">Name / Business Name *</label>
                 <input
                   type="text"
                   required
                   value={newCustName}
                   onChange={(e) => setNewCustName(e.target.value)}
                   placeholder="e.g. Al-Madina Supermart / Haji Tariq"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-lime-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Category Type</label>
+                  <label className="block font-bold text-stone-700 mb-0.5">Category Type</label>
                   <select
                     value={newCustType}
                     onChange={(e) => setNewCustType(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
                   >
+                    <option value="Retailer">Retailer (Shop)</option>
                     <option value="Distributor">Distributor</option>
                     <option value="Sales Man">Sales Man / Rep</option>
-                    <option value="Retailer">Retailer / Shop</option>
                     <option value="Wholesaler">Wholesaler</option>
+                    <option value="Counter">Customer (Direct)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Phone Number</label>
+                  <label className="block font-bold text-stone-700 mb-0.5">Phone Number</label>
                   <input
                     type="text"
                     value={newCustPhone}
                     onChange={(e) => setNewCustPhone(e.target.value)}
                     placeholder="0300 1234567"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-lime-500"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">City / Territory</label>
+                  <label className="block font-bold text-stone-700 mb-0.5">City / Territory</label>
                   <input
                     type="text"
                     value={newCustCity}
                     onChange={(e) => setNewCustCity(e.target.value)}
                     placeholder="e.g. Lahore / Peshawar"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-lime-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Opening Balance (PKR)</label>
+                  <label className="block font-bold text-stone-700 mb-0.5">Opening Balance</label>
                   <input
                     type="number"
                     value={newCustOpeningBalance}
                     onChange={(e) => setNewCustOpeningBalance(Number(e.target.value) || 0)}
                     placeholder="0"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-lime-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-stone-700 mb-1">Market Address (Optional)</label>
+                <label className="block font-bold text-stone-700 mb-0.5">Market Address</label>
                 <input
                   type="text"
                   value={newCustAddress}
                   onChange={(e) => setNewCustAddress(e.target.value)}
-                  placeholder="Shop # / Grain Market..."
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20"
+                  placeholder="Shop # / Market location..."
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 focus:outline-none focus:ring-1 focus:ring-lime-500"
                 />
               </div>
 
-              <div className="pt-3 border-t border-stone-100 flex justify-end gap-2">
+              <div className="pt-2 border-t border-stone-100 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowNewCustomerModal(false)}
-                  className="px-4 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
+                  className="px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-lime-600 hover:bg-lime-700 text-white font-bold shadow-sm"
+                  className="px-4 py-1.5 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold shadow-xs"
                 >
-                  Save & Select Customer
+                  Save & Select
                 </button>
               </div>
             </form>
@@ -1927,13 +2001,13 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         </div>
       )}
 
-      {/* MODAL 4: RESUME HELD DRAFTS */}
+      {/* MODAL 4: HELD DRAFTS */}
       {showDraftsModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-stone-200 overflow-hidden">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
             <div className="bg-stone-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <PauseCircle className="w-5 h-5 text-amber-400" />
+                <PauseCircle className="w-4 h-4 text-amber-400" />
                 <h3 className="font-bold text-sm">Held Sales Drafts ({drafts.length})</h3>
               </div>
               <button onClick={() => setShowDraftsModal(false)} className="text-stone-400 hover:text-white">
@@ -1941,31 +2015,31 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               </button>
             </div>
 
-            <div className="p-4 space-y-2 max-h-80 overflow-y-auto text-xs">
+            <div className="p-3 space-y-2 max-h-72 overflow-y-auto text-xs">
               {drafts.length === 0 ? (
                 <p className="text-center py-6 text-stone-400">No active held drafts.</p>
               ) : (
                 drafts.map((d) => (
-                  <div key={d.id} className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
+                  <div key={d.id} className="p-2.5 bg-stone-50 rounded-xl border border-stone-200/60 flex items-center justify-between">
                     <div>
                       <strong className="text-stone-900 block">{d.customerName}</strong>
                       <span className="text-[10px] text-stone-400">
-                        {d.customerCategory} • {d.cart.length} items • Held at {d.savedAt}
+                        {d.buyerCategory} • {d.cart.length} items • {d.savedAt}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleResumeDraft(d)}
-                        className="px-3 py-1.5 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold text-xs flex items-center gap-1"
+                        className="px-2.5 py-1 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold text-xs flex items-center gap-1"
                       >
-                        <PlayCircle className="w-3.5 h-3.5" />
+                        <PlayCircle className="w-3 h-3" />
                         Resume
                       </button>
                       <button
                         onClick={() => setDrafts(drafts.filter((item) => item.id !== d.id))}
-                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                        className="p-1 rounded-lg text-red-500 hover:bg-red-50"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
