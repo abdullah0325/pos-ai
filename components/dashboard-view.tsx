@@ -143,7 +143,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
     db.invoices.forEach((inv) => {
       const cust = db.customers.find((c) => c.id === inv.customerId)
       const type =
-        inv.saleType === 'Counter POS'
+        (inv.saleType as string) === 'Counter POS' || inv.saleType === 'Counter'
           ? 'Counter'
           : cust?.type || (inv.saleType.includes('Distributor') ? 'Distributor' : 'Wholesaler')
       if (!map[type]) {

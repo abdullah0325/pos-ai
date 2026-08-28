@@ -76,6 +76,7 @@ export interface RawMaterialItem {
   size?: string
   unit: string // 'kg' | 'g' | 'L' | 'ml' | 'Pcs' | 'Bags' | 'Drums' | 'Rolls' | 'Cartons'
   unitCost: number // Base price per unit
+  unitPrice?: number // Alias for compatibility with deal rates
   otherCost?: number // Other cost (e.g. transport, handling, freight)
   totalCostPerUnit?: number // auto-calculated (unitCost + otherCost) or manual override
   isManualTotalCost?: boolean
@@ -83,6 +84,7 @@ export interface RawMaterialItem {
   purchaseInvoiceImage?: string // Attached purchase invoice image (Base64)
   supplierId?: string // Link to Supplier module
   supplierName?: string
+  supplier?: string // Alias for supplierName
   totalReceived?: number // Total quantity received/opening
   totalConsumed?: number // Total quantity consumed in production
   quantity: number // Remaining warehouse stock
@@ -123,7 +125,7 @@ export interface CustomerPaymentRecord {
   receiptNumber: string
   date: string
   amount: number
-  paymentMethod: 'Cash' | 'Online' | 'Bank Transfer' | 'Cheque'
+  paymentMethod: 'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque'
   paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
   transactionRef?: string
   receiptImage?: string // Base64 screenshot or photo of bank slip/cheque
@@ -184,6 +186,8 @@ export interface SupplierItem {
   currentBalance: number // positive = payable to supplier
   status: 'Active' | 'Blocked'
   notes?: string
+  totalPurchases?: number
+  totalPaid?: number
   paymentRecords?: SupplierPaymentRecord[]
   createdAt?: string
   updatedAt: string
@@ -309,10 +313,10 @@ export interface ReturnItem {
   id: string
   returnNumber: string
   date: string
-  type: 'Customer Sales Return' | 'Supplier Purchase Return' | 'Stock Damage Adjustment'
+  type: 'Customer Sales Return' | 'Supplier Purchase Return' | 'Stock Damage Adjustment' | string
   partyId?: string
   partyName: string
-  items: Array<{
+  items?: Array<{
     id: string
     name: string
     quantity: number
@@ -321,14 +325,20 @@ export interface ReturnItem {
     total: number
     reason: string
   }>
-  totalRefund: number
-  refundStatus: 'Adjusted in Ledger' | 'Cash Refunded'
+  productName?: string
+  quantity?: number
+  unit?: string
+  totalLoss?: number
+  reason?: string
+  status?: string
+  totalRefund?: number
+  refundStatus?: 'Adjusted in Ledger' | 'Cash Refunded'
   notes?: string
-  createdAt: string
+  createdAt?: string
 }
 
 export interface AccountBalance {
-  id: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
+  id: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank' | string
   name: string
   type: 'Cash' | 'Bank'
   accountNumber?: string
@@ -336,12 +346,15 @@ export interface AccountBalance {
   updatedAt: string
 }
 
+export type AccountItem = AccountBalance
+
 export interface AccountTransfer {
   id: string
   date: string
-  fromAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
-  toAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
+  fromAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank' | string
+  toAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank' | string
   amount: number
+  description?: string
   notes?: string
 }
 
@@ -399,7 +412,7 @@ export interface SalaryPaymentRecord {
   absentDeduction?: number
   netPayable: number
   amountPaid: number
-  paymentMethod: 'Cash' | 'Online' | 'Bank Transfer'
+  paymentMethod: 'Cash' | 'Online' | 'Bank Transfer' | 'Cheque' | 'Card'
   paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
   paymentScreenshot?: string // Base64 image
   status: 'Paid' | 'Pending'

@@ -43,7 +43,7 @@ import {
   type SupplierItem,
   type AccountItem,
 } from '@/lib/db'
-import { exportToCSV } from '@/lib/pdf-export'
+import { exportToCSV, generatePurchaseVoucherPDF } from '@/lib/pdf-export'
 
 interface PurchasesViewProps {
   db: AppDatabase
@@ -316,7 +316,7 @@ export default function PurchasesView({
       const otherCostStr = (p.items || []).map((it) => it.otherCost || 0).reduce((a, b) => a + b, 0) || p.otherCost || 0
 
       return [
-        p.poNumber || p.purchaseNumber,
+        p.poNumber || p.purchaseNumber || '',
         formatDate(p.date),
         p.purchaseType || 'Raw Material',
         p.supplierName,
@@ -791,6 +791,13 @@ export default function PurchasesView({
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => generatePurchaseVoucherPDF(purchase, db.suppliers.find((s) => s.id === purchase.supplierId))}
+                          className="p-1.5 rounded-lg text-stone-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          title="Download Purchase Voucher PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => {
                             setEditingPurchase(purchase)
                             setIsCreatingPurchase(true)
@@ -1250,7 +1257,7 @@ function PurchaseEditorModal({
             ...r,
             quantity: newQty,
             totalReceived: newReceived,
-            unitCost,
+            unitCost: unitPrice,
             otherCost: otherCost > 0 ? (otherCost / quantity) : r.otherCost,
             totalCostPerUnit: costPerUnit,
             totalCost: costPerUnit * newQty,
@@ -1270,7 +1277,7 @@ function PurchaseEditorModal({
           category: itemCategory as any,
           sku: `RAW-${itemName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
           unit,
-          unitCost,
+          unitCost: unitPrice,
           otherCost: quantity > 0 ? (otherCost / quantity) : 0,
           totalCostPerUnit: unitPrice + (quantity > 0 ? (otherCost / quantity) : 0),
           totalCost: finalGrandTotal,
@@ -1952,6 +1959,14 @@ function PurchaseDetailModal({
             <span className="font-mono font-bold text-stone-600 text-xs">{poNum}</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => generatePurchaseVoucherPDF(purchase, supplier)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 transition-colors shadow-xs cursor-pointer"
+              title="Download Purchase Voucher PDF"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download PDF</span>
+            </button>
             <button
               onClick={handlePrint}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-stone-700 bg-stone-200/70 hover:bg-stone-300 transition-colors"

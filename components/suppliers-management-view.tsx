@@ -98,9 +98,12 @@ export default function SuppliersManagementView({
       const normCat = normalizeCategory(s.category, s.supplyCategory)
 
       // Category Filter
-      if (categoryFilter !== 'all' && normCat !== categoryFilter && normCat !== 'Both') {
-        if (categoryFilter === 'Both' && normCat !== 'Both') return false
-        if (categoryFilter !== 'Both' && normCat !== categoryFilter) return false
+      if (categoryFilter !== 'all') {
+        if (categoryFilter === 'Both') {
+          if (normCat !== 'Both') return false
+        } else {
+          if (normCat !== categoryFilter && normCat !== 'Both') return false
+        }
       }
 
       // Balance Filter
@@ -422,11 +425,12 @@ export default function SuppliersManagementView({
       updatedRawMaterials = db.rawMaterials.map((r) => {
         if (r.id === dealData.itemId || r.name.toLowerCase() === dealData.itemName.toLowerCase()) {
           const newQty = (r.quantity || 0) + dealData.quantity
+          const price = dealData.unitPrice || r.unitPrice || r.unitCost || 0
           return {
             ...r,
             quantity: newQty,
-            unitPrice: dealData.unitPrice || r.unitPrice,
-            totalCost: newQty * (dealData.unitPrice || r.unitPrice),
+            unitPrice: price,
+            totalCost: newQty * price,
             updatedAt: dealData.date,
           }
         }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Search, FileText, Download, Trash2, Printer, CheckCircle, Clock, AlertCircle, ShoppingCart, X } from 'lucide-react'
-import { formatPKR, formatDate, type AppDatabase, type InvoiceItem, type InvoiceLineItem, type CustomerItem } from '@/lib/db'
+import { formatPKR, formatDate, type AppDatabase, type InvoiceItem, type InvoiceLineItem, type CustomerItem, type Status, type LedgerEntry } from '@/lib/db'
 import { generateInvoicePDF, exportToCSV } from '@/lib/pdf-export'
 
 interface InvoicesViewProps {
@@ -524,7 +524,7 @@ function CreateInvoiceModal({
         return {
           ...prod,
           quantity: remaining,
-          status: remaining <= 0 ? 'Out of stock' : remaining <= prod.reorderLevel ? 'Low stock' : 'In stock',
+          status: (remaining <= 0 ? 'Out of stock' : remaining <= prod.reorderLevel ? 'Low stock' : 'In stock') as Status,
           updatedAt: invoiceDate,
         }
       }
@@ -548,13 +548,13 @@ function CreateInvoiceModal({
     })
 
     // 4. Create customer ledger entries
-    const newLedgerEntries = [
+    const newLedgerEntries: LedgerEntry[] = [
       {
         id: `led-${Date.now()}-1`,
         partyId: selectedCustomer.id,
-        partyType: 'Customer' as const,
+        partyType: 'Customer',
         date: invoiceDate,
-        referenceType: 'Invoice' as const,
+        referenceType: 'Invoice',
         referenceId: nextInvNum,
         description: `Invoice #${nextInvNum} (${lines.length} items)`,
         debit: grandTotal,

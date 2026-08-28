@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Factory, CheckCircle2, Clock, AlertCircle, ArrowRight, Boxes, Package, Trash2, X, Download } from 'lucide-react'
-import { formatPKR, formatDate, type AppDatabase, type ProductionRun, type ProductionConsumedItem } from '@/lib/db'
+import { formatPKR, formatDate, type AppDatabase, type ProductionRun, type ProductionConsumedItem, type Status } from '@/lib/db'
 import { exportToCSV } from '@/lib/pdf-export'
 
 interface ProductionViewProps {
@@ -436,7 +436,7 @@ function LaunchProductionModal({
         return {
           ...raw,
           quantity: remaining,
-          status: remaining <= 0 ? 'Out of stock' : remaining <= raw.reorderLevel ? 'Low stock' : 'In stock',
+          status: (remaining <= 0 ? 'Out of stock' : remaining <= raw.reorderLevel ? 'Low stock' : 'In stock') as Status,
           updatedAt: date,
         }
       }

@@ -76,7 +76,7 @@ export default function BusinessApp() {
   }
 
   // Smart Navigation Handler: supports core modules + direct routing to subtabs
-  const handleNavigate = (key: ModuleKey, subTab?: string) => {
+  const handleNavigate = (key: ModuleKey | string, subTab?: string) => {
     // Check if key is a legacy/sub-route and route appropriately
     if (key === 'customer-management' || key === 'customers') {
       setActiveModule('customer-management')

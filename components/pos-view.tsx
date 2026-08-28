@@ -39,6 +39,7 @@ import {
   type InvoiceLineItem,
   type LedgerEntry,
   type CustomerType,
+  type Status,
   fileToBase64,
 } from '@/lib/db'
 import { generateInvoicePDF } from '@/lib/pdf-export'
@@ -669,7 +670,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         return {
           ...p,
           quantity: remaining,
-          status: remaining <= 0 ? 'Out of stock' : remaining <= p.reorderLevel ? 'Low stock' : 'In stock',
+          status: (remaining <= 0 ? 'Out of stock' : remaining <= p.reorderLevel ? 'Low stock' : 'In stock') as Status,
           updatedAt: dateStr,
         }
       }

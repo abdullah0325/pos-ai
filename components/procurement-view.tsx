@@ -519,7 +519,9 @@ function CreateSupplierModal({
         currentBalance: openingBalance,
         totalPurchases: 0,
         totalPaid: 0,
+        status: 'Active',
         createdAt: new Date().toISOString().slice(0, 10),
+        updatedAt: new Date().toISOString().slice(0, 10),
       }
       onSaveDatabase({ ...db, suppliers: [...db.suppliers, newSupplier] })
     }

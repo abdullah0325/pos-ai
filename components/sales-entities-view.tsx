@@ -44,6 +44,7 @@ import {
   type CustomerPaymentRecord,
   type InvoiceItem,
   type LedgerEntry,
+  type Status,
 } from '@/lib/db'
 import { generateLedgerPDF, generateInvoicePDF, exportToCSV } from '@/lib/pdf-export'
 
@@ -208,7 +209,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
         return {
           ...p,
           quantity: rem,
-          status: rem <= 0 ? 'Out of stock' : rem <= p.reorderLevel ? 'Low stock' : 'In stock',
+          status: (rem <= 0 ? 'Out of stock' : rem <= p.reorderLevel ? 'Low stock' : 'In stock') as Status,
           updatedAt: now,
         }
       }
@@ -2011,7 +2012,7 @@ function CreateDeliveryInvoiceModal({
         return {
           ...p,
           quantity: rem,
-          status: rem <= 0 ? 'Out of stock' : rem <= p.reorderLevel ? 'Low stock' : 'In stock',
+          status: (rem <= 0 ? 'Out of stock' : rem <= p.reorderLevel ? 'Low stock' : 'In stock') as Status,
           updatedAt: invoiceDate,
         }
       }
