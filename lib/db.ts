@@ -196,6 +196,7 @@ export interface InvoiceLineItem {
   unit: string
   unitPrice: number
   costPrice: number
+  imageUrl?: string
   discount?: number
   discountType?: 'percent' | 'fixed'
   discountValue?: number

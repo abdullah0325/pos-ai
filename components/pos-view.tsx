@@ -292,19 +292,21 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   // One-click add to cart: if already in cart, increases quantity
   const handleAddToCart = (product: ProductItem) => {
-    const existingIndex = cart.findIndex((item) => item.product.id === product.id)
+    // Look up fresh product data from db.products so imageUrl and warehouse stock are completely fresh
+    const freshProduct = db.products.find((p) => p.id === product.id) || product
+    const existingIndex = cart.findIndex((item) => item.product.id === freshProduct.id)
 
     if (existingIndex >= 0) {
       const existing = cart[existingIndex]
       const newQty = existing.quantity + 1
 
-      if (newQty > product.quantity) {
-        alert(`Stock limit reached! Only ${product.quantity} ${product.unit} available in warehouse.`)
+      if (newQty > freshProduct.quantity) {
+        alert(`Stock limit reached! Only ${freshProduct.quantity} ${freshProduct.unit} available in warehouse.`)
         return
       }
 
       const updatedItem = calculateItemLine(
-        product,
+        freshProduct,
         newQty,
         buyerCategory,
         existing.discountType,
@@ -314,11 +316,11 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       newCart[existingIndex] = updatedItem
       setCart(newCart)
     } else {
-      if (product.quantity <= 0) {
-        alert(`Product is currently Out of Stock (${product.quantity} in inventory).`)
+      if (freshProduct.quantity <= 0) {
+        alert(`Product is currently Out of Stock (${freshProduct.quantity} in inventory).`)
         return
       }
-      const newItem = calculateItemLine(product, 1, buyerCategory, 'fixed', 0)
+      const newItem = calculateItemLine(freshProduct, 1, buyerCategory, 'fixed', 0)
       setCart([...cart, newItem])
     }
   }
@@ -609,20 +611,24 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
     const balanceDue = Math.max(0, grandTotal - effectiveAmountPaid)
 
-    // Build Invoice Line Items
-    const invoiceLines: InvoiceLineItem[] = cart.map((c) => ({
-      productId: c.product.id,
-      name: c.product.name,
-      quantity: c.quantity,
-      unit: c.product.unit,
-      unitPrice: c.unitPrice,
-      costPrice: c.product.costPrice,
-      discount: c.discountAmount,
-      discountType: c.discountType,
-      discountValue: c.discountValue,
-      pricingTier: c.pricingTier,
-      total: c.lineTotal,
-    }))
+    // Build Invoice Line Items with product images
+    const invoiceLines: InvoiceLineItem[] = cart.map((c) => {
+      const liveP = db.products.find((p) => p.id === c.product.id) || c.product
+      return {
+        productId: c.product.id,
+        name: c.product.name,
+        quantity: c.quantity,
+        unit: c.product.unit,
+        unitPrice: c.unitPrice,
+        costPrice: c.product.costPrice,
+        imageUrl: liveP.imageUrl || (liveP as any).image || c.product.imageUrl || (c.product as any).image,
+        discount: c.discountAmount,
+        discountType: c.discountType,
+        discountValue: c.discountValue,
+        pricingTier: c.pricingTier,
+        total: c.lineTotal,
+      }
+    })
 
     // Build Invoice Object
     const newInvoice: InvoiceItem = {
@@ -1252,9 +1258,9 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 >
                   {/* Top Image Box */}
                   <div className="aspect-square w-full rounded-xl bg-stone-100/70 overflow-hidden relative mb-2 flex items-center justify-center">
-                    {p.image ? (
+                    {(p.imageUrl || (p as any).image) ? (
                       <img
-                        src={p.image}
+                        src={p.imageUrl || (p as any).image}
                         alt={p.name}
                         className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-200"
                       />
@@ -1362,64 +1368,87 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               </div>
             ) : (
               <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
-                {cart.map((item, index) => (
-                  <div key={item.product.id} className="bg-stone-50/80 p-2.5 rounded-xl border border-stone-200/50 space-y-1.5">
-                    <div className="flex items-start justify-between gap-1.5">
-                      <div className="truncate">
-                        <h4 className="font-bold text-xs text-stone-900 leading-snug truncate">{item.product.name}</h4>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleItemTier(index)}
-                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase transition ${
-                              item.pricingTier === 'Wholesale'
-                                ? 'bg-lime-600 text-white'
-                                : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
-                            }`}
-                            title="Toggle Retail / Wholesale price tier"
-                          >
-                            {item.pricingTier} ({formatPKR(item.unitPrice)})
-                          </button>
-                          <span className="text-[10px] text-stone-400">× {item.quantity}</span>
+                {cart.map((item, index) => {
+                  const liveProduct = db.products.find((p) => p.id === item.product.id) || item.product
+                  const itemImage = liveProduct.imageUrl || (liveProduct as any).image || item.product.imageUrl || (item.product as any).image
+
+                  return (
+                    <div key={item.product.id} className="bg-stone-50/80 p-2.5 rounded-xl border border-stone-200/50 space-y-1.5">
+                      <div className="flex items-start gap-2.5">
+                        {/* Product Image Thumbnail in Cart */}
+                        <div className="w-11 h-11 rounded-lg bg-white shrink-0 overflow-hidden relative flex items-center justify-center border border-stone-200/80 shadow-2xs">
+                          {itemImage ? (
+                            <img
+                              src={itemImage}
+                              alt={item.product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Package className="w-5 h-5 text-stone-300" />
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-1.5">
+                            <div className="truncate">
+                              <h4 className="font-bold text-xs text-stone-900 leading-snug truncate" title={item.product.name}>
+                                {item.product.name}
+                              </h4>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleItemTier(index)}
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase transition ${
+                                    item.pricingTier === 'Wholesale'
+                                      ? 'bg-lime-600 text-white'
+                                      : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
+                                  }`}
+                                  title="Toggle Retail / Wholesale price tier"
+                                >
+                                  {item.pricingTier} ({formatPKR(item.unitPrice)})
+                                </button>
+                                <span className="text-[10px] text-stone-400">× {item.quantity}</span>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="text-xs font-bold text-stone-900 block">{formatPKR(item.lineTotal)}</span>
+                              {item.discountAmount > 0 && (
+                                <span className="text-[10px] text-rose-600 font-semibold block">
+                                  -{formatPKR(item.discountAmount)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="text-xs font-bold text-stone-900 block">{formatPKR(item.lineTotal)}</span>
-                        {item.discountAmount > 0 && (
-                          <span className="text-[10px] text-rose-600 font-semibold block">
-                            -{formatPKR(item.discountAmount)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Quantity Modifier & Line Discount */}
-                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/50">
-                      {/* Qty +/- */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateQty(index, item.quantity - 1)}
-                          className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => handleUpdateQty(index, Number(e.target.value) || 1)}
-                          className="w-9 text-center text-xs font-bold py-0.2 rounded border border-stone-200 bg-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateQty(index, item.quantity + 1)}
-                          className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
-                        >
-                          +
-                        </button>
-                      </div>
+                      {/* Quantity Modifier & Line Discount */}
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/50">
+                        {/* Qty +/- */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQty(index, item.quantity - 1)}
+                            className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => handleUpdateQty(index, Number(e.target.value) || 1)}
+                            className="w-9 text-center text-xs font-bold py-0.2 rounded border border-stone-200 bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQty(index, item.quantity + 1)}
+                            className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
 
                       {/* Line Discount Input */}
                       <div className="flex items-center gap-1 text-[11px]">
@@ -1458,9 +1487,10 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                )
+              })}
+            </div>
+          )}
 
             {/* Cart Summary & Overall Discount */}
             {cart.length > 0 && (
@@ -1549,6 +1579,36 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 <div className="text-right">
                   <span className="text-stone-500 block text-[10px]">Total Payable:</span>
                   <strong className="text-base font-black text-lime-700">{formatPKR(grandTotal)}</strong>
+                </div>
+              </div>
+
+              {/* Order Items Preview with Product Images */}
+              <div className="bg-stone-50/80 p-2.5 rounded-xl border border-stone-200 space-y-1.5 max-h-36 overflow-y-auto">
+                <div className="flex items-center justify-between text-[11px] font-bold text-stone-600 px-0.5">
+                  <span>Selected Products ({cart.length})</span>
+                  <span>Qty: {cart.reduce((s, it) => s + it.quantity, 0)}</span>
+                </div>
+                <div className="space-y-1">
+                  {cart.map((item) => {
+                    const liveProd = db.products.find((p) => p.id === item.product.id) || item.product
+                    const itemImg = liveProd.imageUrl || (liveProd as any).image || item.product.imageUrl || (item.product as any).image
+                    return (
+                      <div key={item.product.id} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-stone-200/60 text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 rounded bg-stone-100 border border-stone-200 shrink-0 overflow-hidden flex items-center justify-center">
+                            {itemImg ? (
+                              <img src={itemImg} alt={item.product.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Package className="w-3.5 h-3.5 text-stone-300" />
+                            )}
+                          </div>
+                          <span className="font-semibold text-stone-900 truncate max-w-[170px]">{item.product.name}</span>
+                          <span className="text-stone-400 text-[10px] shrink-0">× {item.quantity}</span>
+                        </div>
+                        <span className="font-bold text-stone-800 shrink-0">{formatPKR(item.lineTotal)}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 

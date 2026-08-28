@@ -322,18 +322,28 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               <span className="text-xs text-gray-500">{db.products.length} products available</span>
             </div>
             <div className="pos-grid">
-              {db.products.map((prod) => (
-                <button key={prod.id} className="pos-card" onClick={() => handlePosAddToCart(prod.id)}>
-                  <strong>{prod.name}</strong>
-                  <span>{prod.category}</span>
-                  <div className="flex justify-between items-center mt-2 w-full">
-                    <b>{formatPKR(prod.wholesalePrice)}</b>
-                    <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-1.5 py-0.5 rounded">
-                      Stock: {prod.quantity}
-                    </span>
-                  </div>
-                </button>
-              ))}
+              {db.products.map((prod) => {
+                const prodImg = prod.imageUrl || (prod as any).image
+                return (
+                  <button key={prod.id} className="pos-card" onClick={() => handlePosAddToCart(prod.id)}>
+                    <div className="w-full h-20 mb-1.5 rounded-lg overflow-hidden bg-stone-100 flex items-center justify-center border border-stone-200/50">
+                      {prodImg ? (
+                        <img src={prodImg} alt={prod.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Package className="w-6 h-6 text-stone-300" />
+                      )}
+                    </div>
+                    <strong>{prod.name}</strong>
+                    <span>{prod.category}</span>
+                    <div className="flex justify-between items-center mt-2 w-full">
+                      <b>{formatPKR(prod.wholesalePrice)}</b>
+                      <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-1.5 py-0.5 rounded">
+                        Stock: {prod.quantity}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -368,41 +378,54 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               </div>
 
               <div className="space-y-2 max-h-60 overflow-y-auto border-t border-b border-gray-200 py-2">
-                {posCart.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs">
-                    <div>
-                      <div className="font-bold text-gray-800">{item.name}</div>
-                      <div className="text-gray-500">
-                        {item.qty} x {formatPKR(item.price)}
+                {posCart.map((item, idx) => {
+                  const prod = db.products.find((p) => p.id === item.productId)
+                  const prodImg = prod?.imageUrl || (prod as any)?.image
+                  return (
+                    <div key={idx} className="flex justify-between items-center text-xs gap-2 py-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-9 h-9 rounded bg-stone-100 border border-stone-200 shrink-0 overflow-hidden flex items-center justify-center">
+                          {prodImg ? (
+                            <img src={prodImg} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <Package className="w-4 h-4 text-stone-300" />
+                          )}
+                        </div>
+                        <div className="truncate">
+                          <div className="font-bold text-gray-800 truncate">{item.name}</div>
+                          <div className="text-gray-500 text-[11px]">
+                            {item.qty} x {formatPKR(item.price)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          className="px-1.5 py-0.5 bg-gray-200 rounded font-bold hover:bg-gray-300"
+                          onClick={() =>
+                            setPosCart(
+                              posCart
+                                .map((it) => (it.productId === item.productId ? { ...it, qty: it.qty - 1 } : it))
+                                .filter((it) => it.qty > 0)
+                            )
+                          }
+                        >
+                          -
+                        </button>
+                        <span className="font-bold">{item.qty}</span>
+                        <button
+                          className="px-1.5 py-0.5 bg-gray-200 rounded font-bold hover:bg-gray-300"
+                          onClick={() =>
+                            setPosCart(
+                              posCart.map((it) => (it.productId === item.productId ? { ...it, qty: it.qty + 1 } : it))
+                            )
+                          }
+                        >
+                          +
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="px-1.5 py-0.5 bg-gray-200 rounded font-bold"
-                        onClick={() =>
-                          setPosCart(
-                            posCart
-                              .map((it) => (it.productId === item.productId ? { ...it, qty: it.qty - 1 } : it))
-                              .filter((it) => it.qty > 0)
-                          )
-                        }
-                      >
-                        -
-                      </button>
-                      <span className="font-bold">{item.qty}</span>
-                      <button
-                        className="px-1.5 py-0.5 bg-gray-200 rounded font-bold"
-                        onClick={() =>
-                          setPosCart(
-                            posCart.map((it) => (it.productId === item.productId ? { ...it, qty: it.qty + 1 } : it))
-                          )
-                        }
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
                 {posCart.length === 0 && <div className="text-center py-6 text-gray-400 text-xs">No items in cart yet.</div>}
               </div>
             </div>
