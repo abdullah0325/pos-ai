@@ -755,14 +755,14 @@ export default function CustomerManagementView({
                       {/* Top Row: Initials Avatar Circle & Category Badge */}
                       <div className="flex items-center justify-between gap-2">
                         <div
-                          className={`w-11 h-11 rounded-full font-black text-sm flex items-center justify-center shadow-2xs border shrink-0 transition-transform group-hover:scale-105 ${catAvatarClass}`}
+                          className={`w-10 h-10 rounded-full font-bold text-xs flex items-center justify-center shadow-2xs border shrink-0 transition-transform group-hover:scale-105 ${catAvatarClass}`}
                           title={`${c.name} (${cat.name})`}
                         >
                           {initials}
                         </div>
 
                         <span
-                          className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-md border shadow-2xs shrink-0 ${catBadgeClass}`}
+                          className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-md border shadow-2xs shrink-0 ${catBadgeClass}`}
                         >
                           {catIcon}
                           <span>{cat.name}</span>
@@ -770,93 +770,60 @@ export default function CustomerManagementView({
                       </div>
 
                       {/* Middle Section: Customer Name, Business Subtitle, City & Address */}
-                      <div className="mt-3.5">
+                      <div className="mt-3">
                         <div className="flex items-center justify-between gap-1.5">
                           <h3
-                            className="font-bold text-stone-900 text-sm group-hover:text-emerald-700 transition-colors truncate"
+                            className="font-bold text-stone-900 text-[13.5px] leading-snug group-hover:text-emerald-700 transition-colors truncate"
                             title={c.name}
                           >
                             {c.name}
                           </h3>
                           {c.customerId && (
-                            <span className="text-[10px] font-mono font-semibold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
+                            <span className="text-[9.5px] font-mono font-semibold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
                               {c.customerId}
                             </span>
                           )}
                         </div>
 
                         <p
-                          className="text-xs text-stone-500 font-medium truncate mt-0.5"
+                          className="text-[11.5px] text-stone-500 font-medium truncate mt-0.5"
                           title={c.businessName || `${cat.name} Account`}
                         >
                           {c.businessName || `${cat.name} Account`}
                         </p>
 
-                        <div className="flex items-center gap-1 text-xs text-stone-600 mt-2">
-                          <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                        <div className="flex items-center gap-1 text-stone-500 mt-1.5">
+                          <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
                           <span
                             className="truncate text-[11px]"
                             title={`${c.city ? c.city + ' · ' : ''}${c.address || 'Address not specified'}`}
                           >
-                            {c.city && <strong className="text-stone-800">{c.city} · </strong>}
+                            {c.city && <strong className="text-stone-700">{c.city} · </strong>}
                             {c.address || 'Address not set'}
                           </span>
                         </div>
                       </div>
 
-                      {/* Contact Row: Clickable Phone & WhatsApp */}
-                      <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-stone-100">
-                        <a
-                          href={telUrl}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex-1 inline-flex items-center justify-center gap-1.5 text-[11px] font-mono font-semibold py-1.5 px-2 rounded-lg border transition-all ${
-                            c.phone
-                              ? 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200 active:scale-95'
-                              : 'bg-stone-50/50 text-stone-400 border-stone-200/60 pointer-events-none'
-                          }`}
-                          title={c.phone ? `Call ${c.name} (${c.phone})` : 'No phone number'}
-                        >
-                          <Phone className="w-3 h-3 text-stone-500 shrink-0" />
-                          <span className="truncate">{c.phone || 'No phone'}</span>
-                        </a>
-
-                        <a
-                          href={waUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className={`inline-flex items-center justify-center gap-1 text-[11px] font-bold py-1.5 px-2.5 rounded-lg border transition-all shrink-0 ${
-                            waUrl
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 active:scale-95'
-                              : 'bg-stone-50/50 text-stone-400 border-stone-200/60 pointer-events-none'
-                          }`}
-                          title={waDisplay ? `Open WhatsApp chat with ${c.name} (${waDisplay})` : 'No WhatsApp number'}
-                        >
-                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>WhatsApp</span>
-                        </a>
-                      </div>
-
-                      {/* Balance Row */}
+                      {/* Balance Row (Positioned Above Contact Number) */}
                       <div
-                        className={`rounded-xl p-2.5 my-3 border flex items-center justify-between ${
+                        className={`rounded-xl p-2.5 mt-3 border flex items-center justify-between transition-colors ${
                           c.currentBalance > 0
-                            ? 'bg-amber-50/70 border-amber-200/80 text-amber-900'
-                            : 'bg-emerald-50/60 border-emerald-200/70 text-emerald-900'
+                            ? 'bg-amber-50/60 border-amber-200/70 text-amber-900'
+                            : 'bg-stone-50/80 border-stone-200/70 text-stone-800'
                         }`}
                       >
                         <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider block opacity-80">
+                          <span className="text-[9.5px] font-bold uppercase tracking-wider block text-stone-500">
                             {c.currentBalance > 0 ? 'Outstanding Due' : 'Balance Settled'}
                           </span>
-                          <span className="text-[10px] text-stone-500 font-medium block">
-                            Opening: {formatPKR(c.openingBalance)}
+                          <span className="text-[10px] text-stone-400 font-medium block mt-0.5">
+                            Open: {formatPKR(c.openingBalance)}
                           </span>
                         </div>
                         <div className="text-right">
                           <strong
-                            className={`text-sm font-black block ${
-                              c.currentBalance > 0 ? 'text-rose-700' : 'text-emerald-700'
+                            className={`text-[13px] font-bold block ${
+                              c.currentBalance > 0 ? 'text-rose-700 font-extrabold' : 'text-emerald-700'
                             }`}
                           >
                             {formatPKR(c.currentBalance)}
@@ -867,40 +834,74 @@ export default function CustomerManagementView({
                             </span>
                           )}
                           {c.currentBalance <= 0 && (
-                            <span className="text-[9px] text-emerald-700 font-semibold">Clear (Rs. 0)</span>
+                            <span className="text-[9px] text-emerald-700 font-medium">Clear</span>
                           )}
                         </div>
                       </div>
+
+                      {/* Contact Row (Positioned Below Balance with Compact Buttons) */}
+                      <div className="flex items-center gap-1.5 mt-2.5">
+                        <a
+                          href={telUrl}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`flex-1 inline-flex items-center gap-1.5 text-[11px] font-mono py-1 px-2 rounded-lg border transition-all truncate ${
+                            c.phone
+                              ? 'bg-stone-50/80 text-stone-700 border-stone-200/80 hover:bg-stone-100 hover:text-stone-900 active:scale-98'
+                              : 'bg-stone-50/40 text-stone-300 border-stone-100 pointer-events-none'
+                          }`}
+                          title={c.phone ? `Call ${c.name} (${c.phone})` : 'No phone number'}
+                        >
+                          <Phone className="w-2.5 h-2.5 text-stone-400 shrink-0" />
+                          <span className="truncate">{c.phone || 'No phone'}</span>
+                        </a>
+
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className={`inline-flex items-center gap-1 text-[10.5px] font-medium py-1 px-2 rounded-lg border transition-all shrink-0 ${
+                            waUrl
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80 hover:bg-emerald-100 active:scale-98'
+                              : 'bg-stone-50/40 text-stone-300 border-stone-100 pointer-events-none'
+                          }`}
+                          title={waDisplay ? `WhatsApp ${c.name} (${waDisplay})` : 'No WhatsApp number'}
+                        >
+                          <MessageCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span>WhatsApp</span>
+                        </a>
+                      </div>
                     </div>
 
-                    {/* Bottom Action Row */}
+                    {/* Bottom Action Row (Compact & Proportional) */}
                     <div
-                      className="pt-2 border-t border-stone-100 flex items-center justify-between gap-1.5"
+                      className="pt-2 mt-3 border-t border-stone-100 flex items-center justify-between gap-1.5"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
                         type="button"
-                        className="flex-1 py-1.5 px-3 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                        className="flex-1 py-1 px-2.5 text-[11px] font-semibold text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 rounded-lg border border-emerald-200/80 transition-colors flex items-center justify-center gap-1 shadow-2xs"
                         onClick={() => setSelectedCustomerId(c.id)}
                         title="Open Customer Profile (Ledger, Transactions, Invoices)"
                       >
-                        <Eye className="w-3.5 h-3.5" /> View Profile
+                        <Eye className="w-3 h-3 text-emerald-700" />
+                        <span>View Profile</span>
                       </button>
                       <button
                         type="button"
-                        className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg border border-stone-200 transition-colors"
+                        className="p-1 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg border border-stone-200/80 transition-colors"
                         title="Edit Customer Details"
                         onClick={() => setEditingCustomer(c)}
                       >
-                        <Edit className="w-3.5 h-3.5" />
+                        <Edit className="w-3 h-3" />
                       </button>
                       <button
                         type="button"
-                        className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg border border-stone-200 hover:border-rose-200 transition-colors"
+                        className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-stone-200/80 hover:border-rose-200 transition-colors"
                         title="Delete Customer Profile"
                         onClick={() => requestDeleteCustomer(c)}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
