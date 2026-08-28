@@ -262,10 +262,15 @@ export interface PurchaseItem {
   poNumber: string
   purchaseNumber?: string // Alias for compatibility
   purchaseType?: PurchaseType // 'Raw Material' | 'Finished Product'
+  category?: string // 'Raw Material' | 'Packaging' | 'Equipment & Machinery' | 'Chemicals & Flavors' | 'Maintenance & Spares' | 'Transport & Logistics' | 'Office & Factory Supplies' | 'Finished Product' | 'Custom / One-off' | string
+  customCategoryLabel?: string
+  isCustomCategory?: boolean
+  dueDate?: string // Due date for pending or partial payments
   date: string
   time?: string
   supplierId?: string
   supplierName: string
+  supplierPhone?: string
   items: PurchaseLineItem[]
   quantity?: number
   unit?: string
@@ -283,6 +288,9 @@ export interface PurchaseItem {
   invoiceImage?: string // Attached purchase invoice/bill image (Base64)
   purchaseInvoiceImage?: string // Alias
   paymentScreenshot?: string // Attached online transaction screenshot (Base64)
+  isReturnOrDefect?: boolean // Flagged as Return / Defect shipment
+  defectNote?: string
+  referenceNumber?: string // Optional vendor invoice / challan #
   notes?: string
   createdAt?: string
 }
@@ -498,9 +506,30 @@ export interface AppDatabase {
   employees: EmployeeItem[]
   phonebookCategories?: PhonebookCategoryItem[]
   phonebookContacts?: PhonebookContactItem[]
+  purchaseCategories?: PurchaseCategoryItem[]
   lastBackupDate?: string
   version: number
 }
+
+export interface PurchaseCategoryItem {
+  id: string
+  name: string
+  description?: string
+  color?: string
+  isCustom?: boolean
+  createdAt?: string
+}
+
+export const defaultPurchaseCategories: PurchaseCategoryItem[] = [
+  { id: 'pcat-1', name: 'Raw Material', description: 'Grains, sugar, fruit pulp, preforms, chemicals', color: 'emerald' },
+  { id: 'pcat-2', name: 'Packaging', description: 'Cartons, wrappers, labels, caps, shrink films', color: 'blue' },
+  { id: 'pcat-3', name: 'Equipment & Machinery', description: 'Production lines, motors, pumps, tooling', color: 'purple' },
+  { id: 'pcat-4', name: 'Chemicals & Flavors', description: 'Food grade flavors, food color, citric acid, sanitizers', color: 'amber' },
+  { id: 'pcat-5', name: 'Maintenance & Spares', description: 'Bearings, belts, electrical spares, filters', color: 'teal' },
+  { id: 'pcat-6', name: 'Transport & Logistics', description: 'Freight, vehicle maintenance, delivery fuel', color: 'orange' },
+  { id: 'pcat-7', name: 'Office & Factory Supplies', description: 'Stationery, cleaning items, uniforms, safety gear', color: 'stone' },
+  { id: 'pcat-8', name: 'Finished Product', description: 'Outsourced trade goods and third-party stock', color: 'indigo' },
+]
 
 export const defaultProductCategories: CategoryItem[] = [
   { id: 'cat-1', name: 'Mineral Water', description: 'Purified mineral water in bottles & gallons', createdAt: '2026-08-01' },
@@ -539,6 +568,7 @@ export const initialDatabase: AppDatabase = {
   lastBackupDate: '2026-08-21T10:00:00.000Z',
   categories: defaultProductCategories,
   customerCategories: defaultCustomerCategories,
+  purchaseCategories: defaultPurchaseCategories,
   accounts: [
     { id: 'cash-in-hand', name: 'Cash in Hand (Factory Register)', type: 'Cash', balance: 345200, updatedAt: '2026-08-25' },
     { id: 'meezan-bank', name: 'Meezan Bank Ltd (A/C: 010203040510)', type: 'Bank', accountNumber: '010203040510', balance: 1680450, updatedAt: '2026-08-25' },
@@ -2937,11 +2967,25 @@ export function loadDatabase(): AppDatabase {
           copy.paymentMethod = 'Bank Transfer'
           mod = true
         }
+        if (!copy.category) {
+          if (copy.purchaseType === 'Finished Product') copy.category = 'Finished Product'
+          else if (copy.items && copy.items.some(i => (i.name || '').toLowerCase().includes('carton') || (i.name || '').toLowerCase().includes('label') || (i.name || '').toLowerCase().includes('preform'))) {
+            copy.category = 'Packaging'
+          } else {
+            copy.category = 'Raw Material'
+          }
+          mod = true
+        }
         if (mod) updated = true
         return copy
       })
     } else {
       parsed.purchases = initialDatabase.purchases || []
+      updated = true
+    }
+
+    if (!parsed.purchaseCategories || !Array.isArray(parsed.purchaseCategories) || parsed.purchaseCategories.length === 0) {
+      parsed.purchaseCategories = defaultPurchaseCategories
       updated = true
     }
 

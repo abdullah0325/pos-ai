@@ -14,22 +14,32 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   Clock,
   Calendar,
   Filter,
   Image as ImageIcon,
   Printer,
   ChevronDown,
-  ArrowUpDown,
-  Boxes,
-  Package,
+  ChevronUp,
   Layers,
   CreditCard,
   Building2,
   Phone,
-  Maximize2,
-  RefreshCw,
   Sparkles,
+  RotateCcw,
+  Check,
+  Tag,
+  Package,
+  Boxes,
+  HelpCircle,
+  BarChart3,
+  PieChart,
+  ArrowUpRight,
+  ArrowDownRight,
+  TrendingUp,
+  ExternalLink,
+  BookOpen,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -38,460 +48,735 @@ import {
   type PurchaseItem,
   type PurchaseLineItem,
   type PurchaseType,
+  type PurchaseCategoryItem,
   type RawMaterialItem,
   type ProductItem,
   type SupplierItem,
-  type AccountItem,
+  type ExpenseItem,
+  type LedgerEntry,
+  defaultPurchaseCategories,
 } from '@/lib/db'
 import { exportToCSV, generatePurchaseVoucherPDF } from '@/lib/pdf-export'
 
 interface PurchasesViewProps {
   db: AppDatabase
   onSaveDatabase: (updated: AppDatabase) => void
-  onNavigateToSupplier?: (supplierId?: string) => void
+  onNavigate?: (module: string, subTab?: string) => void
+}
+
+// Category color mappings and icons
+const getCategoryStyle = (categoryName?: string) => {
+  const cat = (categoryName || '').toLowerCase()
+  if (cat.includes('raw') || cat.includes('ingredient')) {
+    return { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', icon: Boxes }
+  }
+  if (cat.includes('packag') || cat.includes('carton') || cat.includes('label')) {
+    return { bg: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500', icon: Package }
+  }
+  if (cat.includes('equip') || cat.includes('machin')) {
+    return { bg: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500', icon: Layers }
+  }
+  if (cat.includes('chem') || cat.includes('flavor')) {
+    return { bg: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', icon: Sparkles }
+  }
+  if (cat.includes('maint') || cat.includes('spare')) {
+    return { bg: 'bg-teal-50 text-teal-700 border-teal-200', dot: 'bg-teal-500', icon: RotateCcw }
+  }
+  if (cat.includes('transp') || cat.includes('logist')) {
+    return { bg: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500', icon: Truck }
+  }
+  if (cat.includes('finish') || cat.includes('product')) {
+    return { bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500', icon: Package }
+  }
+  return { bg: 'bg-stone-100 text-stone-700 border-stone-200', dot: 'bg-stone-500', icon: Tag }
 }
 
 export default function PurchasesView({
   db,
   onSaveDatabase,
-  onNavigateToSupplier,
+  onNavigate,
 }: PurchasesViewProps) {
-  // State
+  // --- STATE ---
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterType, setFilterType] = useState<'all' | 'Raw Material' | 'Finished Product'>('all')
-  const [filterSupplier, setFilterSupplier] = useState<string>('all')
   const [filterCategory, setFilterCategory] = useState<string>('all')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'Paid' | 'Partial' | 'Unpaid'>('all')
-  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'custom'>('all')
+  const [filterSupplier, setFilterSupplier] = useState<string>('all')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'Paid' | 'Partial' | 'Pending' | 'Overdue'>('all')
+  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'this_quarter' | 'this_year' | 'custom'>('all')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
-  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc')
+  const [filterReturnOrDefect, setFilterReturnOrDefect] = useState<boolean | null>(null) // null = all, true = returns only
+
+  // Section collapse state for compact analytics
+  const [showAnalytics, setShowAnalytics] = useState(true)
 
   // Modals
   const [isCreatingPurchase, setIsCreatingPurchase] = useState(false)
   const [editingPurchase, setEditingPurchase] = useState<PurchaseItem | null>(null)
   const [viewingPurchase, setViewingPurchase] = useState<PurchaseItem | null>(null)
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null)
 
-  // Current Month String (e.g. "2026-08")
-  const currentMonthStr = useMemo(() => new Date().toISOString().slice(0, 7), [])
+  // Quick Inline New Supplier Drawer/Modal inside Purchase Form
+  const [isAddingNewSupplierInline, setIsAddingNewSupplierInline] = useState(false)
+  const [newSupplierForm, setNewSupplierForm] = useState({
+    name: '',
+    phone: '',
+    city: 'Lahore',
+    category: 'Raw Material',
+    openingBalance: 0,
+  })
+
+  // Inline New Category creation inside Purchase Form
+  const [isAddingNewCategoryInline, setIsAddingNewCategoryInline] = useState(false)
+  const [inlineCategoryName, setInlineCategoryName] = useState('')
+
+  // Dates
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const currentMonthStr = useMemo(() => new Date().toISOString().slice(0, 7), [])
+  const lastMonthStr = useMemo(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() - 1)
+    return d.toISOString().slice(0, 7)
+  }, [])
 
-  // Categories list across raw materials and products
-  const allCategories = useMemo(() => {
-    const rawCats = Array.from(new Set(db.rawMaterials.map((r) => r.category).filter(Boolean)))
-    const prodCats = Array.from(new Set(db.products.map((p) => p.category).filter(Boolean)))
-    return Array.from(new Set([...rawCats, ...prodCats]))
-  }, [db.rawMaterials, db.products])
+  // Categories list
+  const purchaseCategories = useMemo(() => {
+    return db.purchaseCategories && db.purchaseCategories.length > 0
+      ? db.purchaseCategories
+      : defaultPurchaseCategories
+  }, [db.purchaseCategories])
 
-  // Key KPI Calculations
-  const stats = useMemo(() => {
-    const thisMonthPurchases = db.purchases.filter((p) => (p.date || '').startsWith(currentMonthStr))
-    const totalThisMonth = thisMonthPurchases.reduce((sum, p) => sum + (p.grandTotal || 0), 0)
-    const countThisMonth = thisMonthPurchases.length
+  // --- KPI CALCULATIONS ---
+  const kpis = useMemo(() => {
+    const all = db.purchases || []
+    const thisMonth = all.filter((p) => (p.date || '').startsWith(currentMonthStr))
+    const lastMonth = all.filter((p) => (p.date || '').startsWith(lastMonthStr))
 
-    const totalPayableDue = db.purchases.reduce((sum, p) => sum + (p.balanceDue || 0), 0)
-    const pendingCount = db.purchases.filter((p) => p.balanceDue > 0).length
+    const totalThisMonth = thisMonth.reduce((sum, p) => sum + (p.grandTotal || 0), 0)
+    const totalLastMonth = lastMonth.reduce((sum, p) => sum + (p.grandTotal || 0), 0)
 
-    const rawPurchases = db.purchases.filter((p) => (p.purchaseType || 'Raw Material') === 'Raw Material')
-    const rawTotal = rawPurchases.reduce((sum, p) => sum + (p.grandTotal || 0), 0)
+    const thisMonthCount = thisMonth.length
+    const monthTrendPct = totalLastMonth > 0
+      ? Math.round(((totalThisMonth - totalLastMonth) / totalLastMonth) * 100)
+      : totalThisMonth > 0 ? 100 : 0
 
-    const finishedPurchases = db.purchases.filter((p) => p.purchaseType === 'Finished Product')
-    const finishedTotal = finishedPurchases.reduce((sum, p) => sum + (p.grandTotal || 0), 0)
+    const totalPaidAll = all.reduce((sum, p) => sum + (p.amountPaid || 0), 0)
+    const totalGrandAll = all.reduce((sum, p) => sum + (p.grandTotal || 0), 0)
+    const paidPct = totalGrandAll > 0 ? Math.round((totalPaidAll / totalGrandAll) * 100) : 100
+
+    const pendingPurchases = all.filter((p) => (p.balanceDue || 0) > 0)
+    const totalPendingPayables = pendingPurchases.reduce((sum, p) => sum + (p.balanceDue || 0), 0)
+
+    // Overdue purchases: balanceDue > 0 AND dueDate < today
+    const overduePurchases = all.filter((p) => {
+      if ((p.balanceDue || 0) <= 0) return false
+      if (!p.dueDate) return false
+      return p.dueDate < todayStr
+    })
+    const totalOverdue = overduePurchases.reduce((sum, p) => sum + (p.balanceDue || 0), 0)
 
     return {
       totalThisMonth,
-      countThisMonth,
-      totalPayableDue,
-      pendingCount,
-      rawTotal,
-      rawCount: rawPurchases.length,
-      finishedTotal,
-      finishedCount: finishedPurchases.length,
-      totalAllTime: db.purchases.reduce((sum, p) => sum + (p.grandTotal || 0), 0),
-      totalCount: db.purchases.length,
+      thisMonthCount,
+      monthTrendPct,
+      totalPaidAll,
+      paidPct,
+      totalPendingPayables,
+      pendingCount: pendingPurchases.length,
+      totalOverdue,
+      overdueCount: overduePurchases.length,
+      totalCount: all.length,
     }
-  }, [db.purchases, currentMonthStr])
+  }, [db.purchases, currentMonthStr, lastMonthStr, todayStr])
 
-  // Filtered & Sorted Purchases List
+  // --- FILTERING & SORTING PURCHASES ---
   const filteredPurchases = useMemo(() => {
-    return db.purchases
-      .filter((p) => {
-        // Safe accessors
-        const poNumber = (p.poNumber || p.purchaseNumber || '').toLowerCase()
-        const supplierName = (p.supplierName || '').toLowerCase()
-        const notes = (p.notes || '').toLowerCase()
-        const type = p.purchaseType || 'Raw Material'
-        const status = p.status || 'Paid'
-        const date = p.date || ''
-
-        // Search text matching
-        const itemsText = (p.items || []).map((it) => `${it.name} ${it.category || ''}`).join(' ').toLowerCase()
+    return (db.purchases || []).filter((p) => {
+      // 1. Search Query
+      if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim()
-        if (q) {
-          const matches =
-            poNumber.includes(q) ||
-            supplierName.includes(q) ||
-            notes.includes(q) ||
-            itemsText.includes(q)
-          if (!matches) return false
+        const matchPo = (p.poNumber || p.purchaseNumber || '').toLowerCase().includes(q)
+        const matchSupplier = (p.supplierName || '').toLowerCase().includes(q)
+        const matchNotes = (p.notes || '').toLowerCase().includes(q)
+        const matchRef = (p.referenceNumber || p.transactionRef || '').toLowerCase().includes(q)
+        const matchItems = (p.items || []).some((item) => (item.name || '').toLowerCase().includes(q))
+        if (!matchPo && !matchSupplier && !matchNotes && !matchRef && !matchItems) return false
+      }
+
+      // 2. Category Filter
+      if (filterCategory !== 'all') {
+        const pCat = (p.category || (p.purchaseType === 'Finished Product' ? 'Finished Product' : 'Raw Material')).toLowerCase()
+        if (filterCategory === 'Custom') {
+          if (!p.isCustomCategory && !pCat.includes('custom')) return false
+        } else {
+          if (!pCat.includes(filterCategory.toLowerCase())) return false
         }
+      }
 
-        // Filter: Type
-        if (filterType !== 'all' && type !== filterType) return false
+      // 3. Supplier Filter
+      if (filterSupplier !== 'all') {
+        if (p.supplierId !== filterSupplier && p.supplierName !== filterSupplier) return false
+      }
 
-        // Filter: Supplier
-        if (filterSupplier !== 'all' && p.supplierId !== filterSupplier && p.supplierName !== filterSupplier) return false
-
-        // Filter: Category
-        if (filterCategory !== 'all') {
-          const hasCat = (p.items || []).some((it) => it.category === filterCategory)
-          if (!hasCat) return false
+      // 4. Payment Status Filter
+      if (filterStatus !== 'all') {
+        const isOverdue = (p.balanceDue || 0) > 0 && !!p.dueDate && p.dueDate < todayStr
+        if (filterStatus === 'Overdue') {
+          if (!isOverdue) return false
+        } else if (filterStatus === 'Paid') {
+          if (p.status !== 'Paid' && (p.balanceDue || 0) > 0) return false
+        } else if (filterStatus === 'Partial') {
+          if (p.status !== 'Partial' || (p.balanceDue || 0) === 0) return false
+        } else if (filterStatus === 'Pending') {
+          if ((p.balanceDue || 0) === 0) return false
         }
+      }
 
-        // Filter: Status
-        if (filterStatus !== 'all' && status !== filterStatus) return false
-
-        // Filter: Date Range
+      // 5. Date Range Filter
+      if (filterDateRange !== 'all') {
+        const pDate = p.date || ''
         if (filterDateRange === 'today') {
-          if (date !== todayStr) return false
-        } else if (filterDateRange === 'this_month') {
-          if (!date.startsWith(currentMonthStr)) return false
+          if (pDate !== todayStr) return false
         } else if (filterDateRange === 'this_week') {
-          const pDate = new Date(date)
           const now = new Date()
-          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          if (pDate < weekAgo) return false
+          const dayOfWeek = now.getDay() || 7
+          const monday = new Date(now)
+          monday.setDate(now.getDate() - dayOfWeek + 1)
+          const mondayStr = monday.toISOString().slice(0, 10)
+          if (pDate < mondayStr || pDate > todayStr) return false
+        } else if (filterDateRange === 'this_month') {
+          if (!pDate.startsWith(currentMonthStr)) return false
+        } else if (filterDateRange === 'this_quarter') {
+          const m = new Date().getMonth()
+          const qStartMonth = Math.floor(m / 3) * 3 + 1
+          const qStartStr = `${new Date().getFullYear()}-${String(qStartMonth).padStart(2, '0')}-01`
+          if (pDate < qStartStr) return false
+        } else if (filterDateRange === 'this_year') {
+          const yStr = `${new Date().getFullYear()}`
+          if (!pDate.startsWith(yStr)) return false
         } else if (filterDateRange === 'custom') {
-          if (customStartDate && date < customStartDate) return false
-          if (customEndDate && date > customEndDate) return false
+          if (customStartDate && pDate < customStartDate) return false
+          if (customEndDate && pDate > customEndDate) return false
         }
+      }
 
-        return true
-      })
-      .sort((a, b) => {
-        if (sortBy === 'date-desc') return (b.date || '').localeCompare(a.date || '') || (b.createdAt || '').localeCompare(a.createdAt || '')
-        if (sortBy === 'date-asc') return (a.date || '').localeCompare(b.date || '')
-        if (sortBy === 'amount-desc') return (b.grandTotal || 0) - (a.grandTotal || 0)
-        if (sortBy === 'amount-asc') return (a.grandTotal || 0) - (b.grandTotal || 0)
-        return 0
-      })
+      // 6. Returns & Defects Filter Chip
+      if (filterReturnOrDefect !== null) {
+        if (filterReturnOrDefect === true && !p.isReturnOrDefect) return false
+      }
+
+      return true
+    }).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.poNumber || '').localeCompare(a.poNumber || ''))
   }, [
     db.purchases,
     searchQuery,
-    filterType,
-    filterSupplier,
     filterCategory,
+    filterSupplier,
     filterStatus,
     filterDateRange,
     customStartDate,
     customEndDate,
-    sortBy,
+    filterReturnOrDefect,
     todayStr,
     currentMonthStr,
   ])
 
-  // Handle Delete Purchase
-  const handleDeletePurchase = (purchase: PurchaseItem) => {
-    const poNum = purchase.poNumber || purchase.purchaseNumber || 'this PO'
-    if (!window.confirm(`Are you sure you want to delete purchase order ${poNum}? This will reverse the stock addition and supplier balances.`)) {
-      return
-    }
+  // --- ANALYTICS BREAKDOWNS (Respecting active filters) ---
+  const analyticsData = useMemo(() => {
+    const list = filteredPurchases
 
-    // 1. Reverse Stock addition
-    let updatedRawMaterials = [...db.rawMaterials]
-    let updatedProducts = [...db.products]
-
-    const pType = purchase.purchaseType || 'Raw Material'
-    const items = purchase.items || []
-
-    items.forEach((item) => {
-      const targetId = item.itemId || item.rawMaterialId || item.productId
-      const qty = item.quantity || 0
-
-      if (pType === 'Raw Material' || item.itemType === 'Raw Material') {
-        updatedRawMaterials = updatedRawMaterials.map((r) => {
-          if (r.id === targetId || r.name.toLowerCase() === item.name.toLowerCase()) {
-            const newQty = Math.max(0, r.quantity - qty)
-            const newRec = Math.max(0, (r.totalReceived || r.quantity) - qty)
-            return {
-              ...r,
-              quantity: newQty,
-              totalReceived: newRec,
-              status: (newQty === 0 ? 'Out of stock' : newQty <= r.reorderLevel ? 'Low stock' : 'In stock') as any,
-              updatedAt: new Date().toISOString().slice(0, 10),
-            }
-          }
-          return r
-        })
-      } else {
-        updatedProducts = updatedProducts.map((p) => {
-          if (p.id === targetId || p.name.toLowerCase() === item.name.toLowerCase()) {
-            const newQty = Math.max(0, p.quantity - qty)
-            return {
-              ...p,
-              quantity: newQty,
-              status: (newQty === 0 ? 'Out of stock' : newQty <= p.reorderLevel ? 'Low stock' : 'In stock') as any,
-              updatedAt: new Date().toISOString().slice(0, 10),
-            }
-          }
-          return p
-        })
-      }
+    // 1. Spend by Category
+    const catMap: Record<string, number> = {}
+    list.forEach((p) => {
+      const c = p.category || (p.purchaseType === 'Finished Product' ? 'Finished Product' : 'Raw Material')
+      catMap[c] = (catMap[c] || 0) + (p.grandTotal || 0)
     })
+    const totalSpend = Object.values(catMap).reduce((a, b) => a + b, 0)
+    const categorySpendList = Object.entries(catMap)
+      .map(([name, amount]) => ({
+        name,
+        amount,
+        pct: totalSpend > 0 ? Math.round((amount / totalSpend) * 100) : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount)
 
-    // 2. Reverse Supplier balance if due balance existed
-    let updatedSuppliers = [...db.suppliers]
-    if (purchase.supplierId && purchase.balanceDue > 0) {
-      updatedSuppliers = updatedSuppliers.map((s) => {
-        if (s.id === purchase.supplierId) {
-          return {
-            ...s,
-            currentBalance: Math.max(0, s.currentBalance - purchase.balanceDue),
-            updatedAt: new Date().toISOString().slice(0, 10),
-          }
-        }
-        return s
+    // 2. Trend (Last 6 Months)
+    const months: Array<{ key: string; label: string; amount: number }> = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date()
+      d.setMonth(d.getMonth() - i)
+      const key = d.toISOString().slice(0, 7)
+      const label = d.toLocaleDateString('en-GB', { month: 'short' })
+      const amount = (db.purchases || [])
+        .filter((p) => (p.date || '').startsWith(key))
+        .reduce((sum, p) => sum + (p.grandTotal || 0), 0)
+      months.push({ key, label, amount })
+    }
+    const maxTrendAmount = Math.max(...months.map((m) => m.amount), 1)
+
+    // 3. Payment Status Breakdown
+    const paidAmount = list.reduce((sum, p) => sum + (p.amountPaid || 0), 0)
+    const pendingAmount = list
+      .filter((p) => {
+        const isOverdue = (p.balanceDue || 0) > 0 && !!p.dueDate && p.dueDate < todayStr
+        return (p.balanceDue || 0) > 0 && !isOverdue
       })
+      .reduce((sum, p) => sum + (p.balanceDue || 0), 0)
+    const overdueAmount = list
+      .filter((p) => (p.balanceDue || 0) > 0 && !!p.dueDate && p.dueDate < todayStr)
+      .reduce((sum, p) => sum + (p.balanceDue || 0), 0)
+    const totalStatusAmount = paidAmount + pendingAmount + overdueAmount
+
+    return {
+      totalSpend,
+      categorySpendList,
+      months,
+      maxTrendAmount,
+      paidAmount,
+      pendingAmount,
+      overdueAmount,
+      paidPct: totalStatusAmount > 0 ? Math.round((paidAmount / totalStatusAmount) * 100) : 100,
+      pendingPct: totalStatusAmount > 0 ? Math.round((pendingAmount / totalStatusAmount) * 100) : 0,
+      overduePct: totalStatusAmount > 0 ? Math.round((overdueAmount / totalStatusAmount) * 100) : 0,
     }
+  }, [filteredPurchases, db.purchases, todayStr])
 
-    // 3. Reverse Cash/Bank account payment if paid
-    let updatedAccounts = [...db.accounts]
-    if (purchase.amountPaid > 0 && purchase.paymentAccount) {
-      updatedAccounts = updatedAccounts.map((acc) => {
-        if (acc.id === purchase.paymentAccount) {
-          return {
-            ...acc,
-            balance: acc.balance + purchase.amountPaid,
-            updatedAt: new Date().toISOString().slice(0, 10),
-          }
-        }
-        return acc
-      })
-    }
-
-    // 4. Remove Purchase and associated Ledger entries
-    const updatedPurchases = db.purchases.filter((p) => p.id !== purchase.id)
-    const updatedLedgers = db.ledgers.filter((l) => l.referenceId !== (purchase.poNumber || purchase.purchaseNumber))
-
-    onSaveDatabase({
-      ...db,
-      purchases: updatedPurchases,
-      rawMaterials: updatedRawMaterials,
-      products: updatedProducts,
-      suppliers: updatedSuppliers,
-      accounts: updatedAccounts,
-      ledgers: updatedLedgers,
-    })
-
-    if (viewingPurchase?.id === purchase.id) {
-      setViewingPurchase(null)
-    }
-  }
-
-  // Export to CSV
-  const handleExportCSV = () => {
+  // --- ACTIONS ---
+  const handleExportPurchasesCSV = () => {
     const headers = [
-      'PO Number',
+      'PO #',
       'Date',
-      'Purchase Type',
       'Supplier',
-      'Item Purchased',
-      'Quantity',
-      'Unit',
-      'Unit Price (Rs)',
-      'Other Cost (Rs)',
+      'Category',
+      'Items Summary',
       'Grand Total (Rs)',
       'Amount Paid (Rs)',
       'Balance Due (Rs)',
       'Payment Status',
+      'Due Date',
       'Payment Method',
+      'Account',
+      'Reference #',
       'Notes',
     ]
+    const rows = filteredPurchases.map((p) => [
+      p.poNumber || p.id,
+      p.date,
+      p.supplierName,
+      p.category || p.purchaseType || 'Raw Material',
+      (p.items || []).map((i) => `${i.name} (${i.quantity} ${i.unit})`).join('; '),
+      p.grandTotal,
+      p.amountPaid,
+      p.balanceDue,
+      p.status,
+      p.dueDate || '—',
+      p.paymentMethod,
+      p.paymentAccount || 'cash-in-hand',
+      p.referenceNumber || p.transactionRef || '—',
+      p.notes || '—',
+    ])
+    exportToCSV(`Purchases_Register_${todayStr}`, headers, rows)
+  }
 
-    const rows = filteredPurchases.map((p) => {
-      const itemsStr = (p.items || []).map((it) => it.name).join('; ')
-      const qtyStr = (p.items || []).map((it) => `${it.quantity} ${it.unit}`).join('; ')
-      const unitPriceStr = (p.items || []).map((it) => it.unitPrice).join('; ')
-      const otherCostStr = (p.items || []).map((it) => it.otherCost || 0).reduce((a, b) => a + b, 0) || p.otherCost || 0
+  const handleDeletePurchase = (purchaseId: string) => {
+    if (!confirm('Are you sure you want to delete this purchase order? Associated inventory and ledger balances will be retained.')) {
+      return
+    }
+    const updatedPurchases = db.purchases.filter((p) => p.id !== purchaseId)
+    // Remove linked auto-expense if exists
+    const updatedExpenses = db.expenses.filter((e) => e.expenseNumber !== `EXP-${purchaseId}`)
+    const updatedDb: AppDatabase = {
+      ...db,
+      purchases: updatedPurchases,
+      expenses: updatedExpenses,
+    }
+    onSaveDatabase(updatedDb)
+  }
 
-      return [
-        p.poNumber || p.purchaseNumber || '',
-        formatDate(p.date),
-        p.purchaseType || 'Raw Material',
-        p.supplierName,
-        itemsStr,
-        qtyStr,
-        p.unit || (p.items?.[0]?.unit || 'kg'),
-        unitPriceStr,
-        otherCostStr,
-        p.grandTotal,
-        p.amountPaid,
-        p.balanceDue,
-        p.status,
-        p.paymentMethod,
-        p.notes || '',
-      ]
-    })
+  // --- CATEGORY MANAGEMENT STATE & ACTIONS ---
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatColor, setNewCatColor] = useState('emerald')
+  const [newCatDesc, setNewCatDesc] = useState('')
+  const [editingCatId, setEditingCatId] = useState<string | null>(null)
+  const [editingCatName, setEditingCatName] = useState('')
 
-    exportToCSV(`Purchases_Register_${new Date().toISOString().slice(0, 10)}`, headers, rows)
+  const handleAddCategory = () => {
+    if (!newCatName.trim()) return
+    const newCat: PurchaseCategoryItem = {
+      id: `pcat-${Date.now()}`,
+      name: newCatName.trim(),
+      description: newCatDesc.trim() || undefined,
+      color: newCatColor,
+      isCustom: true,
+      createdAt: todayStr,
+    }
+    const updatedCategories = [...purchaseCategories, newCat]
+    const updatedDb: AppDatabase = {
+      ...db,
+      purchaseCategories: updatedCategories,
+    }
+    onSaveDatabase(updatedDb)
+    setNewCatName('')
+    setNewCatDesc('')
+  }
+
+  const handleRenameCategory = (catId: string, currentName: string) => {
+    if (!editingCatName.trim() || editingCatName.trim() === currentName) {
+      setEditingCatId(null)
+      return
+    }
+    const newName = editingCatName.trim()
+    const updatedCategories = purchaseCategories.map((c) => (c.id === catId ? { ...c, name: newName } : c))
+    // Update all existing purchase records with old category name
+    const updatedPurchases = db.purchases.map((p) => (p.category === currentName ? { ...p, category: newName } : p))
+    const updatedDb: AppDatabase = {
+      ...db,
+      purchaseCategories: updatedCategories,
+      purchases: updatedPurchases,
+    }
+    onSaveDatabase(updatedDb)
+    setEditingCatId(null)
+    setEditingCatName('')
+  }
+
+  const handleDeleteCategory = (catId: string, catName: string) => {
+    if (!confirm(`Delete category "${catName}"? Existing purchases will be marked as Raw Material.`)) return
+    const updatedCategories = purchaseCategories.filter((c) => c.id !== catId)
+    const updatedPurchases = db.purchases.map((p) => (p.category === catName ? { ...p, category: 'Raw Material' } : p))
+    const updatedDb: AppDatabase = {
+      ...db,
+      purchaseCategories: updatedCategories,
+      purchases: updatedPurchases,
+    }
+    onSaveDatabase(updatedDb)
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Title and Primary Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase bg-emerald-100 text-emerald-800 rounded-md">
-              Inward Procurement & Stock In
-            </span>
-            <span className="text-xs text-stone-500 font-medium">· Local Offline SQLite (OPFS)</span>
+    <div className="space-y-6 pb-12" id="purchases-module-root">
+      {/* 1. SIMPLIFIED HEADER (Clean & Minimal: Page Title + New Purchase CTA) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+            <Truck className="w-5 h-5" />
           </div>
-          <h1 className="text-2xl font-black text-stone-900 mt-1 flex items-center gap-2.5">
-            <Truck className="w-7 h-7 text-emerald-600" />
-            Purchase Management
-          </h1>
-          <p className="text-xs text-stone-600 mt-0.5 max-w-2xl">
-            Record raw material & outsourced finished product purchases, attach invoice bills, track supplier payable balances, and automatically synchronize inventory stock levels.
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Purchases</h1>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200">
+                {filteredPurchases.length} of {db.purchases?.length || 0} Orders
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 mt-0.5">Procurement, supplier billing & automatic inventory sync</p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Action Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-300 transition-all cursor-pointer shadow-2xs"
-            title="Export filtered purchases to CSV spreadsheet"
+            onClick={() => setShowAnalytics(!showAnalytics)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors shadow-sm"
+            title="Toggle Analytics & Breakdown Charts"
           >
-            <Download className="w-4 h-4 text-stone-600" />
+            <BarChart3 className="w-3.5 h-3.5 text-stone-500" />
+            <span>{showAnalytics ? 'Hide Trends' : 'View Trends'}</span>
+            {showAnalytics ? <ChevronUp className="w-3 h-3 text-stone-400" /> : <ChevronDown className="w-3 h-3 text-stone-400" />}
+          </button>
+
+          <button
+            onClick={() => setIsManagingCategories(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors shadow-sm"
+            id="btn-manage-categories"
+          >
+            <Layers className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Manage Categories</span>
+          </button>
+
+          <button
+            onClick={handleExportPurchasesCSV}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors shadow-sm"
+            title="Export filtered records as CSV/Excel spreadsheet"
+          >
+            <Download className="w-3.5 h-3.5 text-stone-500" />
             <span>Export CSV</span>
           </button>
+
           <button
             onClick={() => {
               setEditingPurchase(null)
               setIsCreatingPurchase(true)
             }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-98 transition-all cursor-pointer shadow-xs"
-            id="btn-add-new-purchase"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all transform active:scale-95"
+            id="btn-new-purchase"
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>New Purchase Order</span>
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>New Purchase</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Month Purchases */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-bold text-stone-500">
-            <span>Purchases This Month (MTD)</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Calendar className="w-4 h-4" />
+      {/* 2. VISUAL STAT CARDS (3-4 Key Metrics Max with bold icons & trend indicators) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="purchase-kpi-cards">
+        {/* Metric 1: Total Purchases This Month */}
+        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">This Month's Purchases</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <Truck className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2">
-            <div className="text-2xl font-black text-stone-900">{formatPKR(stats.totalThisMonth)}</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-emerald-700">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>{stats.countThisMonth} purchase orders this month</span>
-            </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-stone-900">{formatPKR(kpis.totalThisMonth)}</span>
           </div>
-        </div>
-
-        {/* Card 2: Pending Payables */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-bold text-stone-500">
-            <span>Pending Supplier Payables</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-              <AlertCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-black text-amber-700">{formatPKR(stats.totalPayableDue)}</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-amber-800">
-              <span>{stats.pendingCount} POs awaiting balance settlement</span>
-            </div>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-stone-500">{kpis.thisMonthCount} order{kpis.thisMonthCount !== 1 ? 's' : ''} logged</span>
+            <span
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded font-medium ${
+                kpis.monthTrendPct >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-600'
+              }`}
+            >
+              {kpis.monthTrendPct >= 0 ? <TrendingUp className="w-3 h-3" /> : null}
+              {kpis.monthTrendPct >= 0 ? `+${kpis.monthTrendPct}%` : `${kpis.monthTrendPct}%`} vs last mo
+            </span>
           </div>
         </div>
 
-        {/* Card 3: Raw Materials Sourced */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-bold text-stone-500">
-            <span>Raw Materials Sourced</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
-              <Boxes className="w-4 h-4" />
+        {/* Metric 2: Total Paid */}
+        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">Total Paid Out</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+              <CheckCircle className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2">
-            <div className="text-2xl font-black text-stone-900">{formatPKR(stats.rawTotal)}</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-blue-700">
-              <span>{stats.rawCount} raw material shipments</span>
-            </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-blue-900">{formatPKR(kpis.totalPaidAll)}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-stone-500">{kpis.paidPct}% settlement rate</span>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-blue-50 text-blue-700">
+              Synced to Cash & Bank
+            </span>
           </div>
         </div>
 
-        {/* Card 4: Finished Goods Sourced */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-bold text-stone-500">
-            <span>Finished Goods Sourced</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center">
-              <Package className="w-4 h-4" />
+        {/* Metric 3: Pending Payables */}
+        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">Pending Payables</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2">
-            <div className="text-2xl font-black text-stone-900">{formatPKR(stats.finishedTotal)}</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-purple-700">
-              <span>{stats.finishedCount} finished cartons / batches</span>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-amber-900">{formatPKR(kpis.totalPendingPayables)}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-stone-500">{kpis.pendingCount} unpaid / partial POs</span>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-800">
+              Supplier Credit
+            </span>
+          </div>
+        </div>
+
+        {/* Metric 4: Overdue Payments */}
+        <div
+          className={`bg-white rounded-xl border p-4 shadow-sm relative overflow-hidden ${
+            kpis.totalOverdue > 0 ? 'border-rose-300 bg-rose-50/20' : 'border-stone-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-rose-700 uppercase tracking-wider">Overdue Payments</span>
+            <div
+              className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                kpis.totalOverdue > 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-stone-100 text-stone-500'
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4" />
             </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className={`text-2xl font-bold ${kpis.totalOverdue > 0 ? 'text-rose-700' : 'text-stone-700'}`}>
+              {formatPKR(kpis.totalOverdue)}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className={kpis.totalOverdue > 0 ? 'text-rose-600 font-medium' : 'text-stone-500'}>
+              {kpis.overdueCount} bill{kpis.overdueCount !== 1 ? 's' : ''} past due date
+            </span>
+            {kpis.totalOverdue > 0 ? (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded font-bold bg-rose-100 text-rose-800 text-[10px]">
+                ACTION REQUIRED
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-emerald-50 text-emerald-700 text-[10px]">
+                All Clear
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Filters, Search & View Controls */}
-      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-3.5">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-          {/* Search Bar */}
-          <div className="md:col-span-4 relative">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+      {/* 3. COMPACT CHARTS / ANALYTICS ROW (Collapsible, Glanceable, respects active filters) */}
+      {showAnalytics && (
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 shadow-sm transition-all" id="purchase-analytics-row">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Chart 1: Spend by Category */}
+            <div className="bg-white p-3.5 rounded-lg border border-stone-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
+                  <PieChart className="w-3.5 h-3.5 text-emerald-600" />
+                  Spend by Category
+                </span>
+                <span className="text-[11px] text-stone-400 font-medium">Total: {formatPKR(analyticsData.totalSpend)}</span>
+              </div>
+
+              {analyticsData.categorySpendList.length === 0 ? (
+                <p className="text-xs text-stone-400 py-6 text-center">No purchases match active filter</p>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  {analyticsData.categorySpendList.slice(0, 4).map((c) => {
+                    const style = getCategoryStyle(c.name)
+                    return (
+                      <div key={c.name} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="font-medium text-stone-700 flex items-center gap-1.5 truncate max-w-[140px]">
+                            <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+                            {c.name}
+                          </span>
+                          <span className="text-stone-500 font-mono text-[11px]">
+                            {formatPKR(c.amount)} <span className="text-stone-400 font-sans">({c.pct}%)</span>
+                          </span>
+                        </div>
+                        <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden">
+                          <div className={`h-full ${style.dot}`} style={{ width: `${c.pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Chart 2: Procurement Trend (Last 6 Months) */}
+            <div className="bg-white p-3.5 rounded-lg border border-stone-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
+                  <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
+                  6-Month Purchase Trend
+                </span>
+                <span className="text-[11px] text-stone-400">Monthly Volume</span>
+              </div>
+              <div className="h-28 flex items-end justify-between gap-2 pt-2 px-1">
+                {analyticsData.months.map((m) => {
+                  const heightPct = Math.max(8, Math.round((m.amount / analyticsData.maxTrendAmount) * 100))
+                  const isCurrent = m.key === currentMonthStr
+                  return (
+                    <div key={m.key} className="flex-1 flex flex-col items-center gap-1 group relative">
+                      <div className="w-full bg-stone-100 rounded-t h-20 flex items-end overflow-hidden">
+                        <div
+                          className={`w-full rounded-t transition-all ${
+                            isCurrent ? 'bg-emerald-600' : 'bg-stone-400 group-hover:bg-emerald-500'
+                          }`}
+                          style={{ height: `${heightPct}%` }}
+                        />
+                      </div>
+                      <span className={`text-[10px] ${isCurrent ? 'font-bold text-emerald-700' : 'text-stone-500'}`}>
+                        {m.label}
+                      </span>
+
+                      {/* Tooltip on hover */}
+                      <div className="absolute -top-7 bg-stone-900 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                        {formatPKR(m.amount)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Chart 3: Settlement Distribution */}
+            <div className="bg-white p-3.5 rounded-lg border border-stone-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-amber-600" />
+                  Payment Status Distribution
+                </span>
+                <span className="text-[11px] text-stone-400">Settled vs Due</span>
+              </div>
+
+              {/* Segmented Horizontal Bar */}
+              <div className="w-full h-4 bg-stone-100 rounded-full overflow-hidden flex my-3">
+                <div
+                  className="bg-emerald-500 h-full transition-all"
+                  style={{ width: `${analyticsData.paidPct}%` }}
+                  title={`Paid: ${formatPKR(analyticsData.paidAmount)} (${analyticsData.paidPct}%)`}
+                />
+                <div
+                  className="bg-amber-500 h-full transition-all"
+                  style={{ width: `${analyticsData.pendingPct}%` }}
+                  title={`Pending: ${formatPKR(analyticsData.pendingAmount)} (${analyticsData.pendingPct}%)`}
+                />
+                <div
+                  className="bg-rose-500 h-full transition-all"
+                  style={{ width: `${analyticsData.overduePct}%` }}
+                  title={`Overdue: ${formatPKR(analyticsData.overdueAmount)} (${analyticsData.overduePct}%)`}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                <div className="p-1 rounded bg-emerald-50 border border-emerald-100">
+                  <span className="block text-[10px] text-emerald-800 font-medium">Paid</span>
+                  <span className="text-xs font-bold text-emerald-700">{analyticsData.paidPct}%</span>
+                  <span className="block text-[9px] text-emerald-600 truncate">{formatPKR(analyticsData.paidAmount)}</span>
+                </div>
+                <div className="p-1 rounded bg-amber-50 border border-amber-100">
+                  <span className="block text-[10px] text-amber-800 font-medium">Pending</span>
+                  <span className="text-xs font-bold text-amber-700">{analyticsData.pendingPct}%</span>
+                  <span className="block text-[9px] text-amber-600 truncate">{formatPKR(analyticsData.pendingAmount)}</span>
+                </div>
+                <div className="p-1 rounded bg-rose-50 border border-rose-100">
+                  <span className="block text-[10px] text-rose-800 font-medium">Overdue</span>
+                  <span className="text-xs font-bold text-rose-700">{analyticsData.overduePct}%</span>
+                  <span className="block text-[9px] text-rose-600 truncate">{formatPKR(analyticsData.overdueAmount)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. CLEAN SINGLE-ROW TOOLBAR FOR FILTERS */}
+      <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm space-y-3" id="purchase-filters-toolbar">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
             <input
               type="text"
+              placeholder="Search PO #, supplier name, raw material, or notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by PO #, Supplier, Item, Notes..."
-              className="w-full pl-9 pr-3.5 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-hidden transition-all text-stone-800 placeholder-stone-400 font-medium"
+              className="w-full pl-9 pr-8 py-2 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-stone-900 placeholder:text-stone-400"
+              id="input-purchase-search"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Filter: Purchase Type */}
-          <div className="md:col-span-2">
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 outline-hidden text-stone-800 font-medium cursor-pointer"
-            >
-              <option value="all">All Purchase Types</option>
-              <option value="Raw Material">Raw Material Purchases</option>
-              <option value="Finished Product">Finished Products (Outsourced)</option>
-            </select>
-          </div>
-
-          {/* Filter: Supplier */}
-          <div className="md:col-span-2">
+          {/* Supplier Dropdown */}
+          <div className="w-full sm:w-48">
             <select
               value={filterSupplier}
               onChange={(e) => setFilterSupplier(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 outline-hidden text-stone-800 font-medium cursor-pointer"
+              className="w-full py-2 px-2.5 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-700"
             >
-              <option value="all">All Suppliers / Vendors</option>
+              <option value="all">All Suppliers ({db.suppliers.length})</option>
               {db.suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -500,367 +785,457 @@ export default function PurchasesView({
             </select>
           </div>
 
-          {/* Filter: Payment Status */}
-          <div className="md:col-span-2">
+          {/* Payment Status Dropdown */}
+          <div className="w-full sm:w-36">
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 outline-hidden text-stone-800 font-medium cursor-pointer"
+              className="w-full py-2 px-2.5 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-700"
             >
-              <option value="all">All Payment Statuses</option>
-              <option value="Paid">Paid Full</option>
-              <option value="Partial">Partial / Balance Due</option>
-              <option value="Unpaid">Unpaid / Full Credit</option>
+              <option value="all">All Statuses</option>
+              <option value="Paid">Paid in Full</option>
+              <option value="Partial">Partial Paid</option>
+              <option value="Pending">Pending Due</option>
+              <option value="Overdue">Overdue Only</option>
             </select>
           </div>
 
-          {/* Filter: Date Range */}
-          <div className="md:col-span-2">
+          {/* Date Range Selector */}
+          <div className="w-full sm:w-36">
             <select
               value={filterDateRange}
               onChange={(e) => setFilterDateRange(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 outline-hidden text-stone-800 font-medium cursor-pointer"
+              className="w-full py-2 px-2.5 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-700"
             >
-              <option value="all">All Time</option>
+              <option value="all">All Dates</option>
               <option value="today">Today</option>
-              <option value="this_week">Past 7 Days</option>
-              <option value="this_month">This Month (MTD)</option>
-              <option value="custom">Custom Date Range</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="this_quarter">This Quarter</option>
+              <option value="this_year">This Year</option>
+              <option value="custom">Custom Range</option>
             </select>
           </div>
+
+          {/* Returns & Defects Filter Toggle Chip */}
+          <button
+            onClick={() => setFilterReturnOrDefect(filterReturnOrDefect === true ? null : true)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-all shrink-0 ${
+              filterReturnOrDefect === true
+                ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+            }`}
+            title="Filter orders with returns or defect reports"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Returns & Defects</span>
+            {filterReturnOrDefect === true && <Check className="w-3 h-3 ml-0.5" />}
+          </button>
         </div>
 
-        {/* Optional Custom Date Pickers & Sorting Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-stone-100 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            {filterDateRange === 'custom' && (
-              <div className="flex items-center gap-1.5 bg-stone-50 px-2.5 py-1 rounded-lg border border-stone-200">
-                <span className="text-[11px] text-stone-500 font-bold">From:</span>
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="bg-transparent border-0 text-xs text-stone-800 font-semibold outline-hidden"
-                />
-                <span className="text-[11px] text-stone-500 font-bold">To:</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="bg-transparent border-0 text-xs text-stone-800 font-semibold outline-hidden"
-                />
-              </div>
-            )}
+        {/* Category Filter Pills (Icon + Label Pills) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+          <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mr-1 shrink-0">Category:</span>
+          <button
+            onClick={() => setFilterCategory('all')}
+            className={`px-2.5 py-1 text-xs rounded-full font-medium transition-all shrink-0 ${
+              filterCategory === 'all'
+                ? 'bg-stone-900 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            All Categories
+          </button>
 
-            {/* Category Filter Pills */}
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-              <span className="text-[11px] text-stone-400 font-bold mr-1">Category:</span>
+          {purchaseCategories.map((cat) => {
+            const style = getCategoryStyle(cat.name)
+            const Icon = style.icon
+            const isSelected = filterCategory.toLowerCase() === cat.name.toLowerCase()
+            return (
               <button
-                onClick={() => setFilterCategory('all')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                  filterCategory === 'all'
-                    ? 'bg-stone-900 text-white'
-                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                key={cat.id}
+                onClick={() => setFilterCategory(isSelected ? 'all' : cat.name)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium transition-all shrink-0 border ${
+                  isSelected
+                    ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                    : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
                 }`}
               >
-                All
+                <Icon className={`w-3 h-3 ${isSelected ? 'text-white' : 'text-stone-500'}`} />
+                <span>{cat.name}</span>
               </button>
-              {allCategories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setFilterCategory(cat)}
-                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    filterCategory === cat
-                      ? 'bg-emerald-700 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
+            )
+          })}
+        </div>
 
-          {/* Sort Selector & Result Count */}
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold text-stone-500">
-              Showing <span className="text-stone-900 font-extrabold">{filteredPurchases.length}</span> of {db.purchases.length} records
-            </span>
-            <div className="flex items-center gap-1.5 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200">
-              <ArrowUpDown className="w-3.5 h-3.5 text-stone-500" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-transparent border-0 text-xs text-stone-800 font-semibold outline-hidden cursor-pointer"
+        {/* Custom Date Range Row (Shown when custom is selected) */}
+        {filterDateRange === 'custom' && (
+          <div className="flex items-center gap-2 pt-2 border-t border-stone-100">
+            <span className="text-xs text-stone-500">From:</span>
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="text-xs py-1 px-2 border border-stone-200 rounded"
+            />
+            <span className="text-xs text-stone-500">To:</span>
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="text-xs py-1 px-2 border border-stone-200 rounded"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 5. REDESIGNED RECORDS LIST (Card-Style Row Layout) */}
+      <div className="space-y-3" id="purchases-records-container">
+        {filteredPurchases.length === 0 ? (
+          <div className="bg-white rounded-xl border border-stone-200 p-12 text-center shadow-sm">
+            <div className="w-12 h-12 rounded-full bg-stone-100 text-stone-400 flex items-center justify-center mx-auto mb-3">
+              <Truck className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-semibold text-stone-800">No Purchase Records Found</h3>
+            <p className="text-xs text-stone-500 max-w-md mx-auto mt-1">
+              No purchase orders match your active search or filter criteria. Create a new purchase order or reset filters.
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <button
+                onClick={() => {
+                  setSearchQuery('')
+                  setFilterCategory('all')
+                  setFilterSupplier('all')
+                  setFilterStatus('all')
+                  setFilterDateRange('all')
+                  setFilterReturnOrDefect(null)
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
               >
-                <option value="date-desc">Newest Date First</option>
-                <option value="date-asc">Oldest Date First</option>
-                <option value="amount-desc">Highest Amount</option>
-                <option value="amount-asc">Lowest Amount</option>
-              </select>
+                Reset All Filters
+              </button>
+              <button
+                onClick={() => {
+                  setEditingPurchase(null)
+                  setIsCreatingPurchase(true)
+                }}
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+              >
+                Create New Purchase
+              </button>
             </div>
           </div>
-        </div>
-      </div>
+        ) : (
+          filteredPurchases.map((purchase) => {
+            const style = getCategoryStyle(purchase.category)
+            const CategoryIcon = style.icon
+            const isOverdue = (purchase.balanceDue || 0) > 0 && !!purchase.dueDate && purchase.dueDate < todayStr
+            const isPaid = purchase.status === 'Paid' || (purchase.balanceDue || 0) === 0
+            const isPartial = !isPaid && (purchase.amountPaid || 0) > 0
 
-      {/* Main Purchases Table Panel */}
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 font-bold tracking-wider uppercase text-[10px]">
-                <th className="py-3 px-4">PO # & Date</th>
-                <th className="py-3 px-4">Type</th>
-                <th className="py-3 px-4">Supplier / Vendor</th>
-                <th className="py-3 px-4">Purchased Item(s)</th>
-                <th className="py-3 px-4">Rate & Other Costs</th>
-                <th className="py-3 px-4 text-right">Grand Total</th>
-                <th className="py-3 px-4 text-right">Paid</th>
-                <th className="py-3 px-4 text-right">Balance Due</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-center">Docs</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {filteredPurchases.map((purchase) => {
-                const poNumber = purchase.poNumber || purchase.purchaseNumber || 'PO-' + purchase.id
-                const pType = purchase.purchaseType || 'Raw Material'
-                const isPaid = purchase.status === 'Paid'
-                const isPartial = purchase.status === 'Partial'
-
-                return (
-                  <tr
-                    key={purchase.id}
-                    className="hover:bg-stone-50/80 transition-colors group"
+            return (
+              <div
+                key={purchase.id}
+                className="bg-white rounded-xl border border-stone-200 hover:border-emerald-300 hover:shadow-md transition-all p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group"
+              >
+                {/* Left: Category Icon + PO # + Date */}
+                <div className="flex items-start gap-3 min-w-[200px]">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${style.bg}`}
+                    title={purchase.category || 'Raw Material'}
                   >
-                    {/* 1. PO Number & Date */}
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-stone-900">{poNumber}</div>
-                      <div className="text-[11px] text-stone-500 font-medium">
-                        {formatDate(purchase.date)} {purchase.time ? `· ${purchase.time}` : ''}
-                      </div>
-                    </td>
-
-                    {/* 2. Type Badge */}
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold ${
-                          pType === 'Raw Material'
-                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                            : 'bg-purple-100 text-purple-900 border border-purple-200'
-                        }`}
-                      >
-                        {pType === 'Raw Material' ? <Boxes className="w-3 h-3" /> : <Package className="w-3 h-3" />}
-                        <span>{pType}</span>
+                    <CategoryIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-stone-900">{purchase.poNumber || purchase.purchaseNumber}</span>
+                      <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border ${style.bg}`}>
+                        {purchase.category || purchase.purchaseType || 'Raw Material'}
                       </span>
-                    </td>
-
-                    {/* 3. Supplier Name */}
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-stone-900">{purchase.supplierName}</div>
-                      {purchase.supplierId && onNavigateToSupplier ? (
-                        <button
-                          onClick={() => onNavigateToSupplier(purchase.supplierId)}
-                          className="text-[10px] text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-2 cursor-pointer"
-                        >
-                          View Vendor Ledger
-                        </button>
-                      ) : (
-                        <div className="text-[10px] text-stone-400">Direct Purchase</div>
-                      )}
-                    </td>
-
-                    {/* 4. Purchased Items */}
-                    <td className="py-3.5 px-4 max-w-xs">
-                      {(purchase.items && purchase.items.length > 0) ? (
-                        <div className="space-y-1">
-                          {purchase.items.map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-xs">
-                              <span className="font-semibold text-stone-800 truncate mr-2">{item.name}</span>
-                              <span className="font-bold text-stone-900 shrink-0 bg-stone-100 px-1.5 py-0.5 rounded text-[11px]">
-                                {item.quantity} {item.unit}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-stone-400 italic">No item details</span>
-                      )}
-                    </td>
-
-                    {/* 5. Rate & Other Cost */}
-                    <td className="py-3.5 px-4 text-xs">
-                      {purchase.items?.[0] ? (
-                        <div>
-                          <div className="font-semibold text-stone-800">
-                            Rs. {purchase.items[0].unitPrice?.toLocaleString()} / {purchase.items[0].unit}
-                          </div>
-                          {(purchase.otherCost || purchase.items[0].otherCost) ? (
-                            <div className="text-[10px] text-stone-500 font-medium">
-                              + Transport/Other: {formatPKR(purchase.otherCost || purchase.items[0].otherCost || 0)}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="text-stone-400">—</span>
-                      )}
-                    </td>
-
-                    {/* 6. Grand Total */}
-                    <td className="py-3.5 px-4 text-right font-black text-stone-900 text-sm">
-                      {formatPKR(purchase.grandTotal)}
-                    </td>
-
-                    {/* 7. Amount Paid */}
-                    <td className="py-3.5 px-4 text-right font-bold text-emerald-700">
-                      {formatPKR(purchase.amountPaid)}
-                      <div className="text-[10px] text-stone-400 font-medium">{purchase.paymentMethod || 'Bank'}</div>
-                    </td>
-
-                    {/* 8. Balance Due */}
-                    <td className="py-3.5 px-4 text-right font-bold">
-                      {purchase.balanceDue > 0 ? (
-                        <span className="text-amber-700">{formatPKR(purchase.balanceDue)}</span>
-                      ) : (
-                        <span className="text-stone-400 font-normal">Rs. 0</span>
-                      )}
-                    </td>
-
-                    {/* 9. Payment Status Badge */}
-                    <td className="py-3.5 px-4 text-center">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                          isPaid
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : isPartial
-                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                            : 'bg-rose-100 text-rose-800 border border-rose-200'
-                        }`}
-                      >
-                        {isPaid ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                        <span>{purchase.status}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-stone-500 mt-1">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-stone-400" />
+                        {formatDate(purchase.date)}
                       </span>
-                    </td>
+                      {purchase.time && <span className="text-stone-400">• {purchase.time}</span>}
+                    </div>
+                  </div>
+                </div>
 
-                    {/* 10. Attached Document Indicators */}
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {purchase.invoiceImage ? (
-                          <button
-                            onClick={() =>
-                              setPreviewImage({
-                                src: purchase.invoiceImage!,
-                                title: `Supplier Invoice: ${poNumber}`,
-                              })
-                            }
-                            className="p-1 rounded-md bg-stone-100 hover:bg-emerald-50 text-stone-600 hover:text-emerald-700 transition-colors"
-                            title="View Attached Supplier Invoice Slip"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-                        ) : null}
-                        {purchase.paymentScreenshot ? (
-                          <button
-                            onClick={() =>
-                              setPreviewImage({
-                                src: purchase.paymentScreenshot!,
-                                title: `Payment Slip: ${poNumber}`,
-                              })
-                            }
-                            className="p-1 rounded-md bg-stone-100 hover:bg-blue-50 text-stone-600 hover:text-blue-700 transition-colors"
-                            title="View Attached Payment Screenshot"
-                          >
-                            <CreditCard className="w-3.5 h-3.5" />
-                          </button>
-                        ) : null}
-                        {!purchase.invoiceImage && !purchase.paymentScreenshot && (
-                          <span className="text-stone-300">—</span>
-                        )}
-                      </div>
-                    </td>
+                {/* Middle: Supplier Name, Item Chips, and Defect/Return Tags */}
+                <div className="flex-1 min-w-[220px] max-w-xl space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm text-stone-900">{purchase.supplierName}</span>
+                    {purchase.supplierPhone && (
+                      <span className="text-xs text-stone-400 flex items-center gap-1 font-mono">
+                        <Phone className="w-3 h-3" />
+                        {purchase.supplierPhone}
+                      </span>
+                    )}
+                    {purchase.isReturnOrDefect && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-rose-100 text-rose-800 border border-rose-200">
+                        <AlertCircle className="w-3 h-3" />
+                        RETURN / DEFECT
+                      </span>
+                    )}
+                  </div>
 
-                    {/* 11. Actions */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setViewingPurchase(purchase)}
-                          className="p-1.5 rounded-lg text-stone-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                          title="View PO Details & Voucher"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => generatePurchaseVoucherPDF(purchase, db.suppliers.find((s) => s.id === purchase.supplierId))}
-                          className="p-1.5 rounded-lg text-stone-600 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                          title="Download Purchase Voucher PDF"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingPurchase(purchase)
-                            setIsCreatingPurchase(true)
-                          }}
-                          className="p-1.5 rounded-lg text-stone-600 hover:text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer"
-                          title="Edit Purchase Record"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeletePurchase(purchase)}
-                          className="p-1.5 rounded-lg text-stone-400 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Delete Purchase Record & Reverse Stock"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                  {/* Line Item Chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(purchase.items && purchase.items.length > 0 ? purchase.items : [
+                      {
+                        name: purchase.purchaseType || 'Procured Item',
+                        quantity: purchase.quantity || 1,
+                        unit: purchase.unit || 'Units',
+                        unitPrice: purchase.unitPrice || purchase.grandTotal,
+                      },
+                    ]).map((item, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-stone-100 text-stone-700 border border-stone-200"
+                      >
+                        <span className="text-stone-900 font-semibold">{item.name}</span>
+                        <span className="text-stone-500 text-[11px]">
+                          ({item.quantity} {item.unit} @ Rs.{item.unitPrice})
+                        </span>
+                      </span>
+                    ))}
+                  </div>
 
-              {filteredPurchases.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="py-12 text-center text-stone-400">
-                    <Truck className="w-10 h-10 mx-auto mb-2 text-stone-300 opacity-60" />
-                    <p className="font-bold text-sm text-stone-600">No purchase records found</p>
-                    <p className="text-xs text-stone-400 mt-0.5">
-                      {searchQuery || filterType !== 'all' || filterStatus !== 'all'
-                        ? 'Try clearing the search or filters'
-                        : 'Create your first purchase order to stock raw materials or finished products.'}
+                  {purchase.notes && (
+                    <p className="text-xs text-stone-500 truncate max-w-md italic">
+                      "{purchase.notes}"
                     </p>
-                    <button
-                      onClick={() => {
-                        setSearchQuery('')
-                        setFilterType('all')
-                        setFilterSupplier('all')
-                        setFilterStatus('all')
-                        setFilterCategory('all')
-                        setFilterDateRange('all')
-                      }}
-                      className="mt-3 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors cursor-pointer"
-                    >
-                      Reset All Filters
-                    </button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                </div>
+
+                {/* Right: Amounts & Payment Status Badge */}
+                <div className="flex flex-col md:items-end gap-1 shrink-0 min-w-[170px]">
+                  <div className="text-right">
+                    <span className="text-base font-bold text-stone-900 block font-mono">
+                      {formatPKR(purchase.grandTotal)}
+                    </span>
+                    <span className="text-[11px] text-stone-500 block">
+                      Paid: <span className="text-emerald-700 font-medium">{formatPKR(purchase.amountPaid)}</span>
+                      {purchase.balanceDue > 0 && (
+                        <> • Due: <span className="text-amber-700 font-medium">{formatPKR(purchase.balanceDue)}</span></>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className="mt-0.5">
+                    {isPaid ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <CheckCircle className="w-3 h-3 text-emerald-600" />
+                        Paid in Full
+                      </span>
+                    ) : isOverdue ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200 animate-pulse">
+                        <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        Overdue ({formatDate(purchase.dueDate)})
+                      </span>
+                    ) : isPartial ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                        <Clock className="w-3 h-3 text-amber-600" />
+                        Partial (Due {formatDate(purchase.dueDate)})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200">
+                        <Clock className="w-3 h-3 text-stone-500" />
+                        Pending (Due {formatDate(purchase.dueDate)})
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions: Small Icon Buttons */}
+                <div className="flex items-center gap-1 border-t md:border-t-0 md:border-l border-stone-100 pt-2 md:pt-0 md:pl-3 shrink-0">
+                  {/* Small Vendor Ledger Icon Button */}
+                  <button
+                    onClick={() => {
+                      if (onNavigate) {
+                        onNavigate('suppliers-management')
+                      }
+                    }}
+                    className="p-1.5 text-stone-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                    title="View Supplier Ledger & Balance"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                  </button>
+
+                  {/* View Details / PDF */}
+                  <button
+                    onClick={() => setViewingPurchase(purchase)}
+                    className="p-1.5 text-stone-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="View Purchase Voucher & Details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+
+                  {/* Edit */}
+                  <button
+                    onClick={() => {
+                      setEditingPurchase(purchase)
+                      setIsCreatingPurchase(true)
+                    }}
+                    className="p-1.5 text-stone-400 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors"
+                    title="Edit Purchase Order"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+
+                  {/* Delete */}
+                  <button
+                    onClick={() => handleDeletePurchase(purchase.id)}
+                    className="p-1.5 text-stone-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                    title="Delete Purchase"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
 
-      {/* CREATE & EDIT PURCHASE MODAL */}
+      {/* ========================================================================= */}
+      {/* 6. NEW / EDIT PURCHASE ORDER MODAL (Guided, Smart, 3 Sections) */}
+      {/* ========================================================================= */}
       {isCreatingPurchase && (
-        <PurchaseEditorModal
+        <PurchaseOrderModal
           db={db}
-          purchase={editingPurchase}
+          editingPurchase={editingPurchase}
+          purchaseCategories={purchaseCategories}
           onClose={() => {
             setIsCreatingPurchase(false)
             setEditingPurchase(null)
           }}
-          onSave={(updatedPurchase, updatedDb) => {
+          onSave={(savedPurchase, autoSyncOpts) => {
+            // Auto-sync engine execution:
+            let updatedPurchases = [...(db.purchases || [])]
+            if (editingPurchase) {
+              updatedPurchases = updatedPurchases.map((p) => (p.id === savedPurchase.id ? savedPurchase : p))
+            } else {
+              updatedPurchases = [savedPurchase, ...updatedPurchases]
+            }
+
+            // 1. Supplier Update (or auto-create new supplier if created inline)
+            let updatedSuppliers = [...(db.suppliers || [])]
+            const existingSupIdx = updatedSuppliers.findIndex((s) => s.id === savedPurchase.supplierId || s.name === savedPurchase.supplierName)
+            if (existingSupIdx >= 0) {
+              // Update supplier balance
+              const cur = updatedSuppliers[existingSupIdx]
+              const balanceDelta = savedPurchase.balanceDue - (editingPurchase?.balanceDue || 0)
+              updatedSuppliers[existingSupIdx] = {
+                ...cur,
+                currentBalance: Math.max(0, (cur.currentBalance || 0) + balanceDelta),
+                updatedAt: todayStr,
+              }
+            } else if (savedPurchase.supplierName) {
+              // Auto-create new supplier
+              const newSup: SupplierItem = {
+                id: savedPurchase.supplierId || `sup-${Date.now()}`,
+                name: savedPurchase.supplierName,
+                phone: savedPurchase.supplierPhone || '',
+                category: savedPurchase.category || 'Raw Material',
+                city: 'Lahore',
+                openingBalance: 0,
+                currentBalance: savedPurchase.balanceDue,
+                status: 'Active',
+                notes: `Auto-created from purchase ${savedPurchase.poNumber}`,
+                updatedAt: todayStr,
+              }
+              updatedSuppliers.push(newSup)
+            }
+
+            // 2. Inventory / Stock Levels Update
+            let updatedRawMaterials = [...(db.rawMaterials || [])]
+            let updatedProducts = [...(db.products || [])]
+
+            if (autoSyncOpts.syncInventory) {
+              savedPurchase.items?.forEach((item) => {
+                // Check if item exists in Raw Materials
+                const rawIdx = updatedRawMaterials.findIndex((r) => r.id === item.itemId || r.name.toLowerCase() === item.name.toLowerCase())
+                if (rawIdx >= 0) {
+                  const r = updatedRawMaterials[rawIdx]
+                  updatedRawMaterials[rawIdx] = {
+                    ...r,
+                    quantity: (r.quantity || 0) + (item.quantity || 0),
+                    unitCost: item.unitPrice || r.unitCost,
+                    updatedAt: todayStr,
+                  }
+                }
+
+                // Check if item exists in Products
+                const prodIdx = updatedProducts.findIndex((p) => p.id === item.itemId || p.name.toLowerCase() === item.name.toLowerCase())
+                if (prodIdx >= 0) {
+                  const p = updatedProducts[prodIdx]
+                  updatedProducts[prodIdx] = {
+                    ...p,
+                    quantity: (p.quantity || 0) + (item.quantity || 0),
+                    costPrice: item.unitPrice || p.costPrice,
+                    updatedAt: todayStr,
+                  }
+                }
+              })
+            }
+
+            // 3. Auto-Create / Update Expense Entry (When amountPaid > 0)
+            let updatedExpenses = [...(db.expenses || [])]
+            let updatedAccounts = [...(db.accounts || [])]
+
+            if (savedPurchase.amountPaid > 0) {
+              const expenseId = `exp-po-${savedPurchase.id}`
+              const expIdx = updatedExpenses.findIndex((e) => e.id === expenseId || e.expenseNumber === `EXP-${savedPurchase.poNumber}`)
+              const newExp: ExpenseItem = {
+                id: expenseId,
+                expenseNumber: `EXP-${savedPurchase.poNumber}`,
+                date: savedPurchase.date,
+                category: 'Raw Materials / Ingredients',
+                description: `Procurement: PO ${savedPurchase.poNumber} (${savedPurchase.supplierName})`,
+                amount: savedPurchase.amountPaid,
+                paidTo: savedPurchase.supplierName,
+                paymentMethod: savedPurchase.paymentMethod as any,
+                paymentAccount: savedPurchase.paymentAccount || 'cash-in-hand',
+                status: 'Paid',
+                transactionRef: savedPurchase.transactionRef,
+                notes: `Auto-synced from Purchase ${savedPurchase.poNumber}`,
+                createdAt: new Date().toISOString(),
+              }
+
+              if (expIdx >= 0) {
+                updatedExpenses[expIdx] = newExp
+              } else {
+                updatedExpenses = [newExp, ...updatedExpenses]
+              }
+
+              // Deduct from Accounts
+              const acctId = savedPurchase.paymentAccount || 'cash-in-hand'
+              const acctIdx = updatedAccounts.findIndex((a) => a.id === acctId)
+              if (acctIdx >= 0) {
+                const acct = updatedAccounts[acctIdx]
+                const paidDelta = savedPurchase.amountPaid - (editingPurchase?.amountPaid || 0)
+                updatedAccounts[acctIdx] = {
+                  ...acct,
+                  balance: Math.max(0, acct.balance - paidDelta),
+                  updatedAt: todayStr,
+                }
+              }
+            }
+
+            const updatedDb: AppDatabase = {
+              ...db,
+              purchases: updatedPurchases,
+              suppliers: updatedSuppliers,
+              rawMaterials: updatedRawMaterials,
+              products: updatedProducts,
+              expenses: updatedExpenses,
+              accounts: updatedAccounts,
+            }
+
             onSaveDatabase(updatedDb)
             setIsCreatingPurchase(false)
             setEditingPurchase(null)
@@ -868,1338 +1243,1073 @@ export default function PurchasesView({
         />
       )}
 
-      {/* VIEW PURCHASE DETAIL MODAL */}
-      {viewingPurchase && (
-        <PurchaseDetailModal
-          purchase={viewingPurchase}
-          supplier={db.suppliers.find((s) => s.id === viewingPurchase.supplierId)}
-          onClose={() => setViewingPurchase(null)}
-          onEdit={() => {
-            setEditingPurchase(viewingPurchase)
-            setViewingPurchase(null)
-            setIsCreatingPurchase(true)
-          }}
-          onDelete={() => handleDeletePurchase(viewingPurchase)}
-          onOpenImage={(src, title) => setPreviewImage({ src, title })}
-        />
+      {/* ========================================================================= */}
+      {/* 7. MANAGE CATEGORIES MODAL */}
+      {/* ========================================================================= */}
+      {isManagingCategories && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">Manage Purchase Categories</h3>
+                  <p className="text-xs text-stone-500">Create, rename, or merge procurement categories</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsManagingCategories(false)}
+                className="text-stone-400 hover:text-stone-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Add New Category Input */}
+            <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2">
+              <span className="text-xs font-semibold text-stone-700 block">Add New Category</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. Laboratory Supplies, Boiler Fuel..."
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  onClick={handleAddCategory}
+                  disabled={!newCatName.trim()}
+                  className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {/* Existing Categories List */}
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider block">
+                Existing Categories ({purchaseCategories.length})
+              </span>
+              {purchaseCategories.map((cat) => {
+                const count = (db.purchases || []).filter(
+                  (p) => (p.category || '').toLowerCase() === cat.name.toLowerCase()
+                ).length
+                const isEditing = editingCatId === cat.id
+
+                return (
+                  <div
+                    key={cat.id}
+                    className="flex items-center justify-between p-2.5 bg-stone-50 border border-stone-200 rounded-lg text-xs"
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 flex-1 mr-2">
+                        <input
+                          type="text"
+                          value={editingCatName}
+                          onChange={(e) => setEditingCatName(e.target.value)}
+                          className="px-2 py-1 bg-white border border-stone-300 rounded text-xs w-full"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleRenameCategory(cat.id, cat.name)}
+                          className="px-2 py-1 bg-emerald-600 text-white rounded text-[11px] font-semibold"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingCatId(null)}
+                          className="px-2 py-1 bg-stone-200 text-stone-700 rounded text-[11px]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-stone-800">{cat.name}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-stone-200 text-stone-700">
+                            {count} order{count !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingCatId(cat.id)
+                              setEditingCatName(cat.name)
+                            }}
+                            className="p-1 text-stone-400 hover:text-stone-700"
+                            title="Rename"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                            className="p-1 text-stone-400 hover:text-rose-600"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-stone-100">
+              <button
+                onClick={() => setIsManagingCategories(false)}
+                className="px-4 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* FULLSCREEN IMAGE VIEWER MODAL */}
+      {/* ========================================================================= */}
+      {/* 8. VIEW PURCHASE DETAILS / VOUCHER MODAL */}
+      {/* ========================================================================= */}
+      {viewingPurchase && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-2xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-stone-200 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-stone-900">Purchase Voucher: {viewingPurchase.poNumber}</h3>
+                  <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
+                    {viewingPurchase.category || 'Raw Material'}
+                  </span>
+                </div>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Issued on {formatDate(viewingPurchase.date)} {viewingPurchase.time ? `at ${viewingPurchase.time}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingPurchase(null)}
+                className="text-stone-400 hover:text-stone-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Supplier & Financial Overview */}
+            <div className="grid grid-cols-2 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200 text-xs">
+              <div>
+                <span className="text-stone-400 block uppercase tracking-wider text-[10px] font-bold">Supplier Information</span>
+                <span className="text-sm font-bold text-stone-900 block mt-1">{viewingPurchase.supplierName}</span>
+                {viewingPurchase.supplierPhone && (
+                  <span className="text-stone-600 block mt-0.5">Phone: {viewingPurchase.supplierPhone}</span>
+                )}
+                {viewingPurchase.referenceNumber && (
+                  <span className="text-stone-500 block mt-0.5">Vendor Ref #: {viewingPurchase.referenceNumber}</span>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="text-stone-400 block uppercase tracking-wider text-[10px] font-bold">Payment & Settlement</span>
+                <span className="text-sm font-bold text-stone-900 block mt-1 font-mono">{formatPKR(viewingPurchase.grandTotal)}</span>
+                <span className="text-emerald-700 block font-medium">Paid: {formatPKR(viewingPurchase.amountPaid)}</span>
+                {viewingPurchase.balanceDue > 0 && (
+                  <span className="text-rose-700 block font-bold">
+                    Balance Due: {formatPKR(viewingPurchase.balanceDue)} (Due {formatDate(viewingPurchase.dueDate)})
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Line Items Table */}
+            <div>
+              <span className="text-xs font-semibold text-stone-700 block mb-2">Procured Line Items</span>
+              <div className="border border-stone-200 rounded-xl overflow-hidden text-xs">
+                <table className="w-full text-left">
+                  <thead className="bg-stone-100 text-stone-600 border-b border-stone-200">
+                    <tr>
+                      <th className="py-2 px-3">Item Description</th>
+                      <th className="py-2 px-3 text-right">Quantity</th>
+                      <th className="py-2 px-3 text-right">Unit Rate</th>
+                      <th className="py-2 px-3 text-right">Total (PKR)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {(viewingPurchase.items || []).map((item, i) => (
+                      <tr key={i} className="hover:bg-stone-50">
+                        <td className="py-2.5 px-3 font-medium text-stone-900">{item.name}</td>
+                        <td className="py-2.5 px-3 text-right text-stone-600">
+                          {item.quantity} {item.unit}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-stone-600 font-mono">
+                          {formatPKR(item.unitPrice)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-stone-900 font-mono">
+                          {formatPKR(item.total || (item.quantity * item.unitPrice + (item.otherCost || 0)))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Attached Scanned Invoice / Payment Screenshot */}
+            {(viewingPurchase.invoiceImage || viewingPurchase.paymentScreenshot) && (
+              <div className="space-y-2">
+                <span className="text-xs font-semibold text-stone-700 block">Attached Verification Receipts</span>
+                <div className="flex gap-4">
+                  {viewingPurchase.invoiceImage && (
+                    <div className="border border-stone-200 rounded-lg p-2 bg-stone-50 text-center">
+                      <span className="text-[11px] font-medium text-stone-600 block mb-1">Supplier Bill / Invoice</span>
+                      <img
+                        src={viewingPurchase.invoiceImage}
+                        alt="Bill receipt"
+                        className="max-h-32 rounded border border-stone-200 mx-auto cursor-pointer hover:opacity-90"
+                        onClick={() => setPreviewImage({ src: viewingPurchase.invoiceImage!, title: 'Supplier Bill' })}
+                      />
+                    </div>
+                  )}
+                  {viewingPurchase.paymentScreenshot && (
+                    <div className="border border-stone-200 rounded-lg p-2 bg-stone-50 text-center">
+                      <span className="text-[11px] font-medium text-stone-600 block mb-1">Payment IBFT Screenshot</span>
+                      <img
+                        src={viewingPurchase.paymentScreenshot}
+                        alt="Payment screenshot"
+                        className="max-h-32 rounded border border-stone-200 mx-auto cursor-pointer hover:opacity-90"
+                        onClick={() => setPreviewImage({ src: viewingPurchase.paymentScreenshot!, title: 'Payment IBFT Receipt' })}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-stone-200">
+              <button
+                onClick={() => {
+                  const sup = db.suppliers.find((s) => s.id === viewingPurchase.supplierId || s.name === viewingPurchase.supplierName)
+                  generatePurchaseVoucherPDF(viewingPurchase, sup)
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download Voucher PDF</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const toEdit = viewingPurchase
+                    setViewingPurchase(null)
+                    setEditingPurchase(toEdit)
+                    setIsCreatingPurchase(true)
+                  }}
+                  className="px-3 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors"
+                >
+                  Edit Order
+                </button>
+                <button
+                  onClick={() => setViewingPurchase(null)}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 hover:bg-black rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Zoom Preview Modal */}
       {previewImage && (
-        <ImageViewerModal
-          src={previewImage.src}
-          title={previewImage.title}
-          onClose={() => setPreviewImage(null)}
-        />
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-4 max-w-2xl w-full text-center space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+              <span className="font-semibold text-sm text-stone-800">{previewImage.title}</span>
+              <button onClick={() => setPreviewImage(null)} className="text-stone-400 hover:text-stone-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <img src={previewImage.src} alt={previewImage.title} className="max-h-[75vh] mx-auto rounded-lg" />
+          </div>
+        </div>
       )}
     </div>
   )
 }
 
-/* ==========================================================================
-   PURCHASE EDITOR MODAL (ADD & EDIT WITH AUTO STOCK & LEDGER SYNC)
-   ========================================================================== */
+// =========================================================================
+// GUIDED NEW PURCHASE ORDER MODAL COMPONENT (Smart, Multi-Item, Inline Creation)
+// =========================================================================
+interface PurchaseOrderModalProps {
+  db: AppDatabase
+  editingPurchase: PurchaseItem | null
+  purchaseCategories: PurchaseCategoryItem[]
+  onClose: () => void
+  onSave: (purchase: PurchaseItem, autoSyncOpts: { syncInventory: boolean }) => void
+}
 
-function PurchaseEditorModal({
+function PurchaseOrderModal({
   db,
-  purchase,
+  editingPurchase,
+  purchaseCategories,
   onClose,
   onSave,
-}: {
-  db: AppDatabase
-  purchase: PurchaseItem | null
-  onClose: () => void
-  onSave: (savedPurchase: PurchaseItem, updatedDb: AppDatabase) => void
-}) {
-  const isEditing = Boolean(purchase)
+}: PurchaseOrderModalProps) {
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
-  // 1. Purchase Type & PO Number
-  const [purchaseType, setPurchaseType] = useState<PurchaseType>(purchase?.purchaseType || 'Raw Material')
+  // Section 1: Vendor & General Details
+  const [supplierId, setSupplierId] = useState(editingPurchase?.supplierId || (db.suppliers[0]?.id || ''))
+  const [supplierName, setSupplierName] = useState(editingPurchase?.supplierName || (db.suppliers[0]?.name || ''))
+  const [supplierPhone, setSupplierPhone] = useState(editingPurchase?.supplierPhone || '')
+  const [category, setCategory] = useState(editingPurchase?.category || 'Raw Material')
+  const [isCustomCategory, setIsCustomCategory] = useState(editingPurchase?.isCustomCategory || false)
+  const [customCategoryLabel, setCustomCategoryLabel] = useState(editingPurchase?.customCategoryLabel || '')
   const [poNumber, setPoNumber] = useState(
-    purchase?.poNumber || purchase?.purchaseNumber || `PO-2026-${String(db.purchases.length + 1).padStart(4, '0')}`
+    editingPurchase?.poNumber || `PO-${new Date().getFullYear()}-${3000 + (db.purchases?.length || 0) + 1}`
   )
-  const [date, setDate] = useState(purchase?.date || new Date().toISOString().slice(0, 10))
-  const [time, setTime] = useState(
-    purchase?.time ||
-      new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+  const [date, setDate] = useState(editingPurchase?.date || todayStr)
+  const [time, setTime] = useState(editingPurchase?.time || '10:00 AM')
+  const [referenceNumber, setReferenceNumber] = useState(editingPurchase?.referenceNumber || '')
+
+  // Inline Quick Add Supplier Drawer
+  const [showInlineSupplierForm, setShowInlineSupplierForm] = useState(false)
+  const [inlineSupplierName, setInlineSupplierName] = useState('')
+  const [inlineSupplierPhone, setInlineSupplierPhone] = useState('')
+  const [inlineSupplierCity, setInlineSupplierCity] = useState('Lahore')
+
+  // Section 2: Line Items
+  const [items, setItems] = useState<PurchaseLineItem[]>(
+    editingPurchase?.items && editingPurchase.items.length > 0
+      ? editingPurchase.items
+      : [
+          {
+            id: `item-1`,
+            itemId: db.rawMaterials[0]?.id || '',
+            name: db.rawMaterials[0]?.name || 'Refined White Sugar',
+            quantity: 1000,
+            unit: 'kg',
+            unitPrice: 145,
+            otherCost: 0,
+            total: 145000,
+          },
+        ]
   )
 
-  // 2. Supplier Selection
-  const [supplierId, setSupplierId] = useState<string>(purchase?.supplierId || db.suppliers[0]?.id || '')
-  const [supplierName, setSupplierName] = useState<string>(purchase?.supplierName || db.suppliers[0]?.name || '')
-  const [isCustomSupplier, setIsCustomSupplier] = useState(!purchase?.supplierId && Boolean(purchase?.supplierName))
+  // Section 3: Payment & Settlement
+  const grandTotal = useMemo(() => {
+    return items.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+  }, [items])
 
-  // 3. Item Selection
-  const initialItem = purchase?.items?.[0]
-  const [selectedItemId, setSelectedItemId] = useState<string>(
-    initialItem?.itemId || initialItem?.rawMaterialId || initialItem?.productId || (purchaseType === 'Raw Material' ? db.rawMaterials[0]?.id : db.products[0]?.id) || ''
+  const [paymentStatusType, setPaymentStatusType] = useState<'Paid' | 'Pending' | 'Partial'>(
+    editingPurchase?.status || 'Paid'
   )
-  const [itemName, setItemName] = useState<string>(
-    initialItem?.name || (purchaseType === 'Raw Material' ? db.rawMaterials[0]?.name : db.products[0]?.name) || ''
-  )
-  const [itemCategory, setItemCategory] = useState<string>(
-    initialItem?.category || (purchaseType === 'Raw Material' ? db.rawMaterials[0]?.category : db.products[0]?.category) || 'Ingredients'
-  )
-
-  // 4. Quantity, Unit & Price
-  const [quantity, setQuantity] = useState<number>(initialItem?.quantity || purchase?.quantity || 100)
-  const [unit, setUnit] = useState<string>(
-    initialItem?.unit || purchase?.unit || (purchaseType === 'Raw Material' ? db.rawMaterials[0]?.unit : db.products[0]?.unit) || 'kg'
-  )
-  const [unitPrice, setUnitPrice] = useState<number>(
-    initialItem?.unitPrice || purchase?.unitPrice || (purchaseType === 'Raw Material' ? db.rawMaterials[0]?.unitCost : db.products[0]?.costPrice) || 100
-  )
-  const [otherCost, setOtherCost] = useState<number>(initialItem?.otherCost || purchase?.otherCost || 0)
-
-  // 5. Total Cost & Manual Override
-  const computedTotal = useMemo(() => {
-    return Math.max(0, quantity * unitPrice + otherCost)
-  }, [quantity, unitPrice, otherCost])
-
-  const [isManualTotal, setIsManualTotal] = useState<boolean>(purchase?.isManualTotalCost || false)
-  const [manualGrandTotal, setManualGrandTotal] = useState<number>(purchase?.grandTotal || computedTotal)
-
-  const finalGrandTotal = isManualTotal ? manualGrandTotal : computedTotal
-
-  // 6. Payment Settlement
   const [amountPaid, setAmountPaid] = useState<number>(
-    purchase ? purchase.amountPaid : finalGrandTotal // default full payment or previous
+    editingPurchase ? editingPurchase.amountPaid : grandTotal
   )
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque' | 'Credit'>(
-    purchase?.paymentMethod || 'Bank Transfer'
+  const [dueDate, setDueDate] = useState<string>(
+    editingPurchase?.dueDate ||
+      new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  )
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Bank Transfer' | 'Online' | 'Card' | 'Cheque'>(
+    editingPurchase?.paymentMethod as any || 'Bank Transfer'
   )
   const [paymentAccount, setPaymentAccount] = useState<'cash-in-hand' | 'meezan-bank' | 'hbl-bank'>(
-    purchase?.paymentAccount || 'meezan-bank'
+    editingPurchase?.paymentAccount || 'meezan-bank'
   )
-  const [transactionRef, setTransactionRef] = useState(purchase?.transactionRef || '')
-  const [notes, setNotes] = useState(purchase?.notes || '')
+  const [transactionRef, setTransactionRef] = useState(editingPurchase?.transactionRef || '')
+  const [notes, setNotes] = useState(editingPurchase?.notes || '')
+  const [isReturnOrDefect, setIsReturnOrDefect] = useState(editingPurchase?.isReturnOrDefect || false)
+  const [defectNote, setDefectNote] = useState(editingPurchase?.defectNote || '')
+  const [invoiceImage, setInvoiceImage] = useState(editingPurchase?.invoiceImage || '')
+  const [paymentScreenshot, setPaymentScreenshot] = useState(editingPurchase?.paymentScreenshot || '')
 
-  // 7. Image Attachments (Stored locally in Base64 / OPFS)
-  const [invoiceImage, setInvoiceImage] = useState<string>(purchase?.invoiceImage || purchase?.purchaseInvoiceImage || '')
-  const [paymentScreenshot, setPaymentScreenshot] = useState<string>(purchase?.paymentScreenshot || '')
+  // Sync Option
+  const [syncInventory, setSyncInventory] = useState(true)
 
-  // 8. Inline New Item Quick Creator State
-  const [showInlineItemCreator, setShowInlineItemCreator] = useState(false)
-  const [newItemName, setNewItemName] = useState('')
-  const [newItemCategory, setNewItemCategory] = useState('Ingredients')
-  const [newItemUnit, setNewItemUnit] = useState('kg')
-  const [newItemRate, setNewItemRate] = useState(100)
+  // Selected Supplier Smart Hint Info
+  const selectedSupplierObj = useMemo(() => {
+    return db.suppliers.find((s) => s.id === supplierId || s.name === supplierName)
+  }, [db.suppliers, supplierId, supplierName])
 
-  // Sync item selection details when item changes
-  const handleItemSelect = (itemId: string) => {
-    setSelectedItemId(itemId)
-    if (purchaseType === 'Raw Material') {
-      const raw = db.rawMaterials.find((r) => r.id === itemId)
-      if (raw) {
-        setItemName(raw.name)
-        setItemCategory(raw.category)
-        setUnit(raw.unit)
-        setUnitPrice(raw.unitCost)
-      }
-    } else {
-      const prod = db.products.find((p) => p.id === itemId)
-      if (prod) {
-        setItemName(prod.name)
-        setItemCategory(prod.category)
-        setUnit(prod.unit)
-        setUnitPrice(prod.costPrice || prod.purchaseCost || 0)
+  // Last purchase from this supplier hint
+  const lastPurchaseFromSupplier = useMemo(() => {
+    return (db.purchases || []).find((p) => p.supplierId === supplierId || p.supplierName === supplierName)
+  }, [db.purchases, supplierId, supplierName])
+
+  // Update line item
+  const handleItemChange = (index: number, field: keyof PurchaseLineItem, val: any) => {
+    const updated = [...items]
+    const item = { ...updated[index], [field]: val }
+
+    if (field === 'quantity' || field === 'unitPrice' || field === 'otherCost') {
+      const q = Number(field === 'quantity' ? val : item.quantity) || 0
+      const p = Number(field === 'unitPrice' ? val : item.unitPrice) || 0
+      const o = Number(field === 'otherCost' ? val : item.otherCost) || 0
+      item.total = q * p + o
+    }
+
+    // Auto populate unit & price if selecting from raw material or product
+    if (field === 'itemId') {
+      const rawMatch = db.rawMaterials.find((r) => r.id === val)
+      if (rawMatch) {
+        item.name = rawMatch.name
+        item.unit = rawMatch.unit || 'kg'
+        item.unitPrice = rawMatch.unitCost || 0
+        item.total = item.quantity * item.unitPrice + (item.otherCost || 0)
+      } else {
+        const prodMatch = db.products.find((p) => p.id === val)
+        if (prodMatch) {
+          item.name = prodMatch.name
+          item.unit = prodMatch.unit || 'Cartons'
+          item.unitPrice = prodMatch.costPrice || 0
+          item.total = item.quantity * item.unitPrice + (item.otherCost || 0)
+        }
       }
     }
+
+    updated[index] = item
+    setItems(updated)
   }
 
-  // Switch between Raw Material and Finished Product
-  const handleTypeChange = (newType: PurchaseType) => {
-    setPurchaseType(newType)
-    if (newType === 'Raw Material') {
-      const first = db.rawMaterials[0]
-      if (first) {
-        setSelectedItemId(first.id)
-        setItemName(first.name)
-        setItemCategory(first.category)
-        setUnit(first.unit)
-        setUnitPrice(first.unitCost)
-      }
-    } else {
-      const first = db.products[0]
-      if (first) {
-        setSelectedItemId(first.id)
-        setItemName(first.name)
-        setItemCategory(first.category)
-        setUnit(first.unit)
-        setUnitPrice(first.costPrice || first.purchaseCost || 0)
-      }
-    }
-  }
-
-  // Handle Supplier Select
-  const handleSupplierChange = (supId: string) => {
-    if (supId === 'custom') {
-      setIsCustomSupplier(true)
-      setSupplierId('')
-    } else {
-      setIsCustomSupplier(false)
-      setSupplierId(supId)
-      const found = db.suppliers.find((s) => s.id === supId)
-      if (found) setSupplierName(found.name)
-    }
-  }
-
-  // File Upload Handlers
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'invoice' | 'payment') => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        if (target === 'invoice') setInvoiceImage(reader.result)
-        else setPaymentScreenshot(reader.result)
-      }
-    }
-    reader.readAsDataURL(file)
-  }
-
-  // Quick Pay All
-  const handlePayFull = () => {
-    setAmountPaid(finalGrandTotal)
-  }
-
-  // Inline Quick Add Item Handler
-  const handleCreateInlineItem = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newItemName.trim()) return
-
-    const now = new Date().toISOString().slice(0, 10)
-    if (purchaseType === 'Raw Material') {
-      const newRaw: RawMaterialItem = {
-        id: `raw-${Date.now()}`,
-        name: newItemName.trim(),
-        category: newItemCategory as any,
-        sku: `RAW-${newItemName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-        unit: newItemUnit,
-        unitCost: newItemRate,
+  const handleAddItem = () => {
+    setItems([
+      ...items,
+      {
+        id: `item-${Date.now()}`,
+        name: '',
+        quantity: 1,
+        unit: 'kg',
+        unitPrice: 0,
         otherCost: 0,
-        totalCostPerUnit: newItemRate,
-        totalCost: 0,
-        totalReceived: 0,
-        totalConsumed: 0,
-        quantity: 0,
-        reorderLevel: 50,
-        status: 'Out of stock',
-        updatedAt: now,
-      }
-      db.rawMaterials.unshift(newRaw)
-      setSelectedItemId(newRaw.id)
-      setItemName(newRaw.name)
-      setItemCategory(newRaw.category)
-      setUnit(newRaw.unit)
-      setUnitPrice(newRaw.unitCost)
-    } else {
-      const newProd: ProductItem = {
-        id: `prod-${Date.now()}`,
-        name: newItemName.trim(),
-        category: newItemCategory,
-        sku: `AFP-${newItemName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-        unit: newItemUnit,
-        costPrice: newItemRate,
-        wholesalePrice: Math.round(newItemRate * 1.3),
-        wholesaleMinQty: 12,
-        retailPrice: Math.round(newItemRate * 1.5),
-        totalCost: 0,
-        isPurchasedProduct: true,
-        purchaseCost: newItemRate,
-        quantity: 0,
-        reorderLevel: 20,
-        status: 'Out of stock',
-        updatedAt: now,
-      }
-      db.products.unshift(newProd)
-      setSelectedItemId(newProd.id)
-      setItemName(newProd.name)
-      setItemCategory(newProd.category)
-      setUnit(newProd.unit)
-      setUnitPrice(newProd.costPrice)
-    }
-    setShowInlineItemCreator(false)
-    setNewItemName('')
+        total: 0,
+      },
+    ])
   }
 
-  // Form Submit Handler
+  const handleRemoveItem = (index: number) => {
+    if (items.length <= 1) return
+    setItems(items.filter((_, i) => i !== index))
+  }
+
+  // Handle supplier change
+  const handleSupplierSelect = (id: string) => {
+    setSupplierId(id)
+    const sup = db.suppliers.find((s) => s.id === id)
+    if (sup) {
+      setSupplierName(sup.name)
+      setSupplierPhone(sup.phone || '')
+    }
+  }
+
+  // Handle Inline Add Supplier
+  const handleSaveInlineSupplier = () => {
+    if (!inlineSupplierName.trim()) return
+    const newId = `sup-${Date.now()}`
+    setSupplierId(newId)
+    setSupplierName(inlineSupplierName.trim())
+    setSupplierPhone(inlineSupplierPhone.trim())
+    setShowInlineSupplierForm(false)
+  }
+
+  // Adjust amountPaid when payment status type changes
+  const handleStatusTypeChange = (type: 'Paid' | 'Pending' | 'Partial') => {
+    setPaymentStatusType(type)
+    if (type === 'Paid') {
+      setAmountPaid(grandTotal)
+    } else if (type === 'Pending') {
+      setAmountPaid(0)
+    } else if (type === 'Partial') {
+      setAmountPaid(Math.round(grandTotal / 2))
+    }
+  }
+
+  const balanceDue = Math.max(0, grandTotal - (paymentStatusType === 'Pending' ? 0 : amountPaid))
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!itemName.trim() || quantity <= 0) {
-      alert('Please select a valid item and enter a quantity greater than 0.')
+    if (!supplierName.trim()) {
+      alert('Please select or enter a supplier name.')
+      return
+    }
+    if (items.length === 0 || !items[0].name.trim()) {
+      alert('Please add at least one line item with a name and quantity.')
       return
     }
 
-    const nowIso = new Date().toISOString()
-    const finalBalanceDue = Math.max(0, finalGrandTotal - amountPaid)
-    const status: 'Paid' | 'Partial' | 'Unpaid' =
-      amountPaid >= finalGrandTotal ? 'Paid' : amountPaid > 0 ? 'Partial' : 'Unpaid'
+    const finalStatus: 'Paid' | 'Partial' | 'Unpaid' =
+      balanceDue === 0 ? 'Paid' : amountPaid > 0 ? 'Partial' : 'Unpaid'
 
-    // Construct Line Item
-    const lineItem: PurchaseLineItem = {
-      id: initialItem?.id || `item-po-${Date.now()}`,
-      itemId: selectedItemId,
-      itemType: purchaseType,
-      rawMaterialId: purchaseType === 'Raw Material' ? selectedItemId : undefined,
-      productId: purchaseType === 'Finished Product' ? selectedItemId : undefined,
-      name: itemName,
-      category: itemCategory,
-      quantity,
-      unit,
-      unitPrice,
-      otherCost,
-      total: finalGrandTotal,
-      isManualTotal,
-    }
-
-    const savedPurchase: PurchaseItem = {
-      id: purchase?.id || `po-${Date.now()}`,
-      poNumber,
-      purchaseNumber: poNumber,
-      purchaseType,
+    const saved: PurchaseItem = {
+      id: editingPurchase?.id || `po-${Date.now()}`,
+      poNumber: poNumber.trim(),
+      purchaseNumber: poNumber.trim(),
+      purchaseType: (category.includes('Product') ? 'Finished Product' : 'Raw Material') as PurchaseType,
+      category: isCustomCategory ? customCategoryLabel.trim() || 'Custom' : category,
+      isCustomCategory,
+      customCategoryLabel: isCustomCategory ? customCategoryLabel.trim() : undefined,
       date,
       time,
-      supplierId: isCustomSupplier ? undefined : supplierId,
-      supplierName: isCustomSupplier ? supplierName : (db.suppliers.find((s) => s.id === supplierId)?.name || supplierName),
-      items: [lineItem],
-      quantity,
-      unit,
-      unitPrice,
-      otherCost,
-      grandTotal: finalGrandTotal,
-      isManualTotalCost: isManualTotal,
-      amountPaid,
-      balanceDue: finalBalanceDue,
-      status,
+      supplierId,
+      supplierName: supplierName.trim(),
+      supplierPhone: supplierPhone.trim() || undefined,
+      items,
+      grandTotal,
+      amountPaid: paymentStatusType === 'Pending' ? 0 : amountPaid,
+      balanceDue,
+      status: finalStatus,
+      paymentStatus: finalStatus,
+      dueDate: balanceDue > 0 ? dueDate : undefined,
       paymentMethod,
-      paymentAccount: amountPaid > 0 ? paymentAccount : undefined,
-      transactionRef,
-      invoiceImage,
-      purchaseInvoiceImage: invoiceImage,
-      paymentScreenshot,
-      notes,
-      createdAt: purchase?.createdAt || nowIso,
+      paymentAccount,
+      transactionRef: transactionRef.trim() || undefined,
+      referenceNumber: referenceNumber.trim() || undefined,
+      notes: notes.trim() || undefined,
+      isReturnOrDefect,
+      defectNote: isReturnOrDefect ? defectNote.trim() : undefined,
+      invoiceImage: invoiceImage || undefined,
+      paymentScreenshot: paymentScreenshot || undefined,
+      createdAt: editingPurchase?.createdAt || new Date().toISOString(),
     }
 
-    // -------------------------------------------------------------
-    // DATABASE SYNCHRONIZATION (Stock, Supplier Balance, Accounts)
-    // -------------------------------------------------------------
-    let updatedRawMaterials = [...db.rawMaterials]
-    let updatedProducts = [...db.products]
-    let updatedSuppliers = [...db.suppliers]
-    let updatedAccounts = [...db.accounts]
-    let updatedLedgers = [...db.ledgers]
-
-    // If Editing, first revert the previous effect of this purchase
-    if (isEditing && purchase) {
-      const prevType = purchase.purchaseType || 'Raw Material'
-      const prevItem = purchase.items?.[0]
-      const prevQty = prevItem?.quantity || purchase.quantity || 0
-      const prevId = prevItem?.itemId || prevItem?.rawMaterialId || prevItem?.productId
-
-      if (prevType === 'Raw Material') {
-        updatedRawMaterials = updatedRawMaterials.map((r) => {
-          if (r.id === prevId) {
-            const revertedQty = Math.max(0, r.quantity - prevQty)
-            return {
-              ...r,
-              quantity: revertedQty,
-              totalReceived: Math.max(0, (r.totalReceived || r.quantity) - prevQty),
-            }
-          }
-          return r
-        })
-      } else {
-        updatedProducts = updatedProducts.map((p) => {
-          if (p.id === prevId) {
-            return { ...p, quantity: Math.max(0, p.quantity - prevQty) }
-          }
-          return p
-        })
-      }
-
-      // Revert previous supplier balance
-      if (purchase.supplierId && purchase.balanceDue > 0) {
-        updatedSuppliers = updatedSuppliers.map((s) => {
-          if (s.id === purchase.supplierId) {
-            return { ...s, currentBalance: Math.max(0, s.currentBalance - purchase.balanceDue) }
-          }
-          return s
-        })
-      }
-
-      // Revert previous cash account deduction
-      if (purchase.amountPaid > 0 && purchase.paymentAccount) {
-        updatedAccounts = updatedAccounts.map((acc) => {
-          if (acc.id === purchase.paymentAccount) {
-            return { ...acc, balance: acc.balance + purchase.amountPaid }
-          }
-          return acc
-        })
-      }
-
-      // Remove previous ledger entry
-      updatedLedgers = updatedLedgers.filter((l) => l.referenceId !== (purchase.poNumber || purchase.purchaseNumber))
-    }
-
-    // 1. APPLY NEW STOCK ADDITION
-    if (purchaseType === 'Raw Material') {
-      let matched = false
-      updatedRawMaterials = updatedRawMaterials.map((r) => {
-        if (r.id === selectedItemId || r.name.toLowerCase() === itemName.toLowerCase()) {
-          matched = true
-          const newQty = r.quantity + quantity
-          const newReceived = (r.totalReceived || r.quantity) + quantity
-          const costPerUnit = unitPrice + (quantity > 0 ? (otherCost / quantity) : 0)
-          return {
-            ...r,
-            quantity: newQty,
-            totalReceived: newReceived,
-            unitCost: unitPrice,
-            otherCost: otherCost > 0 ? (otherCost / quantity) : r.otherCost,
-            totalCostPerUnit: costPerUnit,
-            totalCost: costPerUnit * newQty,
-            purchaseInvoiceImage: invoiceImage || r.purchaseInvoiceImage,
-            status: 'In stock' as const,
-            updatedAt: date,
-          }
-        }
-        return r
-      })
-
-      // If raw material doesn't exist, create it
-      if (!matched) {
-        const newRaw: RawMaterialItem = {
-          id: selectedItemId || `raw-${Date.now()}`,
-          name: itemName,
-          category: itemCategory as any,
-          sku: `RAW-${itemName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-          unit,
-          unitCost: unitPrice,
-          otherCost: quantity > 0 ? (otherCost / quantity) : 0,
-          totalCostPerUnit: unitPrice + (quantity > 0 ? (otherCost / quantity) : 0),
-          totalCost: finalGrandTotal,
-          totalReceived: quantity,
-          totalConsumed: 0,
-          quantity,
-          reorderLevel: 50,
-          purchaseInvoiceImage: invoiceImage,
-          supplierId: isCustomSupplier ? undefined : supplierId,
-          supplierName,
-          status: 'In stock',
-          updatedAt: date,
-        }
-        updatedRawMaterials.push(newRaw)
-      }
-    } else {
-      // Finished Product
-      let matched = false
-      updatedProducts = updatedProducts.map((p) => {
-        if (p.id === selectedItemId || p.name.toLowerCase() === itemName.toLowerCase()) {
-          matched = true
-          const newQty = p.quantity + quantity
-          return {
-            ...p,
-            quantity: newQty,
-            costPrice: unitPrice,
-            purchaseCost: unitPrice,
-            isPurchasedProduct: true,
-            purchaseInvoiceImage: invoiceImage || p.purchaseInvoiceImage,
-            status: 'In stock' as const,
-            updatedAt: date,
-          }
-        }
-        return p
-      })
-
-      if (!matched) {
-        const newProd: ProductItem = {
-          id: selectedItemId || `prod-${Date.now()}`,
-          name: itemName,
-          category: itemCategory,
-          sku: `AFP-${itemName.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-          unit,
-          quantity,
-          costPrice: unitPrice,
-          wholesalePrice: Math.round(unitPrice * 1.3),
-          wholesaleMinQty: 12,
-          retailPrice: Math.round(unitPrice * 1.5),
-          isPurchasedProduct: true,
-          purchaseCost: unitPrice,
-          purchaseInvoiceImage: invoiceImage,
-          reorderLevel: 20,
-          status: 'In stock',
-          updatedAt: date,
-        }
-        updatedProducts.push(newProd)
-      }
-    }
-
-    // 2. APPLY SUPPLIER PAYABLE BALANCE & LEDGER
-    const currentSupplierObj = db.suppliers.find((s) => s.id === supplierId)
-    if (!isCustomSupplier && currentSupplierObj) {
-      if (finalBalanceDue > 0) {
-        updatedSuppliers = updatedSuppliers.map((s) => {
-          if (s.id === supplierId) {
-            return {
-              ...s,
-              currentBalance: s.currentBalance + finalBalanceDue,
-              updatedAt: date,
-            }
-          }
-          return s
-        })
-      }
-
-      // Add Supplier Ledger entry
-      const newLedgerEntry = {
-        id: `led-${Date.now()}`,
-        partyId: currentSupplierObj.id,
-        partyType: 'Supplier' as const,
-        date,
-        referenceType: 'Purchase' as const,
-        referenceId: poNumber,
-        description: `PO ${poNumber}: Received ${quantity} ${unit} ${itemName}`,
-        debit: amountPaid,
-        credit: finalGrandTotal,
-        balance: currentSupplierObj.currentBalance + finalBalanceDue,
-      }
-      updatedLedgers.push(newLedgerEntry)
-    }
-
-    // 3. APPLY PAYMENT ACCOUNT DEDUCTION
-    if (amountPaid > 0 && paymentAccount) {
-      updatedAccounts = updatedAccounts.map((acc) => {
-        if (acc.id === paymentAccount) {
-          return {
-            ...acc,
-            balance: Math.max(0, acc.balance - amountPaid),
-            updatedAt: date,
-          }
-        }
-        return acc
-      })
-    }
-
-    // 4. SAVE PURCHASE ORDER
-    const updatedPurchases = isEditing
-      ? db.purchases.map((p) => (p.id === savedPurchase.id ? savedPurchase : p))
-      : [savedPurchase, ...db.purchases]
-
-    onSave(savedPurchase, {
-      ...db,
-      purchases: updatedPurchases,
-      rawMaterials: updatedRawMaterials,
-      products: updatedProducts,
-      suppliers: updatedSuppliers,
-      accounts: updatedAccounts,
-      ledgers: updatedLedgers,
-    })
+    onSave(saved, { syncInventory })
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
-      <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-stone-50">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 rounded">
-                {isEditing ? 'Update Purchase Record' : 'Inward Stock Voucher'}
-              </span>
-              <span className="text-xs font-mono font-bold text-stone-500">{poNumber}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-3xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+              <Truck className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-black text-stone-900 mt-0.5">
-              {isEditing ? `Edit Purchase Order (${poNumber})` : 'New Purchase Order & Stock In'}
-            </h2>
+            <div>
+              <h2 className="text-lg font-bold text-stone-900">
+                {editingPurchase ? 'Edit Purchase Order' : 'Create New Purchase Order'}
+              </h2>
+              <p className="text-xs text-stone-500">Smart guided procurement entry with automatic multi-module sync</p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors"
-          >
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-          {/* 1. Purchase Type Switcher */}
-          <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1.5">
-              Purchase Classification *
-            </label>
-            <div className="grid grid-cols-2 gap-2 bg-stone-100 p-1.5 rounded-xl border border-stone-200">
-              <button
-                type="button"
-                onClick={() => handleTypeChange('Raw Material')}
-                className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  purchaseType === 'Raw Material'
-                    ? 'bg-white text-amber-900 shadow-xs border border-stone-200'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                <Boxes className="w-4 h-4 text-amber-600" />
-                <span>Raw Material (Sugar, Pulp, Preforms, Caps)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTypeChange('Finished Product')}
-                className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  purchaseType === 'Finished Product'
-                    ? 'bg-white text-purple-900 shadow-xs border border-stone-200'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                <Package className="w-4 h-4 text-purple-600" />
-                <span>Finished Product (Purchased / Outsourced)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 2. PO Meta: PO Number, Date, Time */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Purchase Order (PO #) *
-              </label>
-              <input
-                type="text"
-                value={poNumber}
-                onChange={(e) => setPoNumber(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 font-mono font-bold text-stone-900"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Purchase Date *
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 font-semibold text-stone-800"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Delivery Time
-              </label>
-              <input
-                type="text"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                placeholder="10:30 AM"
-                className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 font-medium text-stone-800"
-              />
-            </div>
-          </div>
-
-          {/* 3. Supplier Selection */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* ========================================================================= */}
+          {/* SECTION 1: VENDOR & ORDER METADATA */}
+          {/* ========================================================================= */}
+          <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-4">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+              <span className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Building2 className="w-4 h-4 text-emerald-600" />
-                <span>Supplier / Vendor *</span>
-              </label>
+                1. Supplier & Procurement Category
+              </span>
               <button
                 type="button"
-                onClick={() => setIsCustomSupplier(!isCustomSupplier)}
-                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline"
+                onClick={() => setShowInlineSupplierForm(!showInlineSupplierForm)}
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
               >
-                {isCustomSupplier ? 'Select Registered Supplier' : '+ Custom / Direct Vendor Name'}
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Add New Supplier</span>
               </button>
             </div>
 
-            {!isCustomSupplier ? (
-              <select
-                value={supplierId}
-                onChange={(e) => handleSupplierChange(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-medium text-stone-800"
-                required
-              >
-                {db.suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.category}) · Bal Due: {formatPKR(s.currentBalance)}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
-                placeholder="e.g. Haji Shafi Sugar Agency / Open Market Vendor"
-                className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-medium text-stone-800"
-                required
-              />
-            )}
-          </div>
-
-          {/* 4. Item Selection & Pricing Grid */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
-                {purchaseType === 'Raw Material' ? <Boxes className="w-4 h-4 text-amber-600" /> : <Package className="w-4 h-4 text-purple-600" />}
-                <span>Select {purchaseType === 'Raw Material' ? 'Raw Material' : 'Product'} to Inward *</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowInlineItemCreator(!showInlineItemCreator)}
-                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline"
-              >
-                + Create New {purchaseType === 'Raw Material' ? 'Material' : 'Product'} Inline
-              </button>
-            </div>
-
-            {/* Inline Quick Item Creator Modal */}
-            {showInlineItemCreator && (
-              <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-2.5 animate-fade-in">
-                <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
-                  <span>Quick Add New {purchaseType}</span>
-                  <button type="button" onClick={() => setShowInlineItemCreator(false)} className="text-emerald-700">
-                    <X className="w-3.5 h-3.5" />
+            {/* Inline New Supplier Drawer */}
+            {showInlineSupplierForm && (
+              <div className="bg-white p-3 rounded-lg border border-emerald-300 shadow-2xs space-y-3">
+                <span className="text-xs font-bold text-emerald-800 block">Quick Add New Supplier Profile</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Supplier Business Name *"
+                    value={inlineSupplierName}
+                    onChange={(e) => setInlineSupplierName(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Phone (0300...)"
+                    value={inlineSupplierPhone}
+                    onChange={(e) => setInlineSupplierPhone(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="City (e.g. Lahore, Karachi)"
+                    value={inlineSupplierCity}
+                    onChange={(e) => setInlineSupplierCity(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineSupplierForm(false)}
+                    className="px-2.5 py-1 text-xs text-stone-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveInlineSupplier}
+                    className="px-3 py-1 text-xs font-semibold bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                  >
+                    Use This Supplier
                   </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
-                  <input
-                    type="text"
-                    placeholder="Item Name (e.g. PET Preforms 1.5L)"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    className="sm:col-span-2 px-2.5 py-1.5 rounded-lg bg-white border border-emerald-300 font-medium"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Unit (kg, Cartons, Pcs)"
-                    value={newItemUnit}
-                    onChange={(e) => setNewItemUnit(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-lg bg-white border border-emerald-300 font-medium"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Unit Rate (Rs)"
-                    value={newItemRate}
-                    onChange={(e) => setNewItemRate(Number(e.target.value))}
-                    className="px-2.5 py-1.5 rounded-lg bg-white border border-emerald-300 font-medium"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCreateInlineItem}
-                  className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold"
-                >
-                  Save Item & Select
-                </button>
               </div>
             )}
-
-            {/* Dropdown of existing items */}
-            <select
-              value={selectedItemId}
-              onChange={(e) => handleItemSelect(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-medium text-stone-800"
-              required
-            >
-              {purchaseType === 'Raw Material'
-                ? db.rawMaterials.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} · ({r.category}) · In Stock: {r.quantity} {r.unit} · Last Cost: Rs. {r.unitCost}
-                    </option>
-                  ))
-                : db.products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} · ({p.category}) · Stock: {p.quantity} {p.unit} · Cost: Rs. {p.costPrice || p.purchaseCost || 0}
-                    </option>
-                  ))}
-            </select>
-
-            {/* Quantity, Unit, Price, Other Costs Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  Quantity Purchased *
-                </label>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="any"
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-bold text-stone-900"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  Unit Measurement *
-                </label>
-                <select
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-bold text-stone-800"
-                >
-                  <option value="kg">kg (Kilograms)</option>
-                  <option value="g">g (Grams)</option>
-                  <option value="L">L (Liters)</option>
-                  <option value="ml">ml (Milliliters)</option>
-                  <option value="Cartons">Cartons</option>
-                  <option value="Pcs">Pcs / Pieces</option>
-                  <option value="Bottles">Bottles</option>
-                  <option value="Boxes">Boxes</option>
-                  <option value="Jars">Jars</option>
-                  <option value="Packs">Packs</option>
-                  <option value="Bags">Bags (50kg / 25kg)</option>
-                  <option value="Drums">Drums (200L)</option>
-                  <option value="Rolls">Rolls</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  Rate / Unit (Rs) *
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={unitPrice}
-                  onChange={(e) => setUnitPrice(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-bold text-stone-900"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  Other / Transport Cost (Rs)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={otherCost}
-                  onChange={(e) => setOtherCost(Number(e.target.value))}
-                  placeholder="0"
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-medium text-stone-800"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 5. Total Cost Calculation & Manual Override Toggle */}
-          <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-bold text-stone-600">Calculated Purchase Total:</div>
-              <div className="text-xl font-black text-emerald-800">{formatPKR(finalGrandTotal)}</div>
-              <div className="text-[11px] text-stone-500">
-                ({quantity} {unit} × Rs. {unitPrice}) + Rs. {otherCost || 0} other costs
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 text-xs font-bold text-stone-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isManualTotal}
-                  onChange={(e) => {
-                    setIsManualTotal(e.target.checked)
-                    if (!e.target.checked) setManualGrandTotal(computedTotal)
-                  }}
-                  className="w-4 h-4 rounded text-emerald-600"
-                />
-                <span>Override Total Manually</span>
-              </label>
-
-              {isManualTotal && (
-                <input
-                  type="number"
-                  value={manualGrandTotal}
-                  onChange={(e) => setManualGrandTotal(Number(e.target.value))}
-                  className="w-32 px-2.5 py-1 rounded-lg text-xs bg-white border border-emerald-400 font-bold text-emerald-900"
-                  placeholder="Total Rs"
-                />
-              )}
-            </div>
-          </div>
-
-          {/* 6. Payment Settlement & Mode */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
-                <CreditCard className="w-4 h-4 text-emerald-600" />
-                <span>Payment Settlement & Mode</span>
-              </label>
-              <button
-                type="button"
-                onClick={handlePayFull}
-                className="px-2 py-0.5 rounded text-[11px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 cursor-pointer"
-              >
-                Pay Full (Rs. {finalGrandTotal.toLocaleString()})
-              </button>
-            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Supplier Selection */}
               <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  Amount Paid Now (Rs) *
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max={finalGrandTotal}
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-bold text-emerald-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  Payment Method
-                </label>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">Select Supplier / Vendor *</label>
                 <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-medium text-stone-800"
+                  value={supplierId}
+                  onChange={(e) => handleSupplierSelect(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                  required
                 >
-                  <option value="Bank Transfer">Bank Transfer / IBFT</option>
-                  <option value="Cash">Cash in Hand</option>
-                  <option value="Card">Corporate Debit Card</option>
-                  <option value="Online">Online / Raast QR</option>
-                  <option value="Cheque">Bank Clearing Cheque</option>
-                  <option value="Credit">100% Credit (Pay Later)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  Disbursed From Account
-                </label>
-                <select
-                  value={paymentAccount}
-                  onChange={(e) => setPaymentAccount(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-white border border-stone-300 focus:border-emerald-500 font-medium text-stone-800"
-                >
-                  {db.accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} (Bal: {formatPKR(acc.balance)})
+                  <option value="">-- Choose Supplier --</option>
+                  {db.suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.city || 'Punjab'})
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Category Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-stone-700">Category *</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomCategory(!isCustomCategory)}
+                    className="text-[11px] text-emerald-700 hover:underline"
+                  >
+                    {isCustomCategory ? 'Standard List' : 'Custom / One-off'}
+                  </button>
+                </div>
+                {isCustomCategory ? (
+                  <input
+                    type="text"
+                    placeholder="Enter custom category name..."
+                    value={customCategoryLabel}
+                    onChange={(e) => setCustomCategoryLabel(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-emerald-400 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                    required
+                  />
+                ) : (
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                  >
+                    {purchaseCategories.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Date */}
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">Purchase Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                  required
+                />
+              </div>
             </div>
 
-            {/* Remaining Payable Due Notice */}
-            <div className="flex items-center justify-between text-xs pt-1 px-1">
-              <span className="font-bold text-stone-600">Remaining Balance Payable:</span>
-              <span className={`font-bold ${finalGrandTotal - amountPaid > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-                {formatPKR(Math.max(0, finalGrandTotal - amountPaid))}
+            {/* Smart Supplier Hint Banner */}
+            {selectedSupplierObj && (
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-lg p-2.5 text-xs text-emerald-900 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 truncate">
+                  <Building2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span className="font-semibold">{selectedSupplierObj.name}</span>
+                  <span className="text-emerald-700 font-mono">• Current Balance Due: {formatPKR(selectedSupplierObj.currentBalance || 0)}</span>
+                </div>
+                {lastPurchaseFromSupplier && (
+                  <span className="text-[11px] text-emerald-700 font-medium shrink-0">
+                    💡 Last PO: {lastPurchaseFromSupplier.poNumber} ({formatDate(lastPurchaseFromSupplier.date)})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ========================================================================= */}
+          {/* SECTION 2: LINE ITEMS BUILDER */}
+          {/* ========================================================================= */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Boxes className="w-4 h-4 text-emerald-600" />
+                2. Items & Quantity Procurement
               </span>
+              <button
+                type="button"
+                onClick={handleAddItem}
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Add Item Row</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {items.map((item, index) => {
+                // Check if last purchased price exists for this item
+                const lastItemMatch = (db.purchases || [])
+                  .flatMap((p) => p.items || [])
+                  .find((i) => i.name.toLowerCase() === item.name.toLowerCase())
+
+                return (
+                  <div
+                    key={index}
+                    className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2"
+                  >
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      {/* Item Name / Select */}
+                      <div className="col-span-12 sm:col-span-5">
+                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-1">
+                          Item Description
+                        </label>
+                        <div className="flex gap-1">
+                          <input
+                            type="text"
+                            placeholder="e.g. Refined Sugar, PET Caps..."
+                            value={item.name}
+                            onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                            list={`item-suggestions-${index}`}
+                            className="w-full px-2.5 py-1.5 text-xs bg-white border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 text-stone-900"
+                            required
+                          />
+                          <datalist id={`item-suggestions-${index}`}>
+                            {db.rawMaterials.map((r) => (
+                              <option key={r.id} value={r.name} />
+                            ))}
+                            {db.products.map((p) => (
+                              <option key={p.id} value={p.name} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="col-span-4 sm:col-span-2">
+                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-1">
+                          Quantity
+                        </label>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="any"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 text-stone-900 text-right font-mono"
+                          required
+                        />
+                      </div>
+
+                      {/* Unit */}
+                      <div className="col-span-4 sm:col-span-2">
+                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-1">
+                          Unit
+                        </label>
+                        <select
+                          value={item.unit}
+                          onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs bg-white border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 text-stone-700"
+                        >
+                          <option value="kg">kg</option>
+                          <option value="Cartons">Cartons</option>
+                          <option value="Liters">Liters</option>
+                          <option value="Bags">Bags (50kg)</option>
+                          <option value="Rolls">Rolls</option>
+                          <option value="Pieces">Pieces</option>
+                          <option value="Boxes">Boxes</option>
+                          <option value="Tons">Tons</option>
+                        </select>
+                      </div>
+
+                      {/* Rate per Unit */}
+                      <div className="col-span-4 sm:col-span-2">
+                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-1">
+                          Rate (PKR)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={item.unitPrice}
+                          onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 text-stone-900 text-right font-mono"
+                          required
+                        />
+                      </div>
+
+                      {/* Remove Button */}
+                      <div className="col-span-12 sm:col-span-1 flex justify-end items-end pt-2 sm:pt-4">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(index)}
+                          disabled={items.length <= 1}
+                          className="p-1.5 text-stone-400 hover:text-rose-600 disabled:opacity-30"
+                          title="Remove Line Item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Line total & Smart Item Rate Hint */}
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-100">
+                      {lastItemMatch && (
+                        <span className="text-[11px] text-stone-500">
+                          💡 Prev rate: Rs. {lastItemMatch.unitPrice} per {lastItemMatch.unit}
+                        </span>
+                      )}
+                      <div className="ml-auto font-mono font-bold text-stone-900">
+                        Line Total: {formatPKR(item.total)}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
-          {/* 7. Image Attachments: Invoice Slip & Payment Screenshot */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Purchase Invoice Attachment */}
-            <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 space-y-2">
-              <label className="block text-xs font-bold text-stone-700">
-                Supplier Invoice / Bilty Image
-              </label>
-              {invoiceImage ? (
-                <div className="relative group rounded-lg overflow-hidden border border-stone-300 h-28 bg-white flex items-center justify-center">
-                  <img src={invoiceImage} alt="Invoice" className="h-full w-full object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => setInvoiceImage('')}
-                    className="absolute top-1 right-1 p-1 rounded bg-rose-600 text-white opacity-90 hover:opacity-100"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-stone-300 rounded-lg cursor-pointer hover:bg-stone-100 transition-colors">
-                  <ImageIcon className="w-6 h-6 text-stone-400 mb-1" />
-                  <span className="text-[11px] font-bold text-stone-600">Attach Invoice Bill Photo</span>
-                  <span className="text-[9px] text-stone-400">Stored offline in local database</span>
+          {/* ========================================================================= */}
+          {/* SECTION 3: PAYMENT, SETTLEMENT & AUTO-SYNC OPTIONS */}
+          {/* ========================================================================= */}
+          <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-4">
+            <span className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <CreditCard className="w-4 h-4 text-emerald-600" />
+              3. Payment Settlement & Terms
+            </span>
+
+            {/* Total Display */}
+            <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-stone-200">
+              <span className="text-sm font-semibold text-stone-700">Order Grand Total:</span>
+              <span className="text-xl font-bold text-stone-900 font-mono">{formatPKR(grandTotal)}</span>
+            </div>
+
+            {/* Payment Status Segmented Control */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-stone-700 block">Payment Terms *</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleStatusTypeChange('Paid')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                    paymentStatusType === 'Paid'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  ✓ Paid in Full
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStatusTypeChange('Partial')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                    paymentStatusType === 'Partial'
+                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  ◑ Partial Paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStatusTypeChange('Pending')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                    paymentStatusType === 'Pending'
+                      ? 'bg-stone-800 text-white border-stone-800 shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  ⏳ Pending (100% Credit)
+                </button>
+              </div>
+            </div>
+
+            {/* Amount Paid & Due Date Configuration */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {paymentStatusType !== 'Pending' && (
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">Amount Paid Now (PKR) *</label>
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileUpload(e, 'invoice')}
-                    className="hidden"
+                    type="number"
+                    min="0"
+                    max={grandTotal}
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono text-stone-900 font-bold"
+                    required
                   />
-                </label>
+                  {paymentStatusType === 'Partial' && (
+                    <div className="flex gap-1 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setAmountPaid(Math.round(grandTotal * 0.25))}
+                        className="px-2 py-0.5 text-[10px] bg-stone-200 rounded font-medium text-stone-700"
+                      >
+                        25%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAmountPaid(Math.round(grandTotal * 0.5))}
+                        className="px-2 py-0.5 text-[10px] bg-stone-200 rounded font-medium text-stone-700"
+                      >
+                        50%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAmountPaid(Math.round(grandTotal * 0.75))}
+                        className="px-2 py-0.5 text-[10px] bg-stone-200 rounded font-medium text-stone-700"
+                      >
+                        75%
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {balanceDue > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-rose-700 block mb-1">
+                    Balance Due Date (Promise Date) *
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-rose-300 rounded-lg focus:ring-2 focus:ring-rose-500 text-stone-900"
+                    required
+                  />
+                  <span className="text-[11px] text-stone-500 mt-1 block font-mono">
+                    Remaining Balance: <strong className="text-rose-700">{formatPKR(balanceDue)}</strong>
+                  </span>
+                </div>
               )}
             </div>
 
-            {/* Payment Proof Attachment */}
-            <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 space-y-2">
-              <label className="block text-xs font-bold text-stone-700">
-                Payment Proof / Screenshot
-              </label>
-              {paymentScreenshot ? (
-                <div className="relative group rounded-lg overflow-hidden border border-stone-300 h-28 bg-white flex items-center justify-center">
-                  <img src={paymentScreenshot} alt="Payment Receipt" className="h-full w-full object-contain" />
-                  <button
-                    type="button"
-                    onClick={() => setPaymentScreenshot('')}
-                    className="absolute top-1 right-1 p-1 rounded bg-rose-600 text-white opacity-90 hover:opacity-100"
+            {/* Payment Method & Account (if amountPaid > 0) */}
+            {amountPaid > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-stone-200">
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">Payment Method</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
                   >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                    <option value="Cash">Cash in Hand</option>
+                    <option value="Bank Transfer">Bank Transfer (IBFT)</option>
+                    <option value="Online">Online (Raast ID)</option>
+                    <option value="Cheque">Bank Cheque</option>
+                    <option value="Card">Corporate Debit Card</option>
+                  </select>
                 </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-stone-300 rounded-lg cursor-pointer hover:bg-stone-100 transition-colors">
-                  <CreditCard className="w-6 h-6 text-stone-400 mb-1" />
-                  <span className="text-[11px] font-bold text-stone-600">Attach Online / Bank Slip</span>
-                  <span className="text-[9px] text-stone-400">Stored offline in local database</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileUpload(e, 'payment')}
-                    className="hidden"
-                  />
-                </label>
+
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 block mb-1">Deduct From Account</label>
+                  <select
+                    value={paymentAccount}
+                    onChange={(e) => setPaymentAccount(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                  >
+                    <option value="cash-in-hand">Cash Register (Factory Cash)</option>
+                    <option value="meezan-bank">Meezan Bank Ltd (010203040510)</option>
+                    <option value="hbl-bank">Habib Bank Ltd (998877665520)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Return / Defect Flag & Notes */}
+            <div className="pt-2 border-t border-stone-200 space-y-2">
+              <label className="flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isReturnOrDefect}
+                  onChange={(e) => setIsReturnOrDefect(e.target.checked)}
+                  className="rounded text-rose-600 focus:ring-rose-500"
+                />
+                <span>Flag shipment as Return / Defect / Quality Issue</span>
+              </label>
+
+              {isReturnOrDefect && (
+                <input
+                  type="text"
+                  placeholder="Explain defect reason (e.g. 5 bags torn, high moisture content)..."
+                  value={defectNote}
+                  onChange={(e) => setDefectNote(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-rose-50 border border-rose-300 rounded-lg focus:ring-2 focus:ring-rose-500 text-rose-900"
+                />
               )}
+
+              <div>
+                <label className="text-xs font-semibold text-stone-700 block mb-1">Optional Notes / PO Reference</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Delivery truck # LEB-4920, driver contact, bill ref..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                />
+              </div>
+            </div>
+
+            {/* Smart Auto-Sync Highlight */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900 space-y-1">
+              <span className="font-bold flex items-center gap-1 text-emerald-800">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                Automatic Multi-Module Sync Summary:
+              </span>
+              <ul className="list-disc list-inside text-[11px] text-emerald-700 space-y-0.5 pl-1">
+                <li>Supplier Ledger for <strong>{supplierName || 'vendor'}</strong> will record PO {poNumber} (+{formatPKR(balanceDue)} payable).</li>
+                <li>Tracked Raw Material / Product stocks will be automatically incremented.</li>
+                {amountPaid > 0 && (
+                  <li>An official expense voucher for <strong>{formatPKR(amountPaid)}</strong> will be created in Expenses & Cash book.</li>
+                )}
+              </ul>
             </div>
           </div>
 
-          {/* 8. Transaction Ref & Notes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Transaction / Cheque / Raast Ref #
-              </label>
-              <input
-                type="text"
-                value={transactionRef}
-                onChange={(e) => setTransactionRef(e.target.value)}
-                placeholder="e.g. RAAST-88219 / CHQ-00192"
-                className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 font-mono font-medium text-stone-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                Vehicle / Driver / Remarks
-              </label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Bedford Truck # LE-8812, Quality approved"
-                className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 border border-stone-200 focus:bg-white focus:border-emerald-500 font-medium text-stone-800"
-              />
-            </div>
-          </div>
-
-          {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200">
+          {/* Form Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-98 transition-all shadow-xs cursor-pointer"
+              className="px-6 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all transform active:scale-95"
+              id="btn-save-purchase-order"
             >
-              <CheckCircle className="w-4 h-4 stroke-[3]" />
-              <span>{isEditing ? 'Save Changes & Sync Stock' : 'Receive Materials & Inflow Stock'}</span>
+              {editingPurchase ? 'Update Purchase Order' : 'Save & Sync Purchase'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
-  )
-}
-
-/* ==========================================================================
-   PURCHASE DETAIL MODAL (PRINTABLE PO VOUCHER)
-   ========================================================================== */
-
-function PurchaseDetailModal({
-  purchase,
-  supplier,
-  onClose,
-  onEdit,
-  onDelete,
-  onOpenImage,
-}: {
-  purchase: PurchaseItem
-  supplier?: SupplierItem
-  onClose: () => void
-  onEdit: () => void
-  onDelete: () => void
-  onOpenImage: (src: string, title: string) => void
-}) {
-  const poNum = purchase.poNumber || purchase.purchaseNumber || 'PO-' + purchase.id
-  const pType = purchase.purchaseType || 'Raw Material'
-
-  const handlePrint = () => {
-    window.print()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6">
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-stone-50">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-1 rounded-md text-[11px] font-extrabold bg-emerald-100 text-emerald-900 uppercase">
-              Purchase Voucher
-            </span>
-            <span className="font-mono font-bold text-stone-600 text-xs">{poNum}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => generatePurchaseVoucherPDF(purchase, supplier)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 transition-colors shadow-xs cursor-pointer"
-              title="Download Purchase Voucher PDF"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download PDF</span>
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-stone-700 bg-stone-200/70 hover:bg-stone-300 transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print PO</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-200 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Printable Content Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto" id="printable-purchase-voucher">
-          {/* Brand & Supplier Heading */}
-          <div className="flex flex-col sm:flex-row justify-between gap-4 pb-4 border-b border-stone-200">
-            <div>
-              <h3 className="text-base font-black text-stone-900 tracking-tight">AL FAROOQ FOODS (PVT) LTD</h3>
-              <p className="text-xs text-stone-500 font-medium mt-0.5">
-                Beverage & Confectionery Plant, Sheikhupura Road, Lahore
-              </p>
-              <p className="text-xs text-stone-500 font-medium">NTN: 8821934-1 · STRN: 3277876123456</p>
-            </div>
-            <div className="sm:text-right">
-              <div className="text-xs text-stone-400 font-bold uppercase tracking-wider">Purchase Order No</div>
-              <div className="text-base font-black text-stone-900 font-mono">{poNum}</div>
-              <div className="text-xs text-stone-600 font-semibold mt-0.5">
-                Date: {formatDate(purchase.date)} {purchase.time ? `· ${purchase.time}` : ''}
-              </div>
-            </div>
-          </div>
-
-          {/* Supplier Info & Purchase Type */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-stone-50 border border-stone-200 text-xs">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                Supplier Details
-              </span>
-              <strong className="text-sm font-bold text-stone-900 block">{purchase.supplierName}</strong>
-              {supplier ? (
-                <div className="text-stone-600 space-y-0.5 mt-1 font-medium">
-                  <div>Contact: {supplier.contactPerson || 'Sales Agent'}</div>
-                  <div>Phone: {supplier.phone} · City: {supplier.city}</div>
-                  <div>Address: {supplier.address}</div>
-                </div>
-              ) : (
-                <div className="text-stone-500 mt-1">Direct Procurement</div>
-              )}
-            </div>
-
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                Shipment Information
-              </span>
-              <div className="space-y-1 font-medium text-stone-700">
-                <div className="flex justify-between">
-                  <span>Purchase Type:</span>
-                  <span className="font-bold text-stone-900">{pType}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Payment Mode:</span>
-                  <span className="font-bold text-stone-900">{purchase.paymentMethod}</span>
-                </div>
-                {purchase.transactionRef && (
-                  <div className="flex justify-between">
-                    <span>Reference / Cheque:</span>
-                    <span className="font-mono font-bold text-stone-900">{purchase.transactionRef}</span>
-                  </div>
-                )}
-                {purchase.notes && (
-                  <div className="flex justify-between">
-                    <span>Vehicle / Remarks:</span>
-                    <span className="font-semibold text-stone-800">{purchase.notes}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Items Table */}
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Itemized Breakdown</h4>
-            <div className="rounded-xl border border-stone-200 overflow-hidden">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-stone-100 text-stone-600 font-bold">
-                  <tr>
-                    <th className="py-2.5 px-3">Item Description</th>
-                    <th className="py-2.5 px-3 text-right">Quantity</th>
-                    <th className="py-2.5 px-3 text-right">Unit Rate</th>
-                    <th className="py-2.5 px-3 text-right">Other Costs</th>
-                    <th className="py-2.5 px-3 text-right">Total (Rs)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100">
-                  {(purchase.items || []).map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="py-2.5 px-3">
-                        <div className="font-bold text-stone-900">{item.name}</div>
-                        <div className="text-[10px] text-stone-500">{item.category || pType}</div>
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-bold text-stone-900">
-                        {item.quantity} {item.unit}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-semibold text-stone-800">
-                        Rs. {item.unitPrice?.toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-medium text-stone-600">
-                        {item.otherCost ? formatPKR(item.otherCost) : '—'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-black text-stone-900">
-                        {formatPKR(item.total || item.quantity * item.unitPrice)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Financial Summary */}
-          <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-2 text-xs">
-            <div className="flex justify-between text-stone-600 font-medium">
-              <span>Grand Total Amount:</span>
-              <span className="font-bold text-stone-900 text-sm">{formatPKR(purchase.grandTotal)}</span>
-            </div>
-            <div className="flex justify-between text-emerald-700 font-semibold">
-              <span>Amount Paid:</span>
-              <span>{formatPKR(purchase.amountPaid)}</span>
-            </div>
-            <div className="flex justify-between text-amber-800 font-bold border-t border-stone-200 pt-1.5 text-sm">
-              <span>Balance Payable:</span>
-              <span>{formatPKR(purchase.balanceDue)}</span>
-            </div>
-          </div>
-
-          {/* Attached Images */}
-          {(purchase.invoiceImage || purchase.paymentScreenshot) && (
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">
-                Attached Digital Records
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {purchase.invoiceImage && (
-                  <div
-                    onClick={() => onOpenImage(purchase.invoiceImage!, `Invoice: ${poNum}`)}
-                    className="group relative h-32 rounded-xl border border-stone-300 overflow-hidden bg-stone-100 flex items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors"
-                  >
-                    <img src={purchase.invoiceImage} alt="Invoice" className="h-full w-full object-contain" />
-                    <div className="absolute inset-0 bg-stone-900/30 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 text-white text-xs font-bold transition-opacity">
-                      <Maximize2 className="w-4 h-4" />
-                      <span>View Invoice Slip</span>
-                    </div>
-                  </div>
-                )}
-                {purchase.paymentScreenshot && (
-                  <div
-                    onClick={() => onOpenImage(purchase.paymentScreenshot!, `Payment Slip: ${poNum}`)}
-                    className="group relative h-32 rounded-xl border border-stone-300 overflow-hidden bg-stone-100 flex items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors"
-                  >
-                    <img src={purchase.paymentScreenshot} alt="Payment" className="h-full w-full object-contain" />
-                    <div className="absolute inset-0 bg-stone-900/30 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 text-white text-xs font-bold transition-opacity">
-                      <Maximize2 className="w-4 h-4" />
-                      <span>View Payment Slip</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-stone-200 bg-stone-50">
-          <button
-            onClick={onDelete}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete Record</span>
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onEdit}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-stone-700 bg-stone-200 hover:bg-stone-300 transition-colors"
-            >
-              <Edit className="w-3.5 h-3.5" />
-              <span>Edit Record</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ==========================================================================
-   IMAGE VIEWER MODAL (FULL RESOLUTION ZOOM)
-   ========================================================================== */
-
-function ImageViewerModal({
-  src,
-  title,
-  onClose,
-}: {
-  src: string
-  title: string
-  onClose: () => void
-}) {
-  return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-stone-950/85 backdrop-blur-md animate-fade-in">
-      <div className="relative max-w-4xl max-h-[90vh] bg-stone-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-stone-700">
-        <div className="flex items-center justify-between px-4 py-3 bg-stone-950 border-b border-stone-800 text-white">
-          <span className="text-xs font-bold truncate">{title}</span>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-stone-800 text-stone-300 hover:text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-4 flex items-center justify-center overflow-auto max-h-[80vh]">
-          <img src={src} alt={title} className="max-h-[75vh] max-w-full object-contain rounded-lg shadow-lg" />
-        </div>
       </div>
     </div>
   )

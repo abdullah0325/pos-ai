@@ -41,7 +41,7 @@ import PosView from './pos-view'
 import SalesView, { type SalesSubTab } from './sales-view'
 import PhonebookView from './phonebook-view'
 import CustomerManagementView from './customer-management-view'
-import ProcurementView, { type PurchaseSubTab } from './procurement-view'
+import PurchasesView from './purchases-view'
 import SuppliersManagementView from './suppliers-management-view'
 import ExpensesView from './expenses-view'
 import ProductsView, { type ProductsSubTab } from './products-view'
@@ -390,10 +390,10 @@ export default function BusinessApp() {
           )}
 
           {activeModule === 'purchase' && (
-            <ProcurementView
+            <PurchasesView
               db={db}
-              activeSubView={purchaseTab}
               onSaveDatabase={handleSaveDatabase}
+              onNavigate={handleNavigate}
             />
           )}
 
