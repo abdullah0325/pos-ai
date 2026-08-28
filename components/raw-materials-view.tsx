@@ -15,6 +15,7 @@ import {
   Eye,
   Receipt,
   UploadCloud,
+  ImageIcon,
   FileText,
   DollarSign,
   Truck,
@@ -279,6 +280,35 @@ export default function RawMaterialsView({
     exportToCSV(`Raw_Materials_Register_${new Date().toISOString().slice(0, 10)}`, headers, rows)
   }
 
+  const handleQuickImageUpload = async (materialId: string, file: File) => {
+    try {
+      const base64 = await fileToBase64(file)
+      const updated = db.rawMaterials.map((r) =>
+        r.id === materialId ? { ...r, imageUrl: base64 } : r
+      )
+      onSaveDatabase({ ...db, rawMaterials: updated })
+    } catch (err) {
+      console.error('Failed to upload image:', err)
+    }
+  }
+
+  const getCategoryBadgeClass = (category: string) => {
+    const cat = (category || '').toLowerCase()
+    if (cat.includes('packag')) {
+      return 'bg-blue-600/90 text-white'
+    }
+    if (cat.includes('chem') || cat.includes('mineral')) {
+      return 'bg-amber-600/90 text-white'
+    }
+    if (cat.includes('flavor')) {
+      return 'bg-purple-600/90 text-white'
+    }
+    if (cat.includes('ingred') || cat.includes('sugar') || cat.includes('concentrate')) {
+      return 'bg-[#7cb518]/90 text-white'
+    }
+    return 'bg-stone-700/90 text-white'
+  }
+
   return (
     <div className="page-stack" id="raw-materials-management-view">
       {/* Top Heading */}
@@ -307,133 +337,131 @@ export default function RawMaterialsView({
         </div>
       </div>
 
-      {/* Metrics Banner */}
-      <div className="stats-grid">
+      {/* KPI Stats Grid */}
+      <div className="stat-grid">
         <div className="stat-card" id="metric-total-materials">
           <div className="stat-label">Total Raw Items</div>
-          <div className="stat-value">{totalItemsCount}</div>
-          <div className="stat-helper">
+          <strong>{totalItemsCount} Items</strong>
+          <span className="stat-change text-blue-700">
             {categories.length} categories across plant storage
-          </div>
+          </span>
         </div>
 
         <div className="stat-card" id="metric-raw-valuation">
           <div className="stat-label">Total Material Valuation</div>
-          <div className="stat-value text-[#7cb518]">{formatPKR(totalValuation)}</div>
-          <div className="stat-helper">Based on landed purchase & handling cost</div>
+          <strong>{formatPKR(totalValuation)}</strong>
+          <span className="stat-change text-emerald-700">Based on landed purchase & handling cost</span>
         </div>
 
         <div className="stat-card" id="metric-raw-alerts">
           <div className="stat-label">Low Stock Alerts</div>
-          <div className="stat-value text-amber-600">
-            {lowStockCount} {outOfStockCount > 0 && <span className="text-xs text-rose-600 font-normal">({outOfStockCount} out of stock)</span>}
-          </div>
-          <div className="stat-helper">Items below factory reorder thresholds</div>
+          <strong className={lowStockCount > 0 ? 'text-amber-700' : 'text-stone-900'}>
+            {lowStockCount} Materials
+          </strong>
+          <span className="stat-change text-amber-700">
+            {lowStockCount > 0
+              ? `${outOfStockCount > 0 ? `${outOfStockCount} out of stock, ` : ''}${lowStockCount} below safety limit`
+              : 'All materials above safety limit'}
+          </span>
         </div>
 
         <div className="stat-card" id="metric-total-suppliers">
           <div className="stat-label">Registered Suppliers</div>
-          <div className="stat-value">{db.suppliers.length}</div>
-          <div className="stat-helper">Vendors supplying packaging & ingredients</div>
+          <strong>{db.suppliers.length} Suppliers</strong>
+          <span className="stat-change text-purple-700">Vendors supplying packaging & ingredients</span>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="filter-card">
-        <div className="flex flex-col sm:flex-row gap-2 flex-1">
-          <div className="search-box flex-1">
-            <Search className="w-4 h-4 text-gray-400" />
+      {/* Toolbar & Multi-Filters */}
+      <div
+        className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-3"
+        id="raw-materials-toolbar"
+      >
+        <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              placeholder="Search raw material by name, SKU, category, supplier, or description..."
+              placeholder="Search raw material by name, SKU, category, supplier, description..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-8 py-2 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518] transition-all"
               id="input-raw-search"
             />
             {query && (
               <button
                 type="button"
-                className="text-gray-400 hover:text-gray-600 mr-2 text-xs"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
                 onClick={() => setQuery('')}
               >
-                Clear
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Category Filter */}
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-gray-500 font-medium hidden sm:inline">Category:</span>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-              id="filter-raw-category"
-            >
-              <option value="All">All Categories ({db.rawMaterials.length})</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c} {categoryCounts[c] ? `(${categoryCounts[c]})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Category Dropdown Filter */}
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+            id="filter-raw-category"
+          >
+            <option value="All">All Categories ({db.rawMaterials.length})</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c} {categoryCounts[c] ? `(${categoryCounts[c]})` : ''}
+              </option>
+            ))}
+          </select>
 
-          {/* Stock Level Filter */}
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-gray-500 font-medium hidden sm:inline">Stock Level:</span>
-            <select
-              value={stockStatusFilter}
-              onChange={(e) => setStockStatusFilter(e.target.value)}
-              className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-              id="filter-raw-stock"
-            >
-              <option value="All">All Stock Levels</option>
-              <option value="In stock">In Stock</option>
-              <option value="Low stock">Low Stock Alert</option>
-              <option value="Out of stock">Out of Stock</option>
-            </select>
-          </div>
+          {/* Stock Status Filter */}
+          <select
+            value={stockStatusFilter}
+            onChange={(e) => setStockStatusFilter(e.target.value)}
+            className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+            id="filter-raw-stock"
+          >
+            <option value="All">All Stock Levels</option>
+            <option value="In stock">In Stock</option>
+            <option value="Low stock">Low Stock Alert</option>
+            <option value="Out of stock">Out of Stock</option>
+          </select>
 
           {/* Supplier Filter */}
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-gray-500 font-medium hidden sm:inline">Supplier:</span>
-            <select
-              value={supplierFilter}
-              onChange={(e) => setSupplierFilter(e.target.value)}
-              className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-              id="filter-raw-supplier"
-            >
-              <option value="All">All Suppliers</option>
-              {db.suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={supplierFilter}
+            onChange={(e) => setSupplierFilter(e.target.value)}
+            className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+            id="filter-raw-supplier"
+          >
+            <option value="All">All Suppliers ({db.suppliers.length})</option>
+            {db.suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
 
           {/* Sorting */}
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-gray-500 font-medium hidden sm:inline">Sort:</span>
+          <div className="flex items-center gap-1">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+              className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
               id="select-raw-sort"
             >
-              <option value="name">Material Name</option>
-              <option value="stock">Remaining Stock</option>
-              <option value="unitCost">Base Price / Unit</option>
-              <option value="totalCost">Total Landed Cost / Unit</option>
-              <option value="valuation">Stock Valuation</option>
-              <option value="consumed">Production Consumed Qty</option>
+              <option value="name">Sort: Name</option>
+              <option value="stock">Sort: Stock</option>
+              <option value="unitCost">Sort: Price / Unit</option>
+              <option value="totalCost">Sort: Landed Cost</option>
+              <option value="valuation">Sort: Total Value</option>
+              <option value="consumed">Sort: Consumed Qty</option>
             </select>
             <button
               type="button"
               onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-              className="border border-[var(--border)] rounded-md px-2 py-1.5 text-xs bg-white hover:bg-gray-50 font-mono"
+              className="border border-stone-200 rounded-lg px-2.5 py-2 text-xs bg-white hover:bg-stone-50 text-stone-700 font-bold transition-colors"
               title="Toggle Ascending / Descending"
             >
               {sortOrder === 'asc' ? '↑' : '↓'}
@@ -442,238 +470,207 @@ export default function RawMaterialsView({
         </div>
       </div>
 
-      {/* Main Table of Raw Materials */}
-      <div className="panel table-panel" id="raw-materials-table-panel">
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Material & Image</th>
-                <th>SKU Code</th>
-                <th>Category</th>
-                <th>Size / Unit</th>
-                <th>Price / Unit</th>
-                <th>Other Cost</th>
-                <th>Total Cost / Unit</th>
-                <th>Remaining Stock</th>
-                <th>Consumed (Runs)</th>
-                <th>Total Valuation</th>
-                <th>Supplier Reference</th>
-                <th>Status</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMaterials.length === 0 ? (
-                <tr>
-                  <td colSpan={13} className="text-center py-12 text-gray-500">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <Boxes className="w-8 h-8 text-gray-300" />
-                      <p className="text-sm font-semibold text-gray-700">No raw materials found matching filters.</p>
-                      <p className="text-xs text-gray-400">Try adjusting your search criteria or add a new material.</p>
-                      <button
-                        type="button"
-                        className="button primary text-xs mt-2"
-                        onClick={() => {
-                          setSelectedRawMaterial(null)
-                          setIsCreatingMaterial(true)
-                        }}
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add New Raw Material
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredMaterials.map((r) => {
-                  const isLow = r.quantity <= r.reorderLevel && r.quantity > 0
-                  const isOut = r.quantity <= 0
-                  const effectiveCost =
-                    r.totalCostPerUnit !== undefined ? r.totalCostPerUnit : r.unitCost + (r.otherCost || 0)
-                  const totalVal = r.quantity * effectiveCost
-                  const consumedQty = getMaterialConsumption(r.id, r.sku, r.name)
+      {/* RAW MATERIALS CARD GRID */}
+      <div id="raw-materials-panel">
+        {filteredMaterials.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
+            <div className="flex flex-col items-center justify-center gap-3 max-w-sm mx-auto">
+              <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
+                <Boxes className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-stone-800">No raw materials found</h3>
+              <p className="text-xs text-stone-500">
+                {query || categoryFilter !== 'All' || stockStatusFilter !== 'All' || supplierFilter !== 'All'
+                  ? 'Try adjusting your search query or filters to find what you are looking for.'
+                  : 'Get started by creating your first raw material item.'}
+              </p>
+              <button
+                type="button"
+                className="button primary text-xs mt-2"
+                onClick={() => {
+                  setSelectedRawMaterial(null)
+                  setIsCreatingMaterial(true)
+                }}
+              >
+                <Plus className="w-4 h-4" /> Add Raw Material
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4.5"
+            id="raw-materials-card-grid"
+          >
+            {filteredMaterials.map((r) => {
+              const isLow = r.quantity <= r.reorderLevel && r.quantity > 0
+              const isOut = r.quantity <= 0
+              const effectiveCost =
+                r.totalCostPerUnit !== undefined ? r.totalCostPerUnit : r.unitCost + (r.otherCost || 0)
+              const sizeLabel = r.size ? `${r.size} ${r.unit}`.trim() : null
 
-                  return (
-                    <tr key={r.id} className={isOut ? 'bg-rose-50/40' : isLow ? 'bg-amber-50/30' : ''}>
-                      {/* Material & Image */}
-                      <td>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center flex-shrink-0">
-                            {r.imageUrl ? (
-                              <img src={r.imageUrl} alt={r.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <Boxes className="w-5 h-5 text-purple-600" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-bold text-gray-900 text-xs">{r.name}</div>
-                            {r.description && (
-                              <div className="text-[10px] text-gray-500 line-clamp-1 max-w-[200px]">
-                                {r.description}
-                              </div>
-                            )}
-                            {r.purchaseInvoiceImage && (
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-semibold mt-0.5 hover:underline"
-                                onClick={() => setViewingInvoiceImage(r.purchaseInvoiceImage || null)}
-                              >
-                                <Receipt className="w-3 h-3" /> Invoice attached
-                              </button>
-                            )}
-                          </div>
+              return (
+                <div
+                  key={r.id}
+                  className="group bg-white rounded-2xl p-3.5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative overflow-hidden"
+                  id={`raw-material-card-${r.id}`}
+                >
+                  {/* Top Section: Image & Overlaid Badges */}
+                  <div>
+                    <div className="w-full aspect-[4/3] rounded-xl bg-stone-100 overflow-hidden relative flex items-center justify-center mb-3">
+                      {r.imageUrl ? (
+                        <img
+                          src={r.imageUrl}
+                          alt={r.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-stone-300 gap-1">
+                          <Boxes className="w-10 h-10 stroke-[1.5]" />
+                          <span className="text-[10px] font-medium text-stone-400">No Image</span>
                         </div>
-                      </td>
+                      )}
 
-                      {/* SKU Code */}
-                      <td>
-                        <span className="font-mono text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
-                          {r.sku}
-                        </span>
-                      </td>
-
-                      {/* Category */}
-                      <td>
-                        <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-medium border border-purple-100">
-                          {r.category}
-                        </span>
-                      </td>
-
-                      {/* Size / Unit */}
-                      <td>
-                        <span className="text-xs font-semibold text-gray-900">
-                          {r.size ? `${r.size} ${r.unit}` : r.unit}
-                        </span>
-                      </td>
-
-                      {/* Price / Unit */}
-                      <td>
-                        <span className="text-xs font-medium text-gray-900">{formatPKR(r.unitCost)}</span>
-                      </td>
-
-                      {/* Other Cost */}
-                      <td>
-                        {r.otherCost && r.otherCost > 0 ? (
-                          <span className="text-xs text-gray-600">+{formatPKR(r.otherCost)}</span>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-
-                      {/* Total Cost / Unit */}
-                      <td>
-                        <div className="text-xs font-bold text-gray-900">{formatPKR(effectiveCost)}</div>
-                        {r.isManualTotalCost && (
-                          <span className="text-[9px] text-purple-600 block font-medium">(manual override)</span>
-                        )}
-                      </td>
-
-                      {/* Remaining Stock */}
-                      <td>
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`font-bold text-xs ${
-                              isOut ? 'text-rose-700' : isLow ? 'text-amber-700' : 'text-gray-900'
-                            }`}
-                          >
-                            {r.quantity} {r.unit}
-                          </span>
-                        </div>
-                        {isLow && (
-                          <span className="text-[10px] text-amber-700 font-semibold block flex items-center gap-0.5">
-                            <AlertTriangle className="w-3 h-3 text-amber-500 inline" /> Reorder: {r.reorderLevel} {r.unit}
-                          </span>
-                        )}
-                        {isOut && <span className="text-[10px] text-rose-600 font-bold block">Empty Warehouse</span>}
-                      </td>
-
-                      {/* Consumed in Production */}
-                      <td>
-                        <span className="text-xs font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
-                          {consumedQty} {r.unit}
-                        </span>
-                      </td>
-
-                      {/* Total Valuation */}
-                      <td>
-                        <span className="text-xs font-bold text-gray-900">{formatPKR(totalVal)}</span>
-                      </td>
-
-                      {/* Supplier Reference */}
-                      <td>
-                        {r.supplierName ? (
-                          <div className="text-xs text-gray-800">
-                            <span className="font-medium">{r.supplierName}</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-
-                      {/* Status */}
-                      <td>
-                        <span
-                          className={
-                            isOut
-                              ? 'status status-danger'
-                              : isLow
-                              ? 'status status-warning'
-                              : 'status status-success'
+                      {/* Top-Right Action Buttons (Edit, Delete, Upload Image, Stock Adjust) */}
+                      <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-xs p-1 rounded-lg shadow-xs opacity-90 group-hover:opacity-100 transition-opacity">
+                        <label
+                          className="p-1.5 text-stone-500 hover:text-indigo-600 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
+                          title="Upload / Change Image"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) handleQuickImageUpload(r.id, file)
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="p-1.5 text-stone-500 hover:text-[#7cb518] hover:bg-stone-100 rounded-md transition-colors"
+                          title="Quick Stock Adjust"
+                          onClick={() =>
+                            setStockAdjustmentItem({
+                              id: r.id,
+                              name: r.name,
+                              current: r.quantity,
+                            })
                           }
                         >
-                          {isOut ? 'Out of stock' : isLow ? 'Low stock' : 'In stock'}
-                        </span>
-                      </td>
+                          <ArrowUpCircle className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-stone-100 rounded-md transition-colors"
+                          title="Edit Raw Material"
+                          onClick={() => {
+                            setSelectedRawMaterial(r)
+                            setIsCreatingMaterial(true)
+                          }}
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-md transition-colors"
+                          title="Delete Raw Material"
+                          onClick={() => handleDeleteMaterial(r.id, r.name)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
 
-                      {/* Actions */}
-                      <td>
-                        <div className="row-actions justify-end">
-                          <button
-                            className="row-action text-gray-600 hover:text-gray-900"
-                            title="View Full Material Specifications & Production Usage"
-                            onClick={() => setViewDetailsMaterial(r)}
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            className="row-action text-[#7cb518] hover:text-[#6a9e14]"
-                            title="Quick Stock In / Out Adjustment"
-                            onClick={() =>
-                              setStockAdjustmentItem({
-                                id: r.id,
-                                name: r.name,
-                                current: r.quantity,
-                              })
-                            }
-                          >
-                            <ArrowUpCircle className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            className="row-action text-blue-600 hover:text-blue-800"
-                            title="Edit raw material"
-                            onClick={() => {
-                              setSelectedRawMaterial(r)
-                              setIsCreatingMaterial(true)
-                            }}
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            className="row-action danger"
-                            title="Delete raw material"
-                            onClick={() => handleDeleteMaterial(r.id, r.name)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      {/* Top-Left Category Badge & Status Overlays */}
+                      <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+                        <span
+                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs ${getCategoryBadgeClass(
+                            r.category
+                          )}`}
+                        >
+                          {r.category}
+                        </span>
+
+                        {isOut ? (
+                          <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
+                            Out of Stock
+                          </span>
+                        ) : isLow ? (
+                          <span className="inline-flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
+                            <AlertTriangle className="w-2.5 h-2.5" /> Low Stock
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* Category Pill & SKU Label Row */}
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="inline-block bg-stone-100 text-stone-700 font-semibold text-[10px] px-2 py-0.5 rounded-md truncate max-w-[130px]">
+                        {r.supplierName || r.category}
+                      </span>
+                      <span className="font-mono text-[10px] text-stone-400">
+                        {r.sku}
+                      </span>
+                    </div>
+
+                    {/* Material Name */}
+                    <h4
+                      className="font-bold text-stone-900 text-sm leading-snug line-clamp-1 group-hover:text-[#7cb518] transition-colors cursor-pointer"
+                      title={r.name}
+                      onClick={() => setViewDetailsMaterial(r)}
+                    >
+                      {r.name}
+                    </h4>
+
+                    {/* Unit & Quantity / Stock Info */}
+                    <div className="flex items-center justify-between text-xs text-stone-500 mt-1">
+                      <span>
+                        {sizeLabel ? `${sizeLabel} • ` : ''}
+                        <strong className="text-stone-700">{r.unit}</strong>
+                      </span>
+                      <span
+                        className={`font-bold ${
+                          isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-stone-800'
+                        }`}
+                      >
+                        {r.quantity} {r.unit} in stock
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bottom Pricing Bar */}
+                  <div className="mt-3.5 pt-3 border-t border-stone-100 flex items-end justify-between">
+                    <div>
+                      <span className="text-[10px] text-stone-400 uppercase font-bold tracking-wider block">
+                        Price / Unit
+                      </span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-sm font-extrabold text-stone-900">
+                          {formatPKR(r.unitCost)}
+                        </span>
+                        {effectiveCost !== r.unitCost && (
+                          <span className="text-[10px] text-stone-400 font-medium">
+                            (Landed: {formatPKR(effectiveCost)})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setViewDetailsMaterial(r)}
+                      className="text-[11px] font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-0.5 hover:underline"
+                    >
+                      <Eye className="w-3 h-3" /> View
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* MODAL: ADD / EDIT RAW MATERIAL */}
