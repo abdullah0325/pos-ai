@@ -439,6 +439,33 @@ export interface EmployeeItem {
   updatedAt: string
 }
 
+export interface PhonebookCategoryItem {
+  id: string
+  name: string
+  color?: string // 'emerald' | 'purple' | 'amber' | 'blue' | 'orange' | 'teal' | 'sky' | 'stone' | 'rose' | 'red'
+  description?: string
+  createdAt?: string
+}
+
+export interface PhonebookContactItem {
+  id: string
+  name: string
+  phone: string
+  altPhone?: string
+  whatsapp?: string
+  email?: string
+  category: string
+  businessName?: string
+  city?: string
+  address?: string
+  notes?: string
+  isFavorite?: boolean
+  linkedType?: 'customer' | 'supplier' | 'employee' | 'other'
+  linkedId?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface AppDatabase {
   categories: CategoryItem[]
   customerCategories?: CustomerCategoryItem[]
@@ -455,6 +482,8 @@ export interface AppDatabase {
   transfers: AccountTransfer[]
   ledgers: LedgerEntry[]
   employees: EmployeeItem[]
+  phonebookCategories?: PhonebookCategoryItem[]
+  phonebookContacts?: PhonebookContactItem[]
   lastBackupDate?: string
   version: number
 }
@@ -475,6 +504,17 @@ export const defaultCustomerCategories: CustomerCategoryItem[] = [
   { id: 'ccat-3', name: 'Sales Man', parentType: 'Wholesaler', description: 'Field sales representatives & route order bookers', createdAt: '2026-08-01' },
   { id: 'ccat-4', name: 'Walk-in Customer', parentType: 'Walk-in', description: 'Walk-in counter buyers & occasional clients', createdAt: '2026-08-01' },
   { id: 'ccat-5', name: 'Van Sales', parentType: 'Wholesaler', description: 'Direct mobile van route sales & wholesale delivery', createdAt: '2026-08-01' },
+]
+
+export const defaultPhonebookCategories: PhonebookCategoryItem[] = [
+  { id: 'pbcat-1', name: 'Distributors', color: 'emerald', description: 'Regional distribution partners & territory wholesalers', createdAt: '2026-08-01' },
+  { id: 'pbcat-2', name: 'Wholesalers', color: 'purple', description: 'Bulk wholesale buyers, mandi dealers & stockists', createdAt: '2026-08-01' },
+  { id: 'pbcat-3', name: 'Retailers', color: 'amber', description: 'Retail shops, marts, bakeries & grocery counters', createdAt: '2026-08-01' },
+  { id: 'pbcat-4', name: 'Suppliers', color: 'blue', description: 'Raw materials, packaging, chemical & machinery vendors', createdAt: '2026-08-01' },
+  { id: 'pbcat-5', name: 'Transport & Logistics', color: 'orange', description: 'Goods transport, truck addas, loaders & delivery drivers', createdAt: '2026-08-01' },
+  { id: 'pbcat-6', name: 'Maintenance & Technical', color: 'teal', description: 'Electricians, mechanics, boiler & chiller service engineers', createdAt: '2026-08-01' },
+  { id: 'pbcat-7', name: 'Staff & Management', color: 'sky', description: 'Plant supervisors, gate security, dispatch incharge', createdAt: '2026-08-01' },
+  { id: 'pbcat-8', name: 'General & Personal', color: 'stone', description: 'General business, legal, banking and emergency contacts', createdAt: '2026-08-01' },
 ]
 
 export const DB_STORAGE_KEY = 'al_farooq_foods_db_v2'
@@ -2610,7 +2650,153 @@ export const initialDatabase: AppDatabase = {
       notes: 'Maintains daily stock registers, raw material gate passes, and petty cash.',
       updatedAt: '2026-08-25',
     },
+  ],
+  phonebookCategories: defaultPhonebookCategories,
+}
+
+// Helper to generate initial phonebook contacts from database entities
+export function generateInitialPhonebookContacts(database: Partial<AppDatabase>): PhonebookContactItem[] {
+  const contacts: PhonebookContactItem[] = []
+  const seenPhones = new Set<string>()
+
+  // 1. Map from customers
+  if (database.customers && Array.isArray(database.customers)) {
+    database.customers.forEach((c) => {
+      let category = 'Retailers'
+      if (c.type === 'Distributor') category = 'Distributors'
+      else if (c.type === 'Wholesaler') category = 'Wholesalers'
+      else if (c.type === 'Retailer') category = 'Retailers'
+      else if (c.type === 'Sales Representative' || c.type === 'Sales Man') category = 'Distributors'
+      else category = 'General & Personal'
+
+      const phone = c.phone || ''
+      if (phone && !seenPhones.has(phone)) {
+        seenPhones.add(phone)
+        contacts.push({
+          id: `pb-c-${c.id}`,
+          name: c.name,
+          phone: c.phone,
+          altPhone: c.altPhone || '',
+          whatsapp: c.phone,
+          email: c.email || '',
+          category,
+          businessName: c.businessName || '',
+          city: c.city || '',
+          address: c.address || '',
+          notes: c.notes || '',
+          isFavorite: c.type === 'Distributor',
+          linkedType: 'customer',
+          linkedId: c.id,
+          createdAt: c.createdAt || '2026-08-01',
+          updatedAt: c.updatedAt || '2026-08-25',
+        })
+      }
+    })
+  }
+
+  // 2. Map from suppliers
+  if (database.suppliers && Array.isArray(database.suppliers)) {
+    database.suppliers.forEach((s) => {
+      const phone = s.phone || ''
+      if (phone && !seenPhones.has(phone)) {
+        seenPhones.add(phone)
+        contacts.push({
+          id: `pb-s-${s.id}`,
+          name: s.contactPerson ? `${s.contactPerson}` : s.name,
+          phone: s.phone,
+          altPhone: s.altPhone || '',
+          whatsapp: s.phone,
+          email: s.email || '',
+          category: 'Suppliers',
+          businessName: s.name,
+          city: s.city || '',
+          address: s.address || '',
+          notes: s.notes || `${s.category || 'Raw Material'} Supplier`,
+          isFavorite: false,
+          linkedType: 'supplier',
+          linkedId: s.id,
+          createdAt: s.createdAt || '2026-08-01',
+          updatedAt: s.updatedAt || '2026-08-25',
+        })
+      }
+    })
+  }
+
+  // 3. Transport & logistics, technical maintenance services
+  const logisticsAndServices: PhonebookContactItem[] = [
+    {
+      id: 'pb-extra-1',
+      name: 'Malik Aslam Niazi',
+      phone: '0300-4567890',
+      altPhone: '0321-7890123',
+      whatsapp: '0300-4567890',
+      category: 'Transport & Logistics',
+      businessName: 'Al-Madina Goods Transport Co.',
+      city: 'Lahore',
+      address: 'Shop 14, Truck Stand, Badami Bagh, Lahore',
+      notes: 'Primary freight contractor for Lahore, Rawalpindi & Peshawar shipments. Trailer & Mazda fleet.',
+      isFavorite: true,
+      linkedType: 'other',
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-25',
+    },
+    {
+      id: 'pb-extra-2',
+      name: 'Master Tariq Mahmood',
+      phone: '0302-3344556',
+      altPhone: '0345-6677889',
+      whatsapp: '0302-3344556',
+      category: 'Maintenance & Technical',
+      businessName: 'Tariq Engineering Works',
+      city: 'Gujranwala',
+      address: 'Small Industrial Estate #2, G.T. Road, Gujranwala',
+      notes: 'Industrial boiler, juice filling lines & packaging machinery overhaul expert. On-call 24/7.',
+      isFavorite: true,
+      linkedType: 'other',
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-25',
+    },
+    {
+      id: 'pb-extra-3',
+      name: 'Chaudhary Bilal Akram',
+      phone: '0313-5566778',
+      whatsapp: '0313-5566778',
+      category: 'Maintenance & Technical',
+      businessName: 'Bilal Industrial Automation & Electric',
+      city: 'Lahore',
+      address: 'Main Market, Kot Lakhpat Industrial Area, Lahore',
+      notes: 'Factory main distribution panels, 3-phase wiring, PLC inverter tuning and transformer service.',
+      isFavorite: false,
+      linkedType: 'other',
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-25',
+    },
+    {
+      id: 'pb-extra-4',
+      name: 'Rana Sohail Ahmed',
+      phone: '0321-9871234',
+      altPhone: '041-8765432',
+      whatsapp: '0321-9871234',
+      category: 'Transport & Logistics',
+      businessName: 'Niazi Express Cargo & Logistics',
+      city: 'Faisalabad',
+      address: 'General Bus Stand & Cargo Terminal, Faisalabad',
+      notes: 'Handles express daily dispatches to Faisalabad, Jhang, Toba Tek Singh & Sargodha.',
+      isFavorite: false,
+      linkedType: 'other',
+      createdAt: '2026-08-01',
+      updatedAt: '2026-08-25',
+    },
   ]
+
+  logisticsAndServices.forEach((item) => {
+    if (!seenPhones.has(item.phone)) {
+      seenPhones.add(item.phone)
+      contacts.push(item)
+    }
+  })
+
+  return contacts
 }
 
 // Helper to load database from LocalStorage
@@ -2742,6 +2928,16 @@ export function loadDatabase(): AppDatabase {
       })
     } else {
       parsed.purchases = initialDatabase.purchases || []
+      updated = true
+    }
+
+    if (!parsed.phonebookCategories || !Array.isArray(parsed.phonebookCategories) || parsed.phonebookCategories.length === 0) {
+      parsed.phonebookCategories = defaultPhonebookCategories
+      updated = true
+    }
+
+    if (!parsed.phonebookContacts || !Array.isArray(parsed.phonebookContacts) || parsed.phonebookContacts.length === 0) {
+      parsed.phonebookContacts = generateInitialPhonebookContacts(parsed)
       updated = true
     }
 
