@@ -101,8 +101,8 @@ export default function SalesView({
   return (
     <div className="flex flex-col gap-5">
       {/* Top Sales Horizontal Navigation Bar */}
-      <div className="bg-white rounded-xl border border-stone-200 p-2 shadow-xs sticky top-[71px] z-20">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+      <div className="bg-white rounded-xl border border-stone-200 p-1.5 shadow-xs sticky top-[71px] z-20">
+        <div className="flex flex-wrap items-center gap-1.5">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id
             return (
@@ -110,14 +110,15 @@ export default function SalesView({
                 key={tab.id}
                 id={`sales-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   isActive
                     ? 'bg-primary text-white shadow-xs font-bold'
                     : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
                 }`}
               >
                 {tab.icon}
-                <span>{tab.label}</span>
+                <span className="hidden sm:inline lg:hidden xl:inline">{tab.label}</span>
+                <span className="sm:hidden lg:inline xl:hidden">{tab.shortLabel}</span>
                 {tab.count !== undefined && (
                   <span
                     className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-md ${

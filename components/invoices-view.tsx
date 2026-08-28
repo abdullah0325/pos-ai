@@ -73,41 +73,64 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total Invoiced Sales</div>
-          <strong>{formatPKR(totalSales)}</strong>
-          <span className="stat-change">{db.invoices.length} total invoices issued</span>
+      {/* KPI Cards (Auto-wrap 2x2 on smaller screens) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-semibold text-stone-500 block">Total Invoiced Sales</span>
+            <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">{formatPKR(totalSales)}</strong>
+          </div>
+          <span className="text-[11px] font-medium text-stone-500 mt-2 block">{db.invoices.length} total invoices issued</span>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Payments Collected</div>
-          <strong className="text-emerald-700">{formatPKR(totalReceived)}</strong>
-          <span className="stat-change text-emerald-700">Deposited into Cash & Bank</span>
+        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-semibold text-stone-500 block">Payments Collected</span>
+            <strong className="text-xl font-extrabold text-emerald-700 block mt-1 tracking-tight">{formatPKR(totalReceived)}</strong>
+          </div>
+          <span className="text-[11px] font-medium text-emerald-700 mt-2 block">Deposited into Cash & Bank</span>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Outstanding Receivables</div>
-          <strong className="text-amber-700">{formatPKR(totalReceivable)}</strong>
-          <span className="stat-change text-amber-700">Pending customer recovery</span>
+        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-semibold text-stone-500 block">Outstanding Receivables</span>
+            <strong className="text-xl font-extrabold text-amber-700 block mt-1 tracking-tight">{formatPKR(totalReceivable)}</strong>
+          </div>
+          <span className="text-[11px] font-medium text-amber-800/80 mt-2 block">Pending customer recovery</span>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Unpaid / Partial Invoices</div>
-          <strong>{db.invoices.filter((i) => i.status !== 'Paid').length}</strong>
-          <span className="stat-change">Requires follow-up</span>
+        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+          <div>
+            <span className="text-xs font-semibold text-stone-500 block">Unpaid / Partial Invoices</span>
+            <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">
+              {db.invoices.filter((i) => i.status !== 'Paid').length}
+            </strong>
+          </div>
+          <span className="text-[11px] font-medium text-stone-500 mt-2 block">Requires follow-up</span>
         </div>
       </div>
 
-      {/* Filter toolbar */}
-      <div className="module-toolbar">
-        <div className="flex items-center gap-3">
-          <div className="search-box">
-            <Search />
-            <input placeholder="Search invoice # or customer..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      {/* Filter toolbar (Grouped Cohesive Container) */}
+      <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-xs flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+        <div className="flex flex-1 items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              placeholder="Search invoice # or customer..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-stone-50 hover:bg-white focus:bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+            />
+            {query && (
+              <button
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                onClick={() => setQuery('')}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white"
+            className="border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs bg-stone-50 text-stone-700 font-medium focus:outline-none cursor-pointer"
           >
             <option value="All">All Statuses</option>
             <option value="Paid">Paid</option>
@@ -115,57 +138,66 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
             <option value="Unpaid">Unpaid</option>
           </select>
         </div>
-        <div className="result-count">
+        <div className="text-[11px] font-medium text-stone-400 whitespace-nowrap pl-1">
           Showing {filteredInvoices.length} of {db.invoices.length} invoices
         </div>
       </div>
 
-      {/* Invoices Table */}
-      <div className="panel table-panel">
-        <div className="table-scroll">
-          <table>
+      {/* Invoices Table (Fit within 1440px desktop with no horizontal scroll) */}
+      <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr>
-                <th>Invoice #</th>
-                <th>Date</th>
-                <th>Customer / Buyer</th>
-                <th>Sale Type</th>
-                <th>Total Items</th>
-                <th>Grand Total</th>
-                <th>Paid</th>
-                <th>Balance</th>
-                <th>Status</th>
-                <th className="text-right">Actions</th>
+              <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-500 text-[10.5px] uppercase tracking-wider font-bold">
+                <th className="py-2.5 px-3">Invoice & Date</th>
+                <th className="py-2.5 px-3">Customer / Buyer</th>
+                <th className="py-2.5 px-3">Sale Type</th>
+                <th className="py-2.5 px-3">Items</th>
+                <th className="py-2.5 px-3">Grand Total</th>
+                <th className="py-2.5 px-3">Paid</th>
+                <th className="py-2.5 px-3">Balance</th>
+                <th className="py-2.5 px-3 text-center">Status</th>
+                <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-stone-100">
               {filteredInvoices.map((inv) => (
-                <tr key={inv.id}>
-                  <td>
-                    <div className="flex items-center gap-2 font-bold text-gray-800">
-                      <FileText className="w-4 h-4 text-[#7cb518]" />
-                      <span>{inv.invoiceNumber}</span>
-                    </div>
-                  </td>
-                  <td>{formatDate(inv.date)}</td>
-                  <td>
+                <tr key={inv.id} className="hover:bg-stone-50/70 transition-colors">
+                  <td className="py-2.5 px-3">
                     <div>
-                      <div className="font-semibold text-gray-900">{inv.customerName}</div>
-                      <div className="text-[11px] text-gray-500">{inv.phone || 'No phone'}</div>
+                      <div className="flex items-center gap-1.5 font-bold text-stone-900 text-xs">
+                        <FileText className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span>{inv.invoiceNumber}</span>
+                      </div>
+                      <div className="text-[11px] text-stone-400 mt-0.5">{formatDate(inv.date)}</div>
                     </div>
                   </td>
-                  <td>
-                    <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-medium text-gray-700">{inv.saleType}</span>
+                  <td className="py-2.5 px-3">
+                    <div>
+                      <div className="font-semibold text-stone-900 text-xs">{inv.customerName}</div>
+                      <div className="text-[11px] text-stone-500">{inv.phone || 'No phone'}</div>
+                    </div>
                   </td>
-                  <td>
+                  <td className="py-2.5 px-3">
+                    <span className="text-[11px] bg-stone-100 px-2 py-0.5 rounded font-medium text-stone-700 whitespace-nowrap">
+                      {inv.saleType}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 text-xs text-stone-700 whitespace-nowrap">
                     {inv.items.reduce((s, it) => s + it.quantity, 0)} {inv.items[0]?.unit || 'pk'}
                   </td>
-                  <td className="font-bold text-gray-900">{formatPKR(inv.grandTotal)}</td>
-                  <td className="text-emerald-700 font-semibold">{formatPKR(inv.amountPaid)}</td>
-                  <td className={inv.balanceDue > 0 ? 'text-amber-700 font-semibold' : 'text-gray-400'}>
-                    {inv.balanceDue > 0 ? formatPKR(inv.balanceDue) : 'Rs. 0'}
+                  <td className="py-2.5 px-3 font-bold text-stone-900 text-xs whitespace-nowrap">
+                    {formatPKR(inv.grandTotal)}
                   </td>
-                  <td>
+                  <td className="py-2.5 px-3 text-emerald-700 font-semibold text-xs whitespace-nowrap">
+                    {formatPKR(inv.amountPaid)}
+                  </td>
+                  <td className="py-2.5 px-3 whitespace-nowrap">
+                    <span className={inv.balanceDue > 0 ? 'text-amber-700 font-semibold text-xs' : 'text-stone-400 text-xs'}>
+                      {inv.balanceDue > 0 ? formatPKR(inv.balanceDue) : 'Rs. 0'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 text-center">
                     <span
                       className={
                         inv.status === 'Paid'
@@ -178,23 +210,23 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
                       {inv.status}
                     </span>
                   </td>
-                  <td>
-                    <div className="row-actions">
+                  <td className="py-2.5 px-3 text-right">
+                    <div className="row-actions justify-end">
                       <button
-                        className="row-action text-[#7cb518]"
+                        className="row-action text-[#7cb518] hover:bg-emerald-50"
                         title="Download / Print PDF"
                         onClick={() => {
                           const cust = db.customers.find((c) => c.id === inv.customerId)
                           generateInvoicePDF(inv, cust)
                         }}
                       >
-                        <Download />
+                        <Download className="w-3.5 h-3.5" />
                       </button>
-                      <button className="row-action" title="View details" onClick={() => setSelectedInvoice(inv)}>
-                        <FileText />
+                      <button className="row-action hover:bg-stone-100" title="View details" onClick={() => setSelectedInvoice(inv)}>
+                        <FileText className="w-3.5 h-3.5" />
                       </button>
                       <button className="row-action danger" title="Delete invoice" onClick={() => handleDelete(inv.id)}>
-                        <Trash2 />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </td>
@@ -205,7 +237,7 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
         </div>
         {filteredInvoices.length === 0 && (
           <div className="empty-state">
-            <ShoppingCart />
+            <ShoppingCart className="w-8 h-8 text-stone-300" />
             <strong>No Invoices Found</strong>
             <span>Create a new invoice or adjust your search filter.</span>
           </div>

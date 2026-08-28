@@ -452,58 +452,72 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
       ) : (
         /* VIEW: PROFILES / SHOPS / DISTRIBUTORS LIST */
         <>
-          {/* KPI Summary Cards */}
-          <div className="stat-grid">
-            <div className="stat-card">
-              <div className="stat-label">Total Outstanding Receivables</div>
-              <strong className="text-amber-700">{formatPKR(totalReceivables)}</strong>
-              <span className="stat-change text-amber-800">
+          {/* KPI Summary Cards (Auto-wrap 2x2 on smaller screens) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-semibold text-stone-500 block">Total Outstanding Receivables</span>
+                <strong className="text-xl font-extrabold text-amber-700 block mt-1 tracking-tight">{formatPKR(totalReceivables)}</strong>
+              </div>
+              <span className="text-[11px] font-medium text-amber-800/80 mt-2 block">
                 {entityType === 'distributors' ? 'Due from commercial channels' : 'Pending collection across shops'}
               </span>
             </div>
 
-            <div className="stat-card">
-              <div className="stat-label">Total Credit Limits Authorized</div>
-              <strong>{formatPKR(totalCreditLimits)}</strong>
-              <span className="stat-change">Allocated trade credit limits</span>
+            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-semibold text-stone-500 block">Total Credit Limits Authorized</span>
+                <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">{formatPKR(totalCreditLimits)}</strong>
+              </div>
+              <span className="text-[11px] font-medium text-stone-500 mt-2 block">Allocated trade credit limits</span>
             </div>
 
-            <div className="stat-card">
-              <div className="stat-label">Registered Accounts</div>
-              <strong>{filteredCustomers.length}</strong>
-              <span className="stat-change text-emerald-700">
+            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-semibold text-stone-500 block">Registered Accounts</span>
+                <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">{filteredCustomers.length}</strong>
+              </div>
+              <span className="text-[11px] font-medium text-emerald-700 mt-2 block truncate">
                 {entityType === 'distributors'
                   ? `${distributorCount} Distributors · ${salesRepCount} Sales Reps`
-                  : `${wholesalerCount} Wholesalers · ${retailerCount} Retail Shops · ${otherCount} Other`}
+                  : entityType === 'wholesalers'
+                  ? `${wholesalerCount} Wholesaler Accounts`
+                  : `${retailerCount} Retail Shops · ${otherCount} Other`}
               </span>
             </div>
 
-            <div className="stat-card">
-              <div className="stat-label">Zero-Balance (Clear) Accounts</div>
-              <strong className="text-emerald-700">{filteredCustomers.filter((c) => c.currentBalance <= 0).length}</strong>
-              <span className="stat-change">Fully settled / no dues</span>
+            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-semibold text-stone-500 block">Zero-Balance (Clear) Accounts</span>
+                <strong className="text-xl font-extrabold text-emerald-700 block mt-1 tracking-tight">
+                  {filteredCustomers.filter((c) => c.currentBalance <= 0).length}
+                </strong>
+              </div>
+              <span className="text-[11px] font-medium text-stone-500 mt-2 block">Fully settled / 0 dues</span>
             </div>
           </div>
 
-          {/* Search and Filters Toolbar */}
-          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-white p-3 rounded-xl border border-gray-200">
+          {/* Search and Filters Toolbar (Grouped Cohesive Container) */}
+          <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-xs flex flex-col lg:flex-row gap-2.5 items-stretch lg:items-center justify-between">
             {/* Search Box */}
-            <div className="relative flex-1 min-w-[260px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
                 placeholder={
                   entityType === 'customers'
-                    ? 'Search by shop name, owner name, ID, phone, city, or market address...'
-                    : 'Search by name, agency, ID, phone, city, or territory...'
+                    ? 'Search shop name, owner, ID, phone, city...'
+                    : entityType === 'wholesalers'
+                    ? 'Search wholesaler, owner, ID, phone, city...'
+                    : 'Search distributor, sales rep, agency, ID, city...'
                 }
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
+                className="w-full pl-9 pr-8 py-1.5 text-xs bg-stone-50 hover:bg-white focus:bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
               />
               {query && (
                 <button
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
                   onClick={() => setQuery('')}
                 >
                   <X className="w-3.5 h-3.5" />
@@ -511,127 +525,119 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               )}
             </div>
 
-            {/* Type Filter Pills */}
-            {entityType === 'distributors' ? (
-              <div className="flex items-center bg-gray-100 p-1 rounded-lg text-xs font-medium">
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all ${
-                    typeFilter === 'all' ? 'bg-white shadow-sm font-bold text-gray-900' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  onClick={() => setTypeFilter('all')}
-                >
-                  All Channels ({db.customers.filter((c) => c.type === 'Distributor' || c.type === 'Sales Representative').length})
-                </button>
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all ${
-                    typeFilter === 'Distributor'
-                      ? 'bg-white shadow-sm font-bold text-[#7cb518]'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  onClick={() => setTypeFilter('Distributor')}
-                >
-                  Distributors ({db.customers.filter((c) => c.type === 'Distributor').length})
-                </button>
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all ${
-                    typeFilter === 'Sales Representative'
-                      ? 'bg-white shadow-sm font-bold text-blue-600'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  onClick={() => setTypeFilter('Sales Representative')}
-                >
-                  Sales Reps ({db.customers.filter((c) => c.type === 'Sales Representative').length})
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center bg-gray-100 p-1 rounded-lg text-xs font-medium overflow-x-auto">
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
-                    typeFilter === 'all' ? 'bg-white shadow-sm font-bold text-gray-900' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  onClick={() => setTypeFilter('all')}
-                >
-                  All ({db.customers.length})
-                </button>
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
-                    typeFilter === 'Wholesaler'
-                      ? 'bg-white shadow-sm font-bold text-purple-700'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  onClick={() => setTypeFilter('Wholesaler')}
-                >
-                  Wholesalers ({db.customers.filter((c) => c.type === 'Wholesaler').length})
-                </button>
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
-                    typeFilter === 'Retailer'
-                      ? 'bg-white shadow-sm font-bold text-blue-700'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  onClick={() => setTypeFilter('Retailer')}
-                >
-                  Retailers / Shops ({db.customers.filter((c) => c.type === 'Retailer').length})
-                </button>
-                <button
-                  className={`px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
-                    typeFilter === 'Other'
-                      ? 'bg-white shadow-sm font-bold text-amber-700'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  onClick={() => setTypeFilter('Other')}
-                >
-                  Other ({db.customers.filter((c) => c.type === 'Other').length})
-                </button>
-              </div>
-            )}
+            {/* Filter Pills & Dropdown group */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Type Filter Pills */}
+              {entityType === 'distributors' ? (
+                <div className="flex items-center bg-stone-100 p-0.5 rounded-lg text-xs font-medium border border-stone-200/60">
+                  <button
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      typeFilter === 'all' ? 'bg-white shadow-xs font-bold text-stone-900' : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    onClick={() => setTypeFilter('all')}
+                  >
+                    All Channels ({db.customers.filter((c) => c.type === 'Distributor' || c.type === 'Sales Representative').length})
+                  </button>
+                  <button
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      typeFilter === 'Distributor'
+                        ? 'bg-white shadow-xs font-bold text-emerald-700'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    onClick={() => setTypeFilter('Distributor')}
+                  >
+                    Distributors ({db.customers.filter((c) => c.type === 'Distributor').length})
+                  </button>
+                  <button
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      typeFilter === 'Sales Representative'
+                        ? 'bg-white shadow-xs font-bold text-teal-700'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    onClick={() => setTypeFilter('Sales Representative')}
+                  >
+                    Sales Reps ({db.customers.filter((c) => c.type === 'Sales Representative').length})
+                  </button>
+                </div>
+              ) : entityType === 'customers' ? (
+                <div className="flex items-center bg-stone-100 p-0.5 rounded-lg text-xs font-medium border border-stone-200/60">
+                  <button
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      typeFilter === 'all' ? 'bg-white shadow-xs font-bold text-stone-900' : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    onClick={() => setTypeFilter('all')}
+                  >
+                    All ({retailerCount + otherCount})
+                  </button>
+                  <button
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      typeFilter === 'Retailer'
+                        ? 'bg-white shadow-xs font-bold text-blue-700'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    onClick={() => setTypeFilter('Retailer')}
+                  >
+                    Retailers ({retailerCount})
+                  </button>
+                  <button
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      typeFilter === 'Other'
+                        ? 'bg-white shadow-xs font-bold text-amber-700'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    onClick={() => setTypeFilter('Other')}
+                  >
+                    Other ({otherCount})
+                  </button>
+                </div>
+              ) : null}
 
-            {/* Balance Filter Dropdown */}
-            <div className="flex items-center gap-2">
-              <Filter className="w-3.5 h-3.5 text-gray-500" />
-              <select
-                value={balanceFilter}
-                onChange={(e) => setBalanceFilter(e.target.value as any)}
-                className="text-xs border border-gray-300 rounded-lg p-2 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-              >
-                <option value="all">All Balance Statuses</option>
-                <option value="pending">With Outstanding Balance ({'>'} 0)</option>
-                <option value="settled">Fully Settled (0 Due)</option>
-                <option value="overlimit">Exceeded Credit Limit</option>
-              </select>
+              {/* Balance Filter Dropdown */}
+              <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1">
+                <Filter className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                <select
+                  value={balanceFilter}
+                  onChange={(e) => setBalanceFilter(e.target.value as any)}
+                  className="text-xs bg-transparent border-0 text-stone-700 font-medium focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="all">All Balance Statuses</option>
+                  <option value="pending">With Dues ({'>'} 0)</option>
+                  <option value="settled">Fully Settled (0 Due)</option>
+                  <option value="overlimit">Exceeded Limit</option>
+                </select>
+              </div>
+
+              <span className="text-[11px] font-medium text-stone-400 whitespace-nowrap pl-1 hidden xl:inline">
+                {filteredCustomers.length} accounts
+              </span>
             </div>
           </div>
 
-          {/* Profiles Table */}
-          <div className="panel table-panel">
-            <div className="table-scroll">
-              <table>
+          {/* Profiles Table (Fit within 1440px desktop with no horizontal scroll) */}
+          <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr>
-                    <th>Profile ID</th>
-                    <th>{entityType === 'customers' ? 'Shop / Business Name' : 'Party & Agency Title'}</th>
-                    <th>Channel Type</th>
-                    <th>Contact & WhatsApp</th>
-                    <th>City & Address</th>
-                    <th>Credit Limit</th>
-                    <th>Outstanding Balance</th>
-                    <th>Status</th>
-                    <th className="text-right">Actions</th>
+                  <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-500 text-[10.5px] uppercase tracking-wider font-bold">
+                    <th className="py-2.5 px-3">{entityType === 'customers' ? 'Shop & Owner' : 'Party & Agency Title'}</th>
+                    <th className="py-2.5 px-3">Channel</th>
+                    <th className="py-2.5 px-3">Contact & WhatsApp</th>
+                    <th className="py-2.5 px-3">City / Location</th>
+                    <th className="py-2.5 px-3">Credit Limit</th>
+                    <th className="py-2.5 px-3">Outstanding Balance</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-stone-100">
                   {filteredCustomers.map((c) => {
                     const isOverLimit = c.creditLimit > 0 && c.currentBalance > c.creditLimit
                     const creditPct = c.creditLimit > 0 ? Math.min(100, Math.round((c.currentBalance / c.creditLimit) * 100)) : 0
 
                     return (
-                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                        <td>
-                          <div className="font-mono text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded inline-block">
-                            {c.id}
-                          </div>
-                        </td>
-                        <td>
+                      <tr key={c.id} className="hover:bg-stone-50/70 transition-colors">
+                        {/* Party & Business Title with embedded ID badge */}
+                        <td className="py-2.5 px-3">
                           <div
                             className="cursor-pointer group"
                             onClick={() => {
@@ -639,27 +645,34 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                               setProfileTab('products')
                             }}
                           >
-                            <div className="font-bold text-gray-900 group-hover:text-[#7cb518] transition-colors flex items-center gap-1.5">
-                              <span>{c.businessName || c.name}</span>
-                              <ChevronRight className="w-3.5 h-3.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-stone-900 group-hover:text-primary transition-colors text-xs">
+                                {c.businessName || c.name}
+                              </span>
+                              <span className="text-[10px] font-mono text-stone-400 bg-stone-100 px-1.5 py-0.2 rounded font-normal shrink-0">
+                                {c.id}
+                              </span>
+                              <ChevronRight className="w-3 h-3 text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>
-                            <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                            <div className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
                               <span>Owner: {c.name}</span>
                             </div>
                           </div>
                         </td>
-                        <td>
+
+                        {/* Channel Type */}
+                        <td className="py-2.5 px-3">
                           <span
-                            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold inline-flex items-center gap-1 ${
+                            className={`text-[11px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center gap-1 whitespace-nowrap ${
                               c.type === 'Distributor'
-                                ? 'bg-emerald-100 text-emerald-800'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60'
                                 : c.type === 'Sales Representative'
-                                ? 'bg-teal-100 text-teal-800'
+                                ? 'bg-teal-50 text-teal-800 border border-teal-200/60'
                                 : c.type === 'Wholesaler'
-                                ? 'bg-purple-100 text-purple-800'
+                                ? 'bg-purple-50 text-purple-800 border border-purple-200/60'
                                 : c.type === 'Retailer'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-amber-100 text-amber-800'
+                                ? 'bg-blue-50 text-blue-800 border border-blue-200/60'
+                                : 'bg-amber-50 text-amber-800 border border-amber-200/60'
                             }`}
                           >
                             {c.type === 'Distributor' ? (
@@ -676,34 +689,48 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                             {c.type}
                           </span>
                         </td>
-                        <td>
-                          <div className="space-y-0.5">
+
+                        {/* Compact Contact & WhatsApp */}
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <a
                               href={`https://wa.me/92${c.phone.replace(/[^0-9]/g, '').replace(/^0/, '')}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="flex items-center gap-1 text-gray-800 font-mono text-xs hover:text-[#7cb518]"
+                              className="inline-flex items-center gap-1 text-stone-800 font-mono text-xs hover:text-primary transition-colors"
                               title="Chat on WhatsApp"
                             >
-                              <Phone className="w-3 h-3 text-[#7cb518]" />
+                              <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
                               <span>{c.phone}</span>
                             </a>
-                            {c.altPhone && <div className="text-[10px] text-gray-400 pl-4">{c.altPhone}</div>}
+                            {c.altPhone && (
+                              <span
+                                className="text-[10px] text-stone-500 bg-stone-100 hover:bg-stone-200 px-1 py-0.2 rounded font-mono cursor-help"
+                                title={`Alt Phone: ${c.altPhone}`}
+                              >
+                                +1
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td>
-                          <div className="text-gray-800 text-xs">
-                            <div className="font-semibold">{c.city || '—'}</div>
-                            <div className="text-[11px] text-gray-500 truncate max-w-[200px]" title={c.address || c.territory}>
-                              {c.address || c.territory || '—'}
-                            </div>
+
+                        {/* City / Single-line location with hover tooltip */}
+                        <td className="py-2.5 px-3">
+                          <div
+                            className="text-xs text-stone-800 font-medium whitespace-nowrap cursor-help inline-flex items-center gap-1"
+                            title={c.address || c.territory || c.city || 'No detailed address'}
+                          >
+                            <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
+                            <span>{c.city || c.territory || '—'}</span>
                           </div>
                         </td>
-                        <td>
-                          <div className="text-xs">
-                            <div className="font-medium text-gray-700">{formatPKR(c.creditLimit)}</div>
+
+                        {/* Credit Limit */}
+                        <td className="py-2.5 px-3">
+                          <div className="text-xs whitespace-nowrap">
+                            <div className="font-semibold text-stone-700">{formatPKR(c.creditLimit)}</div>
                             {c.creditLimit > 0 && (
-                              <div className="w-20 bg-gray-200 rounded-full h-1.5 mt-1 overflow-hidden">
+                              <div className="w-14 bg-stone-200 rounded-full h-1 mt-1 overflow-hidden">
                                 <div
                                   className={`h-full ${isOverLimit ? 'bg-red-600' : creditPct > 75 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                                   style={{ width: `${creditPct}%` }}
@@ -712,64 +739,72 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                             )}
                           </div>
                         </td>
-                        <td>
-                          <strong
-                            className={`text-xs ${
-                              isOverLimit
-                                ? 'text-red-700 font-black'
-                                : c.currentBalance > 0
-                                ? 'text-amber-700 font-bold'
-                                : 'text-emerald-700 font-semibold'
-                            }`}
-                          >
-                            {formatPKR(c.currentBalance)}
-                          </strong>
-                          {isOverLimit && <div className="text-[9px] text-red-600 font-bold uppercase">Over Limit!</div>}
+
+                        {/* Outstanding Balance */}
+                        <td className="py-2.5 px-3">
+                          <div className="whitespace-nowrap">
+                            <strong
+                              className={`text-xs ${
+                                isOverLimit
+                                  ? 'text-red-700 font-black'
+                                  : c.currentBalance > 0
+                                  ? 'text-amber-700 font-bold'
+                                  : 'text-emerald-700 font-semibold'
+                              }`}
+                            >
+                              {formatPKR(c.currentBalance)}
+                            </strong>
+                            {isOverLimit && <span className="ml-1 text-[9px] text-red-600 font-bold uppercase">Over!</span>}
+                          </div>
                         </td>
-                        <td>
+
+                        {/* Status */}
+                        <td className="py-2.5 px-3 text-center">
                           <span className={c.status === 'Active' ? 'status status-success' : 'status status-danger'}>
                             {c.status}
                           </span>
                         </td>
-                        <td>
+
+                        {/* Actions */}
+                        <td className="py-2.5 px-3 text-right">
                           <div className="row-actions justify-end">
                             <button
                               className="row-action text-[#7cb518] hover:bg-emerald-50"
-                              title="View Full Profile, Product History, Invoices & Ledger"
+                              title="View Full Profile & Ledger"
                               onClick={() => {
                                 setActiveProfile(c)
                                 setProfileTab('products')
                               }}
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
                             <button
                               className="row-action text-emerald-600 hover:bg-emerald-50"
-                              title="Create Bulk Delivery / Invoice for this shop"
+                              title="Create Invoice for this party"
                               onClick={() => setIsCreatingInvoiceForParty(c)}
                             >
-                              <FilePlus className="w-4 h-4" />
+                              <FilePlus className="w-3.5 h-3.5" />
                             </button>
                             <button
                               className="row-action text-blue-600 hover:bg-blue-50"
                               title="Record Payment / Collection"
                               onClick={() => setPaymentModalProfile(c)}
                             >
-                              <CreditCard className="w-4 h-4" />
+                              <CreditCard className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              className="row-action hover:bg-gray-100"
-                              title="Edit Profile Biodata"
+                              className="row-action hover:bg-stone-100"
+                              title="Edit Profile"
                               onClick={() => setEditingProfile(c)}
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
                               className="row-action danger"
                               title="Delete Profile"
                               onClick={() => handleDeleteProfile(c.id, c.businessName || c.name)}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -778,7 +813,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                   })}
                   {filteredCustomers.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="text-center py-12 text-gray-400 text-xs">
+                      <td colSpan={8} className="text-center py-12 text-stone-400 text-xs">
                         No profiles or shops found matching your search or filters.
                       </td>
                     </tr>
