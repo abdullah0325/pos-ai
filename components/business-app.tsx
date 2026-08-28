@@ -50,6 +50,7 @@ import AccountsView, { type AccountsSubTab } from './accounts-view'
 import ReportsView, { type ReportCategoryKey } from './reports-view'
 import EmployeesView from './employees-view'
 import SettingsView from './settings-view'
+import NotificationsPopover from './notifications-popover'
 
 export default function BusinessApp() {
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
@@ -329,6 +330,9 @@ export default function BusinessApp() {
               <Shield className="w-3.5 h-3.5" />
               <span>{isOwner ? 'Owner View' : 'Staff View'}</span>
             </div>
+
+            {/* Smart Action Alerts Notification Bell */}
+            <NotificationsPopover db={db} onNavigate={handleNavigate} />
 
             <button
               className="icon-button"
