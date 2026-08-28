@@ -47,6 +47,7 @@ import ExpensesView from './expenses-view'
 import ProductsView, { type ProductsSubTab } from './products-view'
 import RawMaterialsView from './raw-materials-view'
 import AccountsView, { type AccountsSubTab } from './accounts-view'
+import ReportsView, { type ReportCategoryKey } from './reports-view'
 import EmployeesView from './employees-view'
 import SettingsView from './settings-view'
 
@@ -56,7 +57,7 @@ export default function BusinessApp() {
   const [salesTab, setSalesTab] = useState<SalesSubTab>('invoices')
   const [purchaseTab, setPurchaseTab] = useState<PurchaseSubTab>('purchases')
   const [productsTab, setProductsTab] = useState<ProductsSubTab>('catalog')
-  const [reportsTab, setReportsTab] = useState<AccountsSubTab>('reports')
+  const [reportsCategory, setReportsCategory] = useState<ReportCategoryKey>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [isOwner, setIsOwner] = useState(true)
@@ -94,16 +95,23 @@ export default function BusinessApp() {
     } else if (['production', 'stock'].includes(key)) {
       setActiveModule('products')
       setProductsTab(key === 'stock' ? 'stock' : 'production')
-    } else if (['daily-summary', 'monthly-summary', 'yearly-summary', 'profit-loss', 'cash-bank'].includes(key)) {
+    } else if (['daily-summary', 'monthly-summary', 'yearly-summary', 'profit-loss', 'cash-bank', 'sales-report', 'purchase-report', 'expense-report', 'supplier-report', 'customer-report', 'salary-report', 'inventory-report'].includes(key)) {
       setActiveModule('reports')
-      setReportsTab(key as AccountsSubTab)
+      if (key === 'sales-report') setReportsCategory('sales')
+      else if (key === 'purchase-report') setReportsCategory('purchases')
+      else if (key === 'expense-report') setReportsCategory('expenses')
+      else if (key === 'supplier-report') setReportsCategory('suppliers')
+      else if (key === 'customer-report') setReportsCategory('customers')
+      else if (key === 'salary-report') setReportsCategory('salary')
+      else if (key === 'inventory-report') setReportsCategory('inventory')
+      else setReportsCategory('overview')
     } else {
       setActiveModule(key)
       if (subTab) {
         if (key === 'sales') setSalesTab(subTab as SalesSubTab)
         if (key === 'purchase') setPurchaseTab(subTab as PurchaseSubTab)
         if (key === 'products') setProductsTab(subTab as ProductsSubTab)
-        if (key === 'reports') setReportsTab(subTab as AccountsSubTab)
+        if (key === 'reports') setReportsCategory(subTab as ReportCategoryKey)
       }
     }
     setSidebarOpen(false)
@@ -427,9 +435,9 @@ export default function BusinessApp() {
           )}
 
           {activeModule === 'reports' && (
-            <AccountsView
+            <ReportsView
               db={db}
-              viewType={reportsTab}
+              initialCategory={reportsCategory}
               onSaveDatabase={handleSaveDatabase}
               isOwner={isOwner}
             />

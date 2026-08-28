@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Only use standalone output when explicitly requested and not on Vercel
-  ...(process.env.BUILD_STANDALONE === 'true' && !process.env.VERCEL
-    ? { output: 'standalone' }
-    : {}),
+  output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -13,4 +10,5 @@ const nextConfig = {
 }
 
 export default nextConfig
+
 

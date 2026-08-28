@@ -910,7 +910,7 @@ export function generateExpenseVoucherPDF(expense: any) {
 // Export any dataset as CSV/Excel compatible file
 export function exportToCSV(filename: string, headers: string[], rows: (string | number | undefined | null)[][]) {
   const csvContent = [
-    headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','),
+    headers.map((h) => `"${String(h ?? '').replace(/"/g, '""')}"`).join(','),
     ...rows.map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')),
   ].join('\n')
 
@@ -924,3 +924,158 @@ export function exportToCSV(filename: string, headers: string[], rows: (string |
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+export interface BusinessReportPDFOptions {
+  title: string
+  subtitle?: string
+  dateRangeText: string
+  kpiStats?: Array<{ label: string; value: string; detail?: string }>
+  headers: string[]
+  rows: (string | number | undefined | null)[][]
+  filename?: string
+  orientation?: 'portrait' | 'landscape'
+}
+
+export function generateBusinessReportPDF(options: BusinessReportPDFOptions) {
+  const {
+    title,
+    subtitle,
+    dateRangeText,
+    kpiStats = [],
+    headers,
+    rows,
+    filename = 'Business_Report',
+    orientation = 'landscape',
+  } = options
+
+  const doc = new jsPDF({
+    orientation: orientation,
+    unit: 'mm',
+    format: 'a4',
+  })
+
+  const pageWidth = orientation === 'landscape' ? 297 : 210
+  const primaryColor: [number, number, number] = [124, 181, 24] // #7cb518
+  const darkColor: [number, number, number] = [43, 43, 43] // #2b2b2b
+  const mutedColor: [number, number, number] = [109, 109, 104] // #6d6d68
+
+  // Header Banner
+  doc.setFillColor(...primaryColor)
+  doc.rect(0, 0, pageWidth, 24, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.text('AL FAROOQ FOODS', 14, 11)
+
+  doc.setFontSize(8.5)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Central Business Intelligence & Executive Analytics Report', 14, 18)
+
+  // Report Date Range Badge on Right
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(pageWidth - 85, 4, 71, 15, 2, 2, 'F')
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('PERIOD / DATE RANGE', pageWidth - 49.5, 9, { align: 'center' })
+  doc.setFontSize(8)
+  doc.setTextColor(...primaryColor)
+  doc.text(dateRangeText, pageWidth - 49.5, 15, { align: 'center' })
+
+  // Report Title and Subtitle
+  let currentY = 32
+  doc.setTextColor(...darkColor)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.text(title, 14, currentY)
+
+  if (subtitle) {
+    currentY += 5
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...mutedColor)
+    doc.text(subtitle, 14, currentY)
+  }
+
+  // Render KPI Stat Cards if provided
+  if (kpiStats && kpiStats.length > 0) {
+    currentY += 5
+    const cardGap = 4
+    const cardCount = Math.min(kpiStats.length, 6)
+    const totalAvailableWidth = pageWidth - 28
+    const cardWidth = (totalAvailableWidth - (cardCount - 1) * cardGap) / cardCount
+    const cardHeight = 16
+
+    kpiStats.slice(0, 6).forEach((kpi, idx) => {
+      const cardX = 14 + idx * (cardWidth + cardGap)
+      doc.setFillColor(248, 250, 248)
+      doc.setDrawColor(222, 222, 216)
+      doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 2, 2, 'FD')
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...mutedColor)
+      doc.text(kpi.label.toUpperCase(), cardX + 3, currentY + 4.5)
+
+      doc.setFontSize(9)
+      doc.setTextColor(...darkColor)
+      doc.text(kpi.value, cardX + 3, currentY + 10.5)
+
+      if (kpi.detail) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6)
+        doc.setTextColor(...primaryColor)
+        doc.text(kpi.detail, cardX + 3, currentY + 14)
+      }
+    })
+    currentY += cardHeight + 4
+  } else {
+    currentY += 2
+  }
+
+  // Data Table
+  autoTable(doc, {
+    startY: currentY,
+    head: [headers],
+    body: rows.map((r) => r.map((c) => String(c ?? '—'))),
+    theme: 'grid',
+    headStyles: {
+      fillColor: [124, 181, 24],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      cellPadding: 2.5,
+    },
+    styles: {
+      fontSize: 7.5,
+      textColor: [43, 43, 43],
+      cellPadding: 2,
+      lineColor: [222, 222, 216],
+    },
+    alternateRowStyles: {
+      fillColor: [252, 252, 250],
+    },
+    margin: { left: 14, right: 14 },
+  })
+
+  // Footer on each page
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pageCount = (doc as any).internal.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    const pageHeight = orientation === 'landscape' ? 210 : 297
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...mutedColor)
+    doc.text(
+      `AL FAROOQ FOODS Confidential Business Report · Generated on ${formatDate(new Date().toISOString())}`,
+      14,
+      pageHeight - 6
+    )
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 6, { align: 'right' })
+  }
+
+  doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`)
+}
+
