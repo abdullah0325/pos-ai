@@ -51,6 +51,7 @@ import ReportsView, { type ReportCategoryKey } from './reports-view'
 import EmployeesView from './employees-view'
 import SettingsView from './settings-view'
 import NotificationsPopover from './notifications-popover'
+import GlobalSearch from './global-search'
 
 export default function BusinessApp() {
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
@@ -319,11 +320,14 @@ export default function BusinessApp() {
             <Menu />
           </button>
 
-          <div className="breadcrumb">
+          <div className="breadcrumb hidden sm:flex">
             <span>AL FAROOQ FOODS</span>
             <span>/</span>
             <strong>{moduleLabels[activeModule] || 'Workspace'}</strong>
           </div>
+
+          {/* Quick Universal Admin Search */}
+          <GlobalSearch db={db} onNavigate={handleNavigate} />
 
           <div className="top-actions">
             <div className="role-pill" onClick={() => setIsOwner(!isOwner)} title="Click to toggle role">
