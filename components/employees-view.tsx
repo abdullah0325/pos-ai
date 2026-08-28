@@ -662,49 +662,49 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
       </div>
 
       {/* KPI Cards */}
-      <div className="metrics-grid">
-        <div className="metric-card">
-          <div className="flex items-center justify-between">
-            <span className="metric-label">Total Factory Staff</span>
-            <Users className="w-5 h-5 text-[#7cb518]" />
+      <div className="stat-grid" id="employees-kpi-stats">
+        <div className="stat-card relative" id="kpi-total-staff">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <Users className="w-4 h-4" />
           </div>
-          <p className="metric-value">{totalEmployees}</p>
-          <div className="metric-foot text-xs text-muted-foreground mt-1">
-            <span className="font-semibold text-[#7cb518]">{activeEmployees} Active</span> · {totalEmployees - activeEmployees} On Leave / Inactive
-          </div>
+          <div className="stat-label">Total Factory Staff</div>
+          <strong>{totalEmployees}</strong>
+          <span className="stat-change text-emerald-700">
+            {activeEmployees} Active · {totalEmployees - activeEmployees} On Leave / Inactive
+          </span>
         </div>
 
-        <div className="metric-card">
-          <div className="flex items-center justify-between">
-            <span className="metric-label">Monthly Payroll Obligation</span>
-            <DollarSign className="w-5 h-5 text-blue-600" />
+        <div className="stat-card relative" id="kpi-monthly-payroll">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+            <DollarSign className="w-4 h-4" />
           </div>
-          <p className="metric-value">{formatPKR(totalMonthlyPayroll)}</p>
-          <div className="metric-foot text-xs text-muted-foreground mt-1">
+          <div className="stat-label">Monthly Payroll Obligation</div>
+          <strong>{formatPKR(totalMonthlyPayroll)}</strong>
+          <span className="stat-change text-blue-700">
             Includes base salaries & plant allowances
-          </div>
+          </span>
         </div>
 
-        <div className="metric-card">
-          <div className="flex items-center justify-between">
-            <span className="metric-label">Pending Salaries</span>
-            <Clock className="w-5 h-5 text-amber-600" />
+        <div className="stat-card relative" id="kpi-pending-salaries">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+            <Clock className="w-4 h-4" />
           </div>
-          <p className="metric-value text-amber-700">{pendingSalaryEmployees.length} Staff</p>
-          <div className="metric-foot text-xs text-amber-600 font-semibold mt-1">
+          <div className="stat-label">Pending Salaries</div>
+          <strong className="text-amber-700">{pendingSalaryEmployees.length} Staff</strong>
+          <span className="stat-change text-amber-700">
             {formatPKR(totalPendingAmount)} unpaid this cycle
-          </div>
+          </span>
         </div>
 
-        <div className="metric-card">
-          <div className="flex items-center justify-between">
-            <span className="metric-label">Active Loans & Advances</span>
-            <CreditCard className="w-5 h-5 text-[#b8481e]" />
+        <div className="stat-card relative" id="kpi-active-loans">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-orange-50 text-orange-700 flex items-center justify-center">
+            <CreditCard className="w-4 h-4" />
           </div>
-          <p className="metric-value text-[#b8481e]">{formatPKR(totalActiveLoans)}</p>
-          <div className="metric-foot text-xs text-muted-foreground mt-1">
+          <div className="stat-label">Active Loans & Advances</div>
+          <strong className="text-orange-700">{formatPKR(totalActiveLoans)}</strong>
+          <span className="stat-change text-orange-700">
             Deductible across monthly payroll slips
-          </div>
+          </span>
         </div>
       </div>
 
