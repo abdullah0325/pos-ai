@@ -31,6 +31,18 @@ import {
   Percent,
   Minus,
   Sparkles,
+  AlertTriangle,
+  MapPin,
+  UserCheck,
+  UserX,
+  Wallet,
+  ArrowUpRight,
+  FileCheck,
+  RefreshCw,
+  Mail,
+  Receipt,
+  CalendarDays,
+  SlidersHorizontal,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -42,6 +54,7 @@ import {
   type LoanAdvanceRecord,
   type SalaryPaymentRecord,
   type EmployeeAllowance,
+  type EmployeeLeaveRecord,
   fileToBase64,
 } from '@/lib/db'
 import { generateSalarySlipPDF, exportToCSV } from '@/lib/pdf-export'
@@ -59,13 +72,22 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
   const [roleFilter, setRoleFilter] = useState<string>('All')
   const [shiftFilter, setShiftFilter] = useState<string>('All')
   const [salaryStatusFilter, setSalaryStatusFilter] = useState<'All' | 'Pending' | 'Paid'>('All')
+  const [departmentFilter, setDepartmentFilter] = useState<string>('All')
   const [activeTab, setActiveTab] = useState<'employees' | 'attendance' | 'loans' | 'payroll'>('employees')
 
   // Modals & Drawers
   const [isCreatingEmployee, setIsCreatingEmployee] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<EmployeeItem | null>(null)
   const [viewingEmployee, setViewingEmployee] = useState<EmployeeItem | null>(null)
-  const [profileTab, setProfileTab] = useState<'overview' | 'attendance' | 'loans' | 'salary'>('overview')
+  const [profileTab, setProfileTab] = useState<'overview' | 'salary' | 'attendance' | 'loans' | 'leaves' | 'slips'>('overview')
+
+  // Leave Management State
+  const [isRecordingLeave, setIsRecordingLeave] = useState(false)
+  const [leaveType, setLeaveType] = useState<'Casual' | 'Sick' | 'Annual' | 'Emergency' | 'Unpaid'>('Casual')
+  const [leaveStartDate, setLeaveStartDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [leaveEndDate, setLeaveEndDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [leaveDays, setLeaveDays] = useState<number>(1)
+  const [leaveReason, setLeaveReason] = useState('')
 
   // Payment / Disbursement Modal
   const [disbursingEmployee, setDisbursingEmployee] = useState<EmployeeItem | null>(null)
@@ -116,6 +138,15 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
     return ['All', ...Array.from(set)]
   }, [employees])
 
+  // Departments list for filter
+  const uniqueDepartments = useMemo(() => {
+    const set = new Set<string>()
+    employees.forEach((e) => {
+      if (e.department) set.add(e.department)
+    })
+    return ['All', ...Array.from(set)]
+  }, [employees])
+
   // Filtered Employees
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
@@ -126,16 +157,120 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
         emp.phone.includes(q) ||
         emp.role.toLowerCase().includes(q) ||
         emp.id.toLowerCase().includes(q) ||
+        (emp.department && emp.department.toLowerCase().includes(q)) ||
         (emp.cnic && emp.cnic.includes(q))
 
       const matchesRole = roleFilter === 'All' || emp.role === roleFilter
       const matchesShift = shiftFilter === 'All' || emp.shift === shiftFilter
+      const matchesDepartment = departmentFilter === 'All' || emp.department === departmentFilter
       const matchesSalaryStatus =
         salaryStatusFilter === 'All' || emp.currentSalaryStatus === salaryStatusFilter
 
-      return matchesQuery && matchesRole && matchesShift && matchesSalaryStatus
+      return matchesQuery && matchesRole && matchesShift && matchesDepartment && matchesSalaryStatus
     })
-  }, [employees, searchQuery, roleFilter, shiftFilter, salaryStatusFilter])
+  }, [employees, searchQuery, roleFilter, shiftFilter, departmentFilter, salaryStatusFilter])
+
+  // Department color & styling helper matching Products & Categories design language
+  const getDepartmentStyle = (dept?: string) => {
+    const d = (dept || '').toLowerCase()
+    if (d.includes('prod') || d.includes('plant') || d.includes('ro') || d.includes('water')) {
+      return {
+        badge: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60',
+        avatar: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+        accent: 'emerald',
+      }
+    }
+    if (d.includes('qual') || d.includes('lab') || d.includes('chem') || d.includes('micro')) {
+      return {
+        badge: 'bg-sky-50 text-sky-800 border border-sky-200/60',
+        avatar: 'bg-sky-100 text-sky-800 border-sky-300',
+        accent: 'sky',
+      }
+    }
+    if (d.includes('pack') || d.includes('ware') || d.includes('fill') || d.includes('stor')) {
+      return {
+        badge: 'bg-amber-50 text-amber-800 border border-amber-200/60',
+        avatar: 'bg-amber-100 text-amber-800 border-amber-300',
+        accent: 'amber',
+      }
+    }
+    if (d.includes('log') || d.includes('sup') || d.includes('driv') || d.includes('fleet')) {
+      return {
+        badge: 'bg-indigo-50 text-indigo-800 border border-indigo-200/60',
+        avatar: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+        accent: 'indigo',
+      }
+    }
+    if (d.includes('admin') || d.includes('fin') || d.includes('acc') || d.includes('hr') || d.includes('office')) {
+      return {
+        badge: 'bg-blue-50 text-blue-800 border border-blue-200/60',
+        avatar: 'bg-blue-100 text-blue-800 border-blue-300',
+        accent: 'blue',
+      }
+    }
+    if (d.includes('sec') || d.includes('guard') || d.includes('facil') || d.includes('maint')) {
+      return {
+        badge: 'bg-stone-100 text-stone-800 border border-stone-200/60',
+        avatar: 'bg-stone-200 text-stone-800 border-stone-300',
+        accent: 'stone',
+      }
+    }
+    return {
+      badge: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60',
+      avatar: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      accent: 'emerald',
+    }
+  }
+
+  // Handle Leave Addition
+  const handleSaveLeave = () => {
+    if (!viewingEmployee) return
+    const daysNum = Math.max(1, Number(leaveDays) || 1)
+    const newLeave: EmployeeLeaveRecord = {
+      id: `lv-${Date.now()}`,
+      leaveType,
+      startDate: leaveStartDate,
+      endDate: leaveEndDate,
+      days: daysNum,
+      reason: leaveReason.trim() || `${leaveType} Leave`,
+      status: 'Approved',
+      appliedOn: new Date().toISOString().slice(0, 10),
+    }
+
+    const updatedEmployees = employees.map((emp) => {
+      if (emp.id !== viewingEmployee.id) return emp
+      const leavesList = emp.leaves || []
+      return {
+        ...emp,
+        leaves: [newLeave, ...leavesList],
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }
+    })
+
+    onSaveDatabase({ ...db, employees: updatedEmployees })
+    const updatedViewing = updatedEmployees.find((e) => e.id === viewingEmployee.id) || null
+    setViewingEmployee(updatedViewing)
+    setIsRecordingLeave(false)
+    setLeaveReason('')
+    setLeaveDays(1)
+  }
+
+  // Handle Leave Deletion
+  const handleDeleteLeave = (leaveId: string) => {
+    if (!viewingEmployee) return
+    const updatedEmployees = employees.map((emp) => {
+      if (emp.id !== viewingEmployee.id) return emp
+      return {
+        ...emp,
+        leaves: (emp.leaves || []).filter((l) => l.id !== leaveId),
+        updatedAt: new Date().toISOString().slice(0, 10),
+      }
+    })
+
+    onSaveDatabase({ ...db, employees: updatedEmployees })
+    const updatedViewing = updatedEmployees.find((e) => e.id === viewingEmployee.id) || null
+    setViewingEmployee(updatedViewing)
+  }
 
   // KPI Calculations
   const totalEmployees = employees.length
@@ -611,24 +746,37 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
       {activeTab === 'employees' && (
         <div className="space-y-4">
           {/* Search & Filter Bar */}
-          <div className="panel p-4 flex flex-wrap items-center gap-3">
+          <div className="panel p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="search-field flex-1 min-w-[240px]">
               <Search className="search-icon" />
               <input
                 type="text"
-                placeholder="Search staff by name, phone, role, CNIC or ID..."
+                placeholder="Search staff by name, phone, role, department, CNIC or ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-transparent outline-none pl-9 pr-3 py-2 text-sm"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-muted-foreground mr-2">
+                <button onClick={() => setSearchQuery('')} className="text-muted-foreground mr-2 hover:text-foreground">
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="input-select text-sm py-2 px-3 bg-white border rounded-lg"
+              >
+                <option value="All">All Departments</option>
+                {uniqueDepartments.filter((d) => d !== 'All').map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
@@ -667,246 +815,244 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             </div>
           </div>
 
-          {/* Employees Table */}
-          <div className="panel overflow-hidden">
-            <div className="table-wrapper">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Employee Details</th>
-                    <th>Role & Department</th>
-                    <th>Duty Timing / Shift</th>
-                    <th>Monthly Package</th>
-                    <th>Today Attendance ({attendanceDate})</th>
-                    <th>Salary Status</th>
-                    <th>Loan Balance</th>
-                    <th className="text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEmployees.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="text-center py-12 text-muted-foreground">
-                        <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                        <p className="font-semibold">No employee records match your filters.</p>
-                        <p className="text-xs mt-1">Try resetting search criteria or add a new employee.</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredEmployees.map((emp) => {
-                      const todayAtt = emp.attendance?.find((a) => a.date === attendanceDate)
-                      const isPending = emp.currentSalaryStatus === 'Pending'
-
-                      return (
-                        <tr key={emp.id} className="hover:bg-muted/40 transition-colors">
-                          <td>
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-[#7cb518]/15 text-[#7cb518] font-bold flex items-center justify-center text-sm">
-                                {emp.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-                              </div>
-                              <div>
-                                <div className="font-semibold text-sm flex items-center gap-1.5">
-                                  {emp.name}
-                                  {emp.status !== 'Active' && (
-                                    <span className="badge badge-muted text-[10px] px-1.5 py-0.5">
-                                      {emp.status}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                                  <span className="font-mono text-[11px] font-semibold text-foreground/70">
-                                    {emp.id.toUpperCase()}
-                                  </span>
-                                  <span>·</span>
-                                  <span className="flex items-center gap-1">
-                                    <Phone className="w-3 h-3 inline" /> {emp.phone}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td>
-                            <div className="font-medium text-sm text-foreground">{emp.role}</div>
-                            <div className="text-xs text-muted-foreground">{emp.department || 'Production'}</div>
-                          </td>
-
-                          <td>
-                            <div className="text-xs font-semibold text-foreground">{emp.dutyTiming || '08:00 AM - 04:00 PM'}</div>
-                            <span className="badge badge-outline text-[11px] mt-0.5 inline-block">
-                              {emp.shift || 'Morning'}
-                            </span>
-                          </td>
-
-                          <td>
-                            <div className="font-semibold text-sm text-foreground">
-                              {formatPKR((emp.baseSalary || 0) + (emp.totalAllowances || 0))}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">
-                              Base: {formatPKR(emp.baseSalary)}
-                              {emp.totalAllowances && emp.totalAllowances > 0 ? ` + ${formatPKR(emp.totalAllowances)}` : ''}
-                            </div>
-                          </td>
-
-                          <td>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleSetAttendance(emp.id, 'Present')}
-                                className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                  todayAtt?.status === 'Present'
-                                    ? 'bg-emerald-600 text-white shadow-sm'
-                                    : 'bg-muted hover:bg-emerald-100 text-emerald-800'
-                                }`}
-                                title="Mark Present"
-                              >
-                                P
-                              </button>
-                              <button
-                                onClick={() => handleSetAttendance(emp.id, 'Absent')}
-                                className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                  todayAtt?.status === 'Absent'
-                                    ? 'bg-rose-600 text-white shadow-sm'
-                                    : 'bg-muted hover:bg-rose-100 text-rose-800'
-                                }`}
-                                title="Mark Absent"
-                              >
-                                A
-                              </button>
-                              <button
-                                onClick={() => handleSetAttendance(emp.id, 'Off-day')}
-                                className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                  todayAtt?.status === 'Off-day'
-                                    ? 'bg-slate-700 text-white shadow-sm'
-                                    : 'bg-muted hover:bg-slate-200 text-slate-700'
-                                }`}
-                                title="Mark Off-day"
-                              >
-                                Off
-                              </button>
-                              <button
-                                onClick={() => handleSetAttendance(emp.id, 'Leave')}
-                                className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                                  todayAtt?.status === 'Leave'
-                                    ? 'bg-blue-600 text-white shadow-sm'
-                                    : 'bg-muted hover:bg-blue-100 text-blue-800'
-                                }`}
-                                title="Mark Leave"
-                              >
-                                L
-                              </button>
-                            </div>
-                            {todayAtt?.checkInTime && todayAtt.status === 'Present' && (
-                              <div className="text-[10px] text-muted-foreground mt-0.5">
-                                In: {todayAtt.checkInTime}
-                              </div>
-                            )}
-                          </td>
-
-                          <td>
-                            {isPending ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-                                <Clock className="w-3 h-3" /> Pending
-                              </span>
-                            ) : (
-                              <div>
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                  <CheckCircle2 className="w-3 h-3" /> Paid
-                                </span>
-                                {emp.lastSalaryPaidDate && (
-                                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                                    {formatDate(emp.lastSalaryPaidDate)}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </td>
-
-                          <td>
-                            {emp.totalLoanBalance > 0 ? (
-                              <span className="font-semibold text-xs text-[#b8481e] bg-red-50 border border-red-200 px-2 py-0.5 rounded">
-                                {formatPKR(emp.totalLoanBalance)}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Nil</span>
-                            )}
-                          </td>
-
-                          <td className="text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {isPending ? (
-                                <button
-                                  className="button primary text-xs py-1 px-2.5"
-                                  onClick={() => handleOpenDisburse(emp)}
-                                  title="Disburse Monthly Salary"
-                                >
-                                  <DollarSign className="w-3.5 h-3.5" /> Pay
-                                </button>
-                              ) : (
-                                <button
-                                  className="button secondary text-xs py-1 px-2 text-emerald-700"
-                                  onClick={() => {
-                                    if (emp.salaryHistory && emp.salaryHistory.length > 0) {
-                                      setActiveReceipt({
-                                        employee: emp,
-                                        payment: emp.salaryHistory[0],
-                                      })
-                                    } else {
-                                      handleOpenDisburse(emp)
-                                    }
-                                  }}
-                                  title="View Salary Receipt"
-                                >
-                                  <FileText className="w-3.5 h-3.5" /> Slip
-                                </button>
-                              )}
-
-                              <button
-                                className="icon-button text-muted-foreground hover:text-foreground"
-                                onClick={() => {
-                                  setLoaningEmployee(emp)
-                                  setLoanAmount(5000)
-                                }}
-                                title="Issue Loan / Salary Advance"
-                              >
-                                <CreditCard className="w-4 h-4 text-amber-700" />
-                              </button>
-
-                              <button
-                                className="icon-button text-muted-foreground hover:text-foreground"
-                                onClick={() => {
-                                  setViewingEmployee(emp)
-                                  setProfileTab('overview')
-                                }}
-                                title="View Full Employee Profile"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                className="icon-button text-muted-foreground hover:text-foreground"
-                                onClick={() => setEditingEmployee(emp)}
-                                title="Edit Employee"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                className="icon-button text-muted-foreground hover:text-destructive"
-                                onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                                title="Delete Employee"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
+          {/* Employee Card Grid */}
+          {filteredEmployees.length === 0 ? (
+            <div className="panel p-12 text-center text-muted-foreground">
+              <Users className="w-12 h-12 mx-auto mb-3 opacity-40 text-stone-400" />
+              <p className="font-bold text-stone-700 text-base">No employee records match your filters.</p>
+              <p className="text-xs text-stone-500 mt-1">Try adjusting search query, department, designation, shift or salary status.</p>
+              <button
+                className="button secondary text-xs mt-4"
+                onClick={() => {
+                  setSearchQuery('')
+                  setDepartmentFilter('All')
+                  setRoleFilter('All')
+                  setShiftFilter('All')
+                  setSalaryStatusFilter('All')
+                }}
+              >
+                Reset All Filters
+              </button>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4.5">
+              {filteredEmployees.map((emp) => {
+                const isPending = emp.currentSalaryStatus === 'Pending'
+                const todayAtt = emp.attendance?.find((a) => a.date === attendanceDate)
+                const totalPkg = (emp.baseSalary || 0) + (emp.totalAllowances || 0)
+                const deptStyle = getDepartmentStyle(emp.department)
+                const initials = emp.name
+                  .split(' ')
+                  .filter(Boolean)
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()
+
+                return (
+                  <div
+                    key={emp.id}
+                    className="group bg-white rounded-2xl p-3.5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative overflow-hidden border border-stone-100"
+                    id={`employee-card-${emp.id}`}
+                  >
+                    {/* Top Section: Avatar Box & Overlaid Badges */}
+                    <div>
+                      <div className="w-full aspect-[4/3] rounded-xl bg-gradient-to-br from-stone-50 to-stone-100/90 border border-stone-200/60 overflow-hidden relative flex flex-col items-center justify-center mb-3 group-hover:border-stone-300 transition-colors">
+                        {/* Top-Right Action Buttons (Glassmorphic) */}
+                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-xs p-1 rounded-lg shadow-xs opacity-90 group-hover:opacity-100 transition-opacity z-10">
+                          <button
+                            type="button"
+                            className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-stone-100 rounded-md transition-colors"
+                            title="Edit Employee"
+                            onClick={() => setEditingEmployee(emp)}
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-md transition-colors"
+                            title="Delete Employee"
+                            onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Top-Left Source & Status Badges */}
+                        <div className="absolute top-2 left-2 flex flex-col gap-1 items-start z-10">
+                          {emp.status === 'Active' ? (
+                            <span className="inline-flex items-center gap-1 bg-[#7cb518]/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
+                              Active
+                            </span>
+                          ) : emp.status === 'On Leave' ? (
+                            <span className="inline-flex items-center gap-1 bg-amber-600/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
+                              On Leave
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-stone-600/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
+                              Terminated
+                            </span>
+                          )}
+
+                          {isPending ? (
+                            <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-xs">
+                              <Clock className="w-2.5 h-2.5 mr-0.5" /> Pending Salary
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-xs">
+                              <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Salary Paid
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Centered Initials Circle */}
+                        <div
+                          className={`w-16 h-16 rounded-full font-black text-xl flex items-center justify-center shadow-xs border-2 cursor-pointer group-hover:scale-105 transition-transform ${deptStyle.avatar}`}
+                          onClick={() => {
+                            setViewingEmployee(emp)
+                            setProfileTab('overview')
+                          }}
+                          title="Click to view employee profile"
+                        >
+                          {initials}
+                        </div>
+
+                        {/* Shift Tag */}
+                        <div className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-stone-500 bg-white/80 px-2 py-0.5 rounded-full border border-stone-200/50 shadow-2xs">
+                          <Clock className="w-2.5 h-2.5 text-stone-400" />
+                          <span>{emp.shift} Shift</span>
+                        </div>
+                      </div>
+
+                      {/* Department Pill & SKU / Employee ID */}
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className={`inline-block font-semibold text-[10px] px-2 py-0.5 rounded-md ${deptStyle.badge}`}>
+                          {emp.department || 'Production & Plant'}
+                        </span>
+                        <span className="font-mono text-[10px] text-stone-400 font-semibold">
+                          {emp.id.toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* Employee Name */}
+                      <h4
+                        className="font-bold text-stone-900 text-sm leading-snug line-clamp-1 group-hover:text-[#7cb518] transition-colors cursor-pointer"
+                        title={emp.name}
+                        onClick={() => {
+                          setViewingEmployee(emp)
+                          setProfileTab('overview')
+                        }}
+                      >
+                        {emp.name}
+                      </h4>
+
+                      {/* Role / Designation */}
+                      <p className="text-xs text-stone-600 font-medium truncate mt-0.5" title={emp.role}>
+                        {emp.role}
+                      </p>
+
+                      {/* Shift / Timing & Phone Line */}
+                      <div className="flex items-center justify-between text-xs text-stone-500 mt-2 pt-2 border-t border-stone-100">
+                        <span className="truncate pr-1 text-[11px]" title={emp.dutyTiming}>
+                          {emp.dutyTiming || '08:00 AM - 04:00 PM'}
+                        </span>
+                        <span className="font-mono text-[11px] text-stone-700 font-medium whitespace-nowrap">
+                          {emp.phone}
+                        </span>
+                      </div>
+
+                      {/* Quick Today Attendance Selector */}
+                      <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">
+                          Today ({attendanceDate.slice(5)})
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSetAttendance(emp.id, 'Present')}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                              todayAtt?.status === 'Present'
+                                ? 'bg-emerald-600 text-white shadow-2xs'
+                                : 'bg-stone-100 hover:bg-emerald-100 text-stone-600 hover:text-emerald-800'
+                            }`}
+                            title="Mark Present"
+                          >
+                            P
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetAttendance(emp.id, 'Absent')}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                              todayAtt?.status === 'Absent'
+                                ? 'bg-rose-600 text-white shadow-2xs'
+                                : 'bg-stone-100 hover:bg-rose-100 text-stone-600 hover:text-rose-800'
+                            }`}
+                            title="Mark Absent"
+                          >
+                            A
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetAttendance(emp.id, 'Off-day')}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                              todayAtt?.status === 'Off-day'
+                                ? 'bg-slate-700 text-white shadow-2xs'
+                                : 'bg-stone-100 hover:bg-slate-200 text-stone-600'
+                            }`}
+                            title="Mark Off-day"
+                          >
+                            Off
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetAttendance(emp.id, 'Leave')}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                              todayAtt?.status === 'Leave'
+                                ? 'bg-blue-600 text-white shadow-2xs'
+                                : 'bg-stone-100 hover:bg-blue-100 text-stone-600 hover:text-blue-800'
+                            }`}
+                            title="Mark Leave"
+                          >
+                            L
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Pricing / Package Bar */}
+                    <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-end justify-between">
+                      <div>
+                        <span className="text-[10px] text-stone-400 uppercase font-bold tracking-wider block">
+                          Monthly Package
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-sm font-black text-stone-900">
+                            {formatPKR(totalPkg)}
+                          </span>
+                          {emp.totalLoanBalance > 0 && (
+                            <span className="text-[9px] text-[#b8481e] font-semibold bg-rose-50 px-1 rounded ml-1" title="Active Advance Balance">
+                              Adv: {formatPKR(emp.totalLoanBalance)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setViewingEmployee(emp)
+                          setProfileTab('overview')
+                        }}
+                        className="text-[11px] font-semibold text-stone-600 hover:text-[#7cb518] flex items-center gap-1 hover:underline transition-colors pb-0.5"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View Profile
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1824,201 +1970,795 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
         </div>
       )}
 
-      {/* MODAL 5: EMPLOYEE DETAILED PROFILE & HISTORY */}
+      {/* MODAL 5: EMPLOYEE DETAILED PROFILE & DEDICATED MANAGEMENT VIEW */}
       {viewingEmployee && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-card w-full max-w-3xl rounded-2xl shadow-2xl border border-border p-6 space-y-5 my-8">
-            <div className="flex items-start justify-between border-b pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full bg-[#7cb518]/20 text-[#7cb518] font-bold flex items-center justify-center text-lg">
-                  {viewingEmployee.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-foreground">{viewingEmployee.name}</h2>
-                  <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                    <span className="badge badge-outline">{viewingEmployee.role}</span>
-                    <span>·</span>
-                    <span>{viewingEmployee.department}</span>
-                    <span>·</span>
-                    <span className="font-mono">{viewingEmployee.phone}</span>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-card w-full max-w-4xl rounded-2xl shadow-2xl border border-border flex flex-col my-6 max-h-[92vh] overflow-hidden">
+            {/* Profile Header */}
+            <div className="bg-gradient-to-r from-stone-50 via-white to-stone-50 border-b border-border p-5 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  {/* Large Avatar */}
+                  <div
+                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl font-black text-2xl sm:text-3xl flex items-center justify-center shadow-xs border-2 shrink-0 ${
+                      getDepartmentStyle(viewingEmployee.department).avatar
+                    }`}
+                  >
+                    {viewingEmployee.name
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()}
                   </div>
-                </div>
-              </div>
-              <button className="icon-button" onClick={() => setViewingEmployee(null)}>
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Profile Sub Tabs */}
-            <div className="tab-pill-group">
-              <button
-                className={`tab-pill ${profileTab === 'overview' ? 'tab-pill-active' : ''}`}
-                onClick={() => setProfileTab('overview')}
-              >
-                Biodata & Info
-              </button>
-              <button
-                className={`tab-pill ${profileTab === 'attendance' ? 'tab-pill-active' : ''}`}
-                onClick={() => setProfileTab('attendance')}
-              >
-                Attendance Log ({viewingEmployee.attendance?.length || 0})
-              </button>
-              <button
-                className={`tab-pill ${profileTab === 'salary' ? 'tab-pill-active' : ''}`}
-                onClick={() => setProfileTab('salary')}
-              >
-                Salary Receipts ({viewingEmployee.salaryHistory?.length || 0})
-              </button>
-              <button
-                className={`tab-pill ${profileTab === 'loans' ? 'tab-pill-active' : ''}`}
-                onClick={() => setProfileTab('loans')}
-              >
-                Loan Ledger ({viewingEmployee.loans?.length || 0})
-              </button>
-            </div>
-
-            {/* TAB CONTENT */}
-            {profileTab === 'overview' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-muted/20 p-4 rounded-xl">
-                <div>
-                  <span className="text-xs text-muted-foreground block">CNIC Number:</span>
-                  <strong>{viewingEmployee.cnic || '—'}</strong>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground block">Duty Shift & Timing:</span>
-                  <strong>{viewingEmployee.dutyTiming} ({viewingEmployee.shift})</strong>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground block">Base Monthly Salary:</span>
-                  <strong className="text-foreground">{formatPKR(viewingEmployee.baseSalary)}</strong>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground block">Monthly Allowances:</span>
-                  <strong className="text-emerald-700">+{formatPKR(viewingEmployee.totalAllowances || 0)}</strong>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground block">Joining Date:</span>
-                  <strong>{formatDate(viewingEmployee.joiningDate)}</strong>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground block">Emergency Contact:</span>
-                  <strong>{viewingEmployee.emergencyContact || '—'}</strong>
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="text-xs text-muted-foreground block">Residential Address:</span>
-                  <strong>{viewingEmployee.address || '—'}</strong>
-                </div>
-                {viewingEmployee.bankDetails && (
-                  <div className="sm:col-span-2 border-t pt-2 mt-2">
-                    <span className="text-xs text-muted-foreground block">Bank Account Details:</span>
-                    <strong>
-                      {viewingEmployee.bankDetails.bankName || 'Bank'} — {viewingEmployee.bankDetails.accountNumber || '—'} ({viewingEmployee.bankDetails.accountTitle || viewingEmployee.name})
-                    </strong>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {profileTab === 'attendance' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Recent Attendance Log</span>
-                  <span>Total Recorded: {viewingEmployee.attendance?.length || 0} days</span>
-                </div>
-                <div className="max-h-60 overflow-y-auto border rounded-xl divide-y">
-                  {viewingEmployee.attendance?.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground">No attendance records yet.</div>
-                  ) : (
-                    viewingEmployee.attendance?.map((att) => (
-                      <div key={att.id} className="p-3 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-semibold">{formatDate(att.date)}</span>
-                          {att.checkInTime && <span className="text-muted-foreground">(In: {att.checkInTime})</span>}
-                        </div>
-                        <span
-                          className={`badge ${
-                            att.status === 'Present'
-                              ? 'badge-success'
-                              : att.status === 'Absent'
-                              ? 'badge-danger'
-                              : 'badge-muted'
-                          }`}
-                        >
-                          {att.status}
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-xl sm:text-2xl font-bold text-foreground">
+                        {viewingEmployee.name}
+                      </h2>
+                      <span className="font-mono text-xs px-2 py-0.5 bg-stone-100 text-stone-700 rounded-md font-bold border border-stone-200">
+                        {viewingEmployee.id.toUpperCase()}
+                      </span>
+                      {viewingEmployee.status === 'Active' ? (
+                        <span className="badge badge-success text-[10px] font-semibold">Active Staff</span>
+                      ) : viewingEmployee.status === 'On Leave' ? (
+                        <span className="badge badge-warning text-[10px] font-semibold">On Leave</span>
+                      ) : (
+                        <span className="badge badge-muted text-[10px] font-semibold">Terminated</span>
+                      )}
+                      {viewingEmployee.currentSalaryStatus === 'Pending' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                          <Clock className="w-2.5 h-2.5" /> Pending Salary
                         </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <CheckCircle2 className="w-2.5 h-2.5" /> Salary Paid
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-sm font-semibold text-stone-700 flex items-center gap-1.5">
+                      <span>{viewingEmployee.role}</span>
+                      <span className="text-stone-300">•</span>
+                      <span className="text-[#7cb518]">{viewingEmployee.department || 'Production'}</span>
+                      <span className="text-stone-300">•</span>
+                      <span className="text-xs text-stone-500 font-normal">{viewingEmployee.shift} Shift ({viewingEmployee.dutyTiming})</span>
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-0.5">
+                      <span className="flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-stone-400" /> {viewingEmployee.phone}
+                      </span>
+                      {viewingEmployee.cnic && (
+                        <>
+                          <span>•</span>
+                          <span className="font-mono">CNIC: {viewingEmployee.cnic}</span>
+                        </>
+                      )}
+                      <span>•</span>
+                      <span>Joined {formatDate(viewingEmployee.joiningDate)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Profile Actions */}
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  {viewingEmployee.currentSalaryStatus === 'Pending' && (
+                    <button
+                      type="button"
+                      className="button primary text-xs py-1.5 px-3"
+                      onClick={() => {
+                        handleOpenDisburse(viewingEmployee)
+                      }}
+                    >
+                      <DollarSign className="w-3.5 h-3.5" /> Pay Salary
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="button secondary text-xs py-1.5 px-3"
+                    onClick={() => {
+                      setLoaningEmployee(viewingEmployee)
+                      setLoanAmount(5000)
+                    }}
+                  >
+                    <CreditCard className="w-3.5 h-3.5 text-amber-700" /> Issue Advance
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => {
+                      setEditingEmployee(viewingEmployee)
+                    }}
+                    title="Edit Employee Details"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button text-muted-foreground hover:text-foreground"
+                    onClick={() => setViewingEmployee(null)}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Profile Navigation Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pt-4 mt-2 border-t border-stone-200/70">
+                <button
+                  type="button"
+                  className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
+                    profileTab === 'overview' ? 'tab-pill-active' : ''
+                  }`}
+                  onClick={() => setProfileTab('overview')}
+                >
+                  <Users className="w-3.5 h-3.5 mr-1.5 inline" />
+                  Overview & Biodata
+                </button>
+                <button
+                  type="button"
+                  className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
+                    profileTab === 'salary' ? 'tab-pill-active' : ''
+                  }`}
+                  onClick={() => setProfileTab('salary')}
+                >
+                  <DollarSign className="w-3.5 h-3.5 mr-1.5 inline text-emerald-600" />
+                  Salary & Allowances
+                </button>
+                <button
+                  type="button"
+                  className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
+                    profileTab === 'attendance' ? 'tab-pill-active' : ''
+                  }`}
+                  onClick={() => setProfileTab('attendance')}
+                >
+                  <Calendar className="w-3.5 h-3.5 mr-1.5 inline text-blue-600" />
+                  Attendance Log ({viewingEmployee.attendance?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
+                    profileTab === 'loans' ? 'tab-pill-active' : ''
+                  }`}
+                  onClick={() => setProfileTab('loans')}
+                >
+                  <CreditCard className="w-3.5 h-3.5 mr-1.5 inline text-amber-600" />
+                  Loans & Advances ({viewingEmployee.loans?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
+                    profileTab === 'leaves' ? 'tab-pill-active' : ''
+                  }`}
+                  onClick={() => setProfileTab('leaves')}
+                >
+                  <CalendarDays className="w-3.5 h-3.5 mr-1.5 inline text-purple-600" />
+                  Leaves & Time Off ({viewingEmployee.leaves?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
+                    profileTab === 'slips' ? 'tab-pill-active' : ''
+                  }`}
+                  onClick={() => setProfileTab('slips')}
+                >
+                  <Receipt className="w-3.5 h-3.5 mr-1.5 inline text-indigo-600" />
+                  Salary Slips & Receipts ({viewingEmployee.salaryHistory?.length || 0})
+                </button>
+              </div>
+            </div>
+
+            {/* Profile Tab Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* TAB 1: OVERVIEW & BIODATA */}
+              {profileTab === 'overview' && (
+                <div className="space-y-6">
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-stone-50 rounded-xl p-3.5 border border-stone-200/60">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500 block">
+                        Monthly Package
+                      </span>
+                      <span className="text-base sm:text-lg font-black text-stone-900 block mt-0.5">
+                        {formatPKR((viewingEmployee.baseSalary || 0) + (viewingEmployee.totalAllowances || 0))}
+                      </span>
+                      <span className="text-[10px] text-stone-500">Base + Allowances</span>
+                    </div>
+
+                    <div className="bg-emerald-50/70 rounded-xl p-3.5 border border-emerald-200/60">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-800 block">
+                        Salary Status
+                      </span>
+                      <span className="text-base sm:text-lg font-black text-emerald-900 block mt-0.5">
+                        {viewingEmployee.currentSalaryStatus}
+                      </span>
+                      <span className="text-[10px] text-emerald-700">
+                        {viewingEmployee.lastSalaryPaidDate ? `Last: ${formatDate(viewingEmployee.lastSalaryPaidDate)}` : 'For current cycle'}
+                      </span>
+                    </div>
+
+                    <div className="bg-amber-50/70 rounded-xl p-3.5 border border-amber-200/60">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800 block">
+                        Advance Balance
+                      </span>
+                      <span className="text-base sm:text-lg font-black text-amber-900 block mt-0.5">
+                        {formatPKR(viewingEmployee.totalLoanBalance || 0)}
+                      </span>
+                      <span className="text-[10px] text-amber-700">
+                        {viewingEmployee.totalLoanBalance > 0 ? 'Active repayment' : 'No outstanding loans'}
+                      </span>
+                    </div>
+
+                    <div className="bg-purple-50/70 rounded-xl p-3.5 border border-purple-200/60">
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-purple-800 block">
+                        Leaves Logged
+                      </span>
+                      <span className="text-base sm:text-lg font-black text-purple-900 block mt-0.5">
+                        {(viewingEmployee.leaves || []).reduce((sum, l) => sum + (l.days || 1), 0)} Days
+                      </span>
+                      <span className="text-[10px] text-purple-700">Total approved leaves</span>
+                    </div>
+                  </div>
+
+                  {/* Personal & Employment Details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="panel p-4 space-y-3 bg-white border border-stone-200">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b pb-2 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-stone-400" /> Personal Information
+                      </h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Full Name:</span>
+                          <span className="font-bold text-stone-800">{viewingEmployee.name}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Employee ID:</span>
+                          <span className="font-mono font-bold text-stone-800">{viewingEmployee.id.toUpperCase()}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">CNIC Number:</span>
+                          <span className="font-mono font-semibold text-stone-800">{viewingEmployee.cnic || '—'}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Primary Phone:</span>
+                          <span className="font-semibold text-stone-800">{viewingEmployee.phone}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Emergency Contact:</span>
+                          <span className="font-semibold text-stone-800">{viewingEmployee.emergencyContact || '—'}</span>
+                        </div>
+                        <div className="flex justify-between py-1">
+                          <span className="text-stone-500">Residential Address:</span>
+                          <span className="font-medium text-stone-800 text-right max-w-[60%]">{viewingEmployee.address || '—'}</span>
+                        </div>
                       </div>
-                    ))
+                    </div>
+
+                    <div className="panel p-4 space-y-3 bg-white border border-stone-200">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b pb-2 flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-stone-400" /> Job & Factory Assignment
+                      </h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Department:</span>
+                          <span className="font-semibold text-stone-800">{viewingEmployee.department || 'Production & Plant'}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Designation / Role:</span>
+                          <span className="font-semibold text-stone-800">{viewingEmployee.role}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Shift Type:</span>
+                          <span className="font-semibold text-stone-800">{viewingEmployee.shift} Shift</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Duty Timings:</span>
+                          <span className="font-semibold text-stone-800">{viewingEmployee.dutyTiming || '08:00 AM - 04:00 PM'}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-stone-100">
+                          <span className="text-stone-500">Joining Date:</span>
+                          <span className="font-semibold text-stone-800">{formatDate(viewingEmployee.joiningDate)}</span>
+                        </div>
+                        <div className="flex justify-between py-1">
+                          <span className="text-stone-500">Employment Status:</span>
+                          <span className="font-bold text-emerald-700">{viewingEmployee.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bank & Payment Method Overview */}
+                  {viewingEmployee.bankDetails && (
+                    <div className="panel p-4 bg-stone-50/70 border border-stone-200/80 rounded-xl">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600 mb-2 flex items-center gap-1.5">
+                        <Banknote className="w-3.5 h-3.5 text-stone-500" /> Bank & Account Information
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div>
+                          <span className="text-stone-400 block text-[11px]">Bank Name</span>
+                          <span className="font-bold text-stone-800">{viewingEmployee.bankDetails.bankName || 'Meezan Bank Ltd'}</span>
+                        </div>
+                        <div>
+                          <span className="text-stone-400 block text-[11px]">Account Title</span>
+                          <span className="font-bold text-stone-800">{viewingEmployee.bankDetails.accountTitle || viewingEmployee.name}</span>
+                        </div>
+                        <div>
+                          <span className="text-stone-400 block text-[11px]">Account / IBAN</span>
+                          <span className="font-mono font-bold text-stone-800">{viewingEmployee.bankDetails.accountNumber || '—'}</span>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {profileTab === 'salary' && (
-              <div className="space-y-3">
-                <div className="max-h-60 overflow-y-auto border rounded-xl divide-y">
-                  {viewingEmployee.salaryHistory?.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground">No salary disbursement records yet.</div>
-                  ) : (
-                    viewingEmployee.salaryHistory?.map((sal) => (
-                      <div key={sal.id} className="p-3 flex items-center justify-between text-xs">
-                        <div>
-                          <strong className="block text-sm text-foreground">{sal.month}</strong>
-                          <span className="text-muted-foreground font-mono">
-                            {sal.receiptNumber} · Paid on {formatDate(sal.paymentDate)}
+              {/* TAB 2: SALARY & ALLOWANCES BREAKDOWN */}
+              {profileTab === 'salary' && (
+                <div className="space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-50 p-4 rounded-xl border border-stone-200">
+                    <div>
+                      <h4 className="font-bold text-stone-900 text-sm">Monthly Compensation Package</h4>
+                      <p className="text-xs text-stone-500">Full breakdown of base wage, allowances, and net monthly entitlement.</p>
+                    </div>
+                    <div className="text-left sm:text-right">
+                      <span className="text-[10px] text-stone-400 uppercase font-bold tracking-wider block">Gross Monthly</span>
+                      <span className="text-xl font-black text-emerald-800">
+                        {formatPKR((viewingEmployee.baseSalary || 0) + (viewingEmployee.totalAllowances || 0))}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Fixed Base & Allowances */}
+                    <div className="panel p-4 bg-white border border-stone-200 space-y-3">
+                      <h5 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b pb-2">
+                        Earnings Breakdown
+                      </h5>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between py-1.5 border-b border-stone-100">
+                          <span className="text-stone-600 font-medium">Base Salary (Fixed)</span>
+                          <span className="font-bold text-stone-900">{formatPKR(viewingEmployee.baseSalary)}</span>
+                        </div>
+                        {viewingEmployee.allowances && viewingEmployee.allowances.length > 0 ? (
+                          viewingEmployee.allowances.map((al, idx) => (
+                            <div key={idx} className="flex justify-between py-1.5 border-b border-stone-100">
+                              <span className="text-stone-600">{al.name} Allowance</span>
+                              <span className="font-semibold text-emerald-700">+{formatPKR(al.amount)}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-stone-400 py-1 italic">No extra allowances configured</div>
+                        )}
+                        <div className="flex justify-between pt-2 font-bold text-sm text-stone-900">
+                          <span>Total Monthly Gross</span>
+                          <span className="text-emerald-700">
+                            {formatPKR((viewingEmployee.baseSalary || 0) + (viewingEmployee.totalAllowances || 0))}
                           </span>
                         </div>
-                        <div className="text-right flex items-center gap-3">
-                          <div>
-                            <span className="font-bold text-sm text-foreground block">
-                              {formatPKR(sal.amountPaid)}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">{sal.paymentMethod}</span>
+                      </div>
+                    </div>
+
+                    {/* Deductions & Loan Summary */}
+                    <div className="panel p-4 bg-white border border-stone-200 space-y-3">
+                      <h5 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b pb-2">
+                        Active Deductions & Advances
+                      </h5>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between py-1.5 border-b border-stone-100">
+                          <span className="text-stone-600">Active Loan/Advance Balance</span>
+                          <span className="font-bold text-rose-700">{formatPKR(viewingEmployee.totalLoanBalance || 0)}</span>
+                        </div>
+                        <div className="flex justify-between py-1.5 border-b border-stone-100">
+                          <span className="text-stone-600">Current Salary Status</span>
+                          <span className={`font-bold ${viewingEmployee.currentSalaryStatus === 'Pending' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                            {viewingEmployee.currentSalaryStatus}
+                          </span>
+                        </div>
+                        <div className="flex justify-between py-1.5 border-b border-stone-100">
+                          <span className="text-stone-600">Last Disbursed Date</span>
+                          <span className="font-semibold text-stone-800">
+                            {viewingEmployee.lastSalaryPaidDate ? formatDate(viewingEmployee.lastSalaryPaidDate) : 'Not recorded'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3">
+                        <button
+                          type="button"
+                          className="button primary w-full text-xs py-2"
+                          onClick={() => handleOpenDisburse(viewingEmployee)}
+                        >
+                          <DollarSign className="w-3.5 h-3.5 mr-1" /> Disburse & Generate Slip for {viewingEmployee.name}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: ATTENDANCE LOG */}
+              {profileTab === 'attendance' && (
+                <div className="space-y-4">
+                  {/* Attendance Stats for this employee */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-emerald-800 block">Present Days</span>
+                      <span className="text-lg font-black text-emerald-900">
+                        {(viewingEmployee.attendance || []).filter((a) => a.status === 'Present').length}
+                      </span>
+                    </div>
+                    <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-rose-800 block">Absent Days</span>
+                      <span className="text-lg font-black text-rose-900">
+                        {(viewingEmployee.attendance || []).filter((a) => a.status === 'Absent').length}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-slate-800 block">Off-days</span>
+                      <span className="text-lg font-black text-slate-900">
+                        {(viewingEmployee.attendance || []).filter((a) => a.status === 'Off-day').length}
+                      </span>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-blue-800 block">Leaves / Half</span>
+                      <span className="text-lg font-black text-blue-900">
+                        {(viewingEmployee.attendance || []).filter((a) => a.status === 'Leave' || a.status === 'Half-day').length}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                    <div className="p-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+                      <span className="text-xs font-bold text-stone-700">Detailed Daily Attendance Register</span>
+                      <span className="text-[11px] text-stone-500">
+                        {viewingEmployee.attendance?.length || 0} total records
+                      </span>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-stone-100">
+                      {viewingEmployee.attendance?.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-stone-400">
+                          <Calendar className="w-8 h-8 mx-auto mb-2 opacity-40 text-stone-300" />
+                          No attendance logs recorded yet for this staff member.
+                        </div>
+                      ) : (
+                        viewingEmployee.attendance?.map((att) => (
+                          <div key={att.id} className="p-3 flex items-center justify-between text-xs hover:bg-stone-50/80 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono font-bold text-stone-800">{formatDate(att.date)}</span>
+                              {att.checkInTime && (
+                                <span className="text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded text-[11px]">
+                                  In: {att.checkInTime}
+                                </span>
+                              )}
+                              {att.checkOutTime && (
+                                <span className="text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded text-[11px]">
+                                  Out: {att.checkOutTime}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`badge text-[11px] font-bold ${
+                                  att.status === 'Present'
+                                    ? 'badge-success'
+                                    : att.status === 'Absent'
+                                    ? 'badge-danger'
+                                    : att.status === 'Off-day'
+                                    ? 'badge-muted'
+                                    : 'badge-warning'
+                                }`}
+                              >
+                                {att.status}
+                              </span>
+                            </div>
                           </div>
-                          <button
-                            className="button secondary text-xs py-1 px-2"
-                            onClick={() => {
-                              setActiveReceipt({ employee: viewingEmployee, payment: sal })
-                            }}
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: LOANS & ADVANCES */}
+              {profileTab === 'loans' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-amber-800 block">Total Active Advance Balance</span>
+                      <span className="text-xl font-black text-amber-900">{formatPKR(viewingEmployee.totalLoanBalance || 0)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button primary text-xs py-1.5 px-3"
+                      onClick={() => {
+                        setLoaningEmployee(viewingEmployee)
+                        setLoanAmount(5000)
+                      }}
+                    >
+                      <CreditCard className="w-3.5 h-3.5 mr-1" /> Issue New Advance
+                    </button>
+                  </div>
+
+                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                    <div className="p-3 bg-stone-50 border-b border-stone-200">
+                      <span className="text-xs font-bold text-stone-700">Advances & Loan History</span>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-stone-100">
+                      {viewingEmployee.loans?.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-stone-400">
+                          <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-40 text-stone-300" />
+                          No loan or salary advances recorded for this employee.
+                        </div>
+                      ) : (
+                        viewingEmployee.loans?.map((ln) => (
+                          <div key={ln.id} className="p-3 flex items-center justify-between text-xs hover:bg-stone-50/80 transition-colors">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <strong className="text-stone-900 font-bold">{ln.type}</strong>
+                                <span className="font-black text-stone-800">{formatPKR(ln.amount)}</span>
+                                <span className={`badge text-[10px] ${ln.status === 'Active' ? 'badge-warning' : 'badge-success'}`}>
+                                  {ln.status}
+                                </span>
+                              </div>
+                              <div className="text-stone-500 text-[11px]">
+                                Date: {formatDate(ln.date)} {ln.reason ? `• Reason: ${ln.reason}` : ''}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] text-stone-400 block uppercase font-semibold">Remaining</span>
+                              <span className="font-bold text-sm text-stone-800">{formatPKR(ln.remainingBalance)}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: LEAVES & TIME OFF */}
+              {profileTab === 'leaves' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-50/70 border border-purple-200/80 p-4 rounded-xl">
+                    <div>
+                      <h4 className="font-bold text-purple-900 text-sm">Leave & Time-Off Management</h4>
+                      <p className="text-xs text-purple-700">Track and record approved leaves (Casual, Sick, Annual, Emergency).</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="button primary text-xs py-1.5 px-3 bg-purple-700 hover:bg-purple-800"
+                      onClick={() => setIsRecordingLeave(true)}
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Record New Leave
+                    </button>
+                  </div>
+
+                  {/* Inline Leave Entry Form */}
+                  {isRecordingLeave && (
+                    <div className="panel p-4 bg-purple-50/30 border border-purple-200 rounded-xl space-y-3 animate-in fade-in">
+                      <div className="flex items-center justify-between border-b pb-2 border-purple-200">
+                        <h5 className="font-bold text-xs text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <CalendarDays className="w-3.5 h-3.5 text-purple-700" /> Record Leave Application for {viewingEmployee.name}
+                        </h5>
+                        <button
+                          type="button"
+                          className="text-stone-400 hover:text-stone-600"
+                          onClick={() => setIsRecordingLeave(false)}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                        <div>
+                          <label className="field-label text-[11px]">Leave Type</label>
+                          <select
+                            value={leaveType}
+                            onChange={(e) => setLeaveType(e.target.value as any)}
+                            className="input-select text-xs py-1.5"
                           >
-                            Slip
+                            <option value="Casual">Casual Leave</option>
+                            <option value="Sick">Sick Leave</option>
+                            <option value="Annual">Annual Leave</option>
+                            <option value="Emergency">Emergency Leave</option>
+                            <option value="Unpaid">Unpaid Leave</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="field-label text-[11px]">From Date</label>
+                          <input
+                            type="date"
+                            value={leaveStartDate}
+                            onChange={(e) => setLeaveStartDate(e.target.value)}
+                            className="input-field text-xs py-1.5"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="field-label text-[11px]">To Date</label>
+                          <input
+                            type="date"
+                            value={leaveEndDate}
+                            onChange={(e) => setLeaveEndDate(e.target.value)}
+                            className="input-field text-xs py-1.5"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="field-label text-[11px]">Total Days</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={leaveDays}
+                            onChange={(e) => setLeaveDays(Number(e.target.value) || 1)}
+                            className="input-field text-xs py-1.5 font-bold"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-3">
+                          <label className="field-label text-[11px]">Reason / Details</label>
+                          <input
+                            type="text"
+                            value={leaveReason}
+                            onChange={(e) => setLeaveReason(e.target.value)}
+                            placeholder="e.g. Family wedding in village, medical recovery, personal urgent work"
+                            className="input-field text-xs py-1.5"
+                          />
+                        </div>
+
+                        <div className="flex items-end">
+                          <button
+                            type="button"
+                            className="button primary w-full text-xs py-1.5"
+                            onClick={handleSaveLeave}
+                          >
+                            <Check className="w-3.5 h-3.5 mr-1" /> Save Leave Record
                           </button>
                         </div>
                       </div>
-                    ))
+                    </div>
                   )}
-                </div>
-              </div>
-            )}
 
-            {profileTab === 'loans' && (
-              <div className="space-y-3">
-                <div className="max-h-60 overflow-y-auto border rounded-xl divide-y">
-                  {viewingEmployee.loans?.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground">No loans or salary advances.</div>
-                  ) : (
-                    viewingEmployee.loans?.map((ln) => (
-                      <div key={ln.id} className="p-3 flex items-center justify-between text-xs">
-                        <div>
-                          <strong className="block text-foreground">{ln.type}: {formatPKR(ln.amount)}</strong>
-                          <span className="text-muted-foreground">
-                            Date: {formatDate(ln.date)} · Reason: {ln.reason}
-                          </span>
+                  {/* Leave History List */}
+                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                    <div className="p-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+                      <span className="text-xs font-bold text-stone-700">Leave History</span>
+                      <span className="text-[11px] text-stone-500">
+                        {viewingEmployee.leaves?.length || 0} applications
+                      </span>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-stone-100">
+                      {(!viewingEmployee.leaves || viewingEmployee.leaves.length === 0) ? (
+                        <div className="p-8 text-center text-xs text-stone-400">
+                          <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-40 text-stone-300" />
+                          No leave applications logged for this employee.
                         </div>
-                        <div className="text-right">
-                          <span className="badge badge-warning text-xs font-semibold">
-                            Remaining: {formatPKR(ln.remainingBalance)}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
+                      ) : (
+                        viewingEmployee.leaves.map((lv) => (
+                          <div key={lv.id} className="p-3 flex items-center justify-between text-xs hover:bg-stone-50/80 transition-colors">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <strong className="text-stone-900 font-bold">{lv.leaveType} Leave</strong>
+                                <span className="bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded text-[11px]">
+                                  {lv.days} {lv.days === 1 ? 'Day' : 'Days'}
+                                </span>
+                                <span className="badge badge-success text-[10px]">
+                                  {lv.status || 'Approved'}
+                                </span>
+                              </div>
+                              <div className="text-stone-500 text-[11px]">
+                                {formatDate(lv.startDate)} {lv.startDate !== lv.endDate ? `to ${formatDate(lv.endDate)}` : ''}
+                                {lv.reason ? ` • ${lv.reason}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="icon-button text-stone-400 hover:text-rose-600"
+                                title="Delete Leave Record"
+                                onClick={() => handleDeleteLeave(lv.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div className="flex justify-end pt-3 border-t">
-              <button className="button secondary" onClick={() => setViewingEmployee(null)}>
-                Close
+              {/* TAB 6: SALARY SLIPS & DISBURSEMENT HISTORY */}
+              {profileTab === 'slips' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between bg-stone-50 border border-stone-200 p-4 rounded-xl">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-stone-500 block">Total Disbursed to Date</span>
+                      <span className="text-xl font-black text-stone-900">
+                        {formatPKR(
+                          (viewingEmployee.salaryHistory || []).reduce((sum, s) => sum + (s.amountPaid || 0), 0)
+                        )}
+                      </span>
+                    </div>
+                    {viewingEmployee.currentSalaryStatus === 'Pending' && (
+                      <button
+                        type="button"
+                        className="button primary text-xs py-1.5 px-3"
+                        onClick={() => handleOpenDisburse(viewingEmployee)}
+                      >
+                        <DollarSign className="w-3.5 h-3.5 mr-1" /> Pay Monthly Salary
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                    <div className="p-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+                      <span className="text-xs font-bold text-stone-700">Salary Receipts & Pay Slips</span>
+                      <span className="text-[11px] text-stone-500">
+                        {viewingEmployee.salaryHistory?.length || 0} slips issued
+                      </span>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-stone-100">
+                      {viewingEmployee.salaryHistory?.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-stone-400">
+                          <Receipt className="w-8 h-8 mx-auto mb-2 opacity-40 text-stone-300" />
+                          No salary slips generated yet for this employee.
+                        </div>
+                      ) : (
+                        viewingEmployee.salaryHistory?.map((sal) => (
+                          <div key={sal.id} className="p-3 flex items-center justify-between text-xs hover:bg-stone-50/80 transition-colors">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <strong className="text-sm font-bold text-stone-900">{sal.month}</strong>
+                                <span className="font-mono text-stone-500 text-[11px] bg-stone-100 px-1.5 py-0.5 rounded">
+                                  {sal.receiptNumber}
+                                </span>
+                              </div>
+                              <div className="text-stone-500 text-[11px]">
+                                Paid: {formatDate(sal.paymentDate)} via {sal.paymentMethod} ({sal.paymentAccount})
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <span className="font-bold text-sm text-stone-900 block">{formatPKR(sal.amountPaid)}</span>
+                                <span className="text-[10px] text-emerald-700 font-semibold">Net Paid</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="button secondary text-xs py-1 px-2.5 flex items-center gap-1 text-emerald-700"
+                                onClick={() => {
+                                  setActiveReceipt({ employee: viewingEmployee, payment: sal })
+                                }}
+                              >
+                                <FileText className="w-3.5 h-3.5" /> View Slip
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Profile Footer */}
+            <div className="bg-stone-50 border-t border-border p-4 flex items-center justify-between">
+              <span className="text-xs text-stone-500">
+                Al-Farooq Foods • Employee Management Profile
+              </span>
+              <button
+                type="button"
+                className="button secondary text-xs py-1.5 px-4"
+                onClick={() => setViewingEmployee(null)}
+              >
+                Close Profile
               </button>
             </div>
           </div>

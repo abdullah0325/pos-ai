@@ -428,6 +428,18 @@ export interface SalaryPaymentRecord {
   createdAt: string
 }
 
+export interface EmployeeLeaveRecord {
+  id: string
+  leaveType: 'Casual' | 'Sick' | 'Annual' | 'Emergency' | 'Unpaid'
+  startDate: string
+  endDate: string
+  days: number
+  reason: string
+  status: 'Approved' | 'Pending' | 'Rejected'
+  appliedOn: string
+  notes?: string
+}
+
 export interface EmployeeItem {
   id: string
   name: string
@@ -457,6 +469,7 @@ export interface EmployeeItem {
   attendance: AttendanceRecord[]
   loans: LoanAdvanceRecord[]
   salaryHistory: SalaryPaymentRecord[]
+  leaves?: EmployeeLeaveRecord[]
   notes?: string
   updatedAt: string
 }
