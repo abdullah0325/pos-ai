@@ -7,7 +7,6 @@ import {
   Truck,
   Store,
   Building2,
-  Phone,
   ArrowRight,
   TrendingUp,
   Receipt,
@@ -17,7 +16,6 @@ import { type AppDatabase, type ModuleKey } from '@/lib/db'
 import InvoicesView from './invoices-view'
 import PosView from './pos-view'
 import SalesEntitiesView from './sales-entities-view'
-import PhonebookView from './phonebook-view'
 
 export type SalesSubTab =
   | 'invoices'
@@ -25,7 +23,6 @@ export type SalesSubTab =
   | 'distributors'
   | 'customers'
   | 'wholesalers'
-  | 'phonebook'
 
 interface SalesViewProps {
   db: AppDatabase
@@ -99,13 +96,6 @@ export default function SalesView({
       icon: <Building2 className="w-4 h-4" />,
       count: wholesalersCount,
     },
-    {
-      id: 'phonebook',
-      label: 'Trade Phone Book',
-      shortLabel: 'Phone Book',
-      icon: <Phone className="w-4 h-4" />,
-      count: db.customers.length + db.suppliers.length,
-    },
   ]
 
   return (
@@ -175,10 +165,6 @@ export default function SalesView({
             entityType="wholesalers"
             onSaveDatabase={onSaveDatabase}
           />
-        )}
-
-        {activeTab === 'phonebook' && (
-          <PhonebookView db={db} onSaveDatabase={onSaveDatabase} />
         )}
       </div>
     </div>

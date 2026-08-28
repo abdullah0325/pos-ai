@@ -22,6 +22,7 @@ import {
   FileText,
   Receipt,
   Store,
+  Phone,
 } from 'lucide-react'
 
 import {
@@ -38,6 +39,7 @@ import {
 import DashboardView from './dashboard-view'
 import PosView from './pos-view'
 import SalesView, { type SalesSubTab } from './sales-view'
+import PhonebookView from './phonebook-view'
 import CustomerManagementView from './customer-management-view'
 import ProcurementView, { type PurchaseSubTab } from './procurement-view'
 import SuppliersManagementView from './suppliers-management-view'
@@ -80,7 +82,9 @@ export default function BusinessApp() {
       setActiveModule('customer-management')
     } else if (key === 'suppliers-management' || key === 'suppliers') {
       setActiveModule('suppliers-management')
-    } else if (['invoices', 'counter-sales', 'wholesalers', 'phonebook'].includes(key)) {
+    } else if (key === 'phonebook') {
+      setActiveModule('phonebook')
+    } else if (['invoices', 'counter-sales', 'wholesalers'].includes(key)) {
       setActiveModule('sales')
       const mapped = key === 'counter-sales' ? 'pos' : (key as SalesSubTab)
       setSalesTab(mapped)
@@ -166,7 +170,18 @@ export default function BusinessApp() {
             <span className="nav-count">{db.invoices.length}</span>
           </button>
 
-          {/* 4. Customer Management (Unified Hub) */}
+          {/* 4. Phone Book (Standalone Company Directory) */}
+          <button
+            className={`nav-item ${activeModule === 'phonebook' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('phonebook')}
+            id="nav-phonebook"
+          >
+            <Phone />
+            <span>Phone Book</span>
+            <span className="nav-count">{db.customers.length + db.suppliers.length}</span>
+          </button>
+
+          {/* 5. Customer Management (Unified Hub) */}
           <button
             className={`nav-item ${activeModule === 'customer-management' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('customer-management')}
@@ -348,6 +363,13 @@ export default function BusinessApp() {
               initialTab={salesTab}
               onSaveDatabase={handleSaveDatabase}
               onNavigate={handleNavigate}
+            />
+          )}
+
+          {activeModule === 'phonebook' && (
+            <PhonebookView
+              db={db}
+              onSaveDatabase={handleSaveDatabase}
             />
           )}
 

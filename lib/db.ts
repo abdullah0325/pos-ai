@@ -2865,7 +2865,7 @@ export const moduleLabels: Record<ModuleKey, string> = {
   'monthly-summary': 'Monthly Financial Statement',
   'yearly-summary': 'Yearly Financial Review',
   'profit-loss': 'Profit & Loss Statement',
-  phonebook: 'Trade Phone Book',
+  phonebook: 'Phone Book',
 }
 
 // Currency formatting helper (Pakistani Rupee PKR)
