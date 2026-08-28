@@ -57,6 +57,7 @@ import {
   generateCustomerPaymentReceiptPDF,
   exportToCSV,
 } from '@/lib/pdf-export'
+import { CreditLimitBadge } from '@/components/status-badges'
 
 interface CustomerManagementViewProps {
   db: AppDatabase
@@ -803,11 +804,16 @@ export default function CustomerManagementView({
                         }`}
                       >
                         <div>
-                          <span className="text-[9.5px] font-bold uppercase tracking-wider block text-stone-500">
-                            {c.currentBalance > 0 ? 'Outstanding Due' : 'Balance Settled'}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider block text-stone-500">
+                              {c.currentBalance > 0 ? 'Outstanding Due' : 'Balance Settled'}
+                            </span>
+                            {c.creditLimit > 0 && (
+                              <CreditLimitBadge currentBalance={c.currentBalance} creditLimit={c.creditLimit} />
+                            )}
+                          </div>
                           <span className="text-[10px] text-stone-400 font-medium block mt-0.5">
-                            Open: {formatPKR(c.openingBalance)}
+                            {c.creditLimit > 0 ? `Limit: ${formatPKR(c.creditLimit)}` : `Open: ${formatPKR(c.openingBalance)}`}
                           </span>
                         </div>
                         <div className="text-right">
@@ -1008,8 +1014,16 @@ export default function CustomerManagementView({
                   <span className="text-[10px] font-bold text-stone-500 block uppercase tracking-wider">Opening Bal</span>
                   <strong className="text-sm font-black text-stone-800">{formatPKR(selectedCustomer.openingBalance)}</strong>
                 </div>
-                <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[120px]">
-                  <span className="text-[10px] font-bold text-stone-500 block uppercase tracking-wider">Credit Limit</span>
+                <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[130px]">
+                  <div className="flex items-center justify-end gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-stone-500 block uppercase tracking-wider">Credit Limit</span>
+                    {selectedCustomer.creditLimit > 0 && (
+                      <CreditLimitBadge
+                        currentBalance={selectedCustomer.currentBalance}
+                        creditLimit={selectedCustomer.creditLimit}
+                      />
+                    )}
+                  </div>
                   <strong className="text-sm font-black text-stone-800">
                     {selectedCustomer.creditLimit > 0 ? formatPKR(selectedCustomer.creditLimit) : 'No Limit'}
                   </strong>

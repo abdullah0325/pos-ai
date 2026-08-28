@@ -34,6 +34,7 @@ import {
   type Status,
 } from '@/lib/db'
 import { exportToCSV } from '@/lib/pdf-export'
+import { ExpiryDateBadge } from '@/components/status-badges'
 
 interface RawMaterialsViewProps {
   db: AppDatabase
@@ -622,9 +623,12 @@ export default function RawMaterialsView({
                       <span className="inline-block bg-stone-100 text-stone-700 font-semibold text-[10px] px-2 py-0.5 rounded-md truncate max-w-[130px]">
                         {r.supplierName || r.category}
                       </span>
-                      <span className="font-mono text-[10px] text-stone-400">
-                        {r.sku}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        {r.expiryDate && <ExpiryDateBadge date={r.expiryDate} />}
+                        <span className="font-mono text-[10px] text-stone-400">
+                          {r.sku}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Material Name */}
@@ -818,6 +822,8 @@ function RawMaterialEditorModal({
   // Quantity fields
   const [quantity, setQuantity] = useState<number>(material?.quantity !== undefined ? material.quantity : 500)
   const [reorderLevel, setReorderLevel] = useState<number>(material?.reorderLevel !== undefined ? material.reorderLevel : 100)
+  const [expiryDate, setExpiryDate] = useState<string>(material?.expiryDate || '')
+  const [manufacturingDate, setManufacturingDate] = useState<string>(material?.manufacturingDate || '')
 
   const [error, setError] = useState<string | null>(null)
 
@@ -892,6 +898,8 @@ function RawMaterialEditorModal({
       totalReceived: material?.totalReceived !== undefined ? material.totalReceived : numQty,
       totalConsumed: material?.totalConsumed !== undefined ? material.totalConsumed : 0,
       quantity: numQty,
+      expiryDate: expiryDate.trim() || undefined,
+      manufacturingDate: manufacturingDate.trim() || undefined,
       reorderLevel: numReorder,
       status,
       updatedAt: now,
@@ -1019,6 +1027,39 @@ function RawMaterialEditorModal({
                   </select>
                   <span className="text-[10px] text-gray-500 mt-0.5 block">Standard inventory metric</span>
                 </label>
+              </div>
+            </div>
+
+            {/* Optional Expiry & Manufacturing Dates for Ingredients/Materials */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-200">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                  Batch / Receiving Date <span className="text-[10px] text-gray-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={manufacturingDate}
+                  onChange={(e) => setManufacturingDate(e.target.value)}
+                  className="bg-white w-full text-xs"
+                  id="input-material-mfg-date"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-gray-700 mb-0 block">
+                    Expiry Date <span className="text-[10px] text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  {expiryDate && <ExpiryDateBadge date={expiryDate} />}
+                </div>
+                <input
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  className="bg-white w-full text-xs"
+                  id="input-material-expiry-date"
+                />
+                <span className="text-[10px] text-gray-500 mt-0.5 block">Color-coded badges (Green &gt; 15d, Orange &le; 15d, Red expired)</span>
               </div>
             </div>
           </div>

@@ -44,6 +44,7 @@ import {
   type Status,
 } from '@/lib/db'
 import { exportToCSV, generateStockReportPDF } from '@/lib/pdf-export'
+import { ExpiryDateBadge } from '@/components/status-badges'
 
 interface InventoryViewProps {
   db: AppDatabase
@@ -587,9 +588,12 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                         <span className="inline-block bg-emerald-50 text-emerald-800 font-semibold text-[10px] px-2 py-0.5 rounded-md">
                           {p.category}
                         </span>
-                        <span className="font-mono text-[10px] text-stone-400">
-                          {p.sku}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          {p.expiryDate && <ExpiryDateBadge date={p.expiryDate} />}
+                          <span className="font-mono text-[10px] text-stone-400">
+                            {p.sku}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Product Name */}
@@ -1033,6 +1037,8 @@ function ProductEditorModal({
   const [unit, setUnit] = useState(product?.unit || 'Cartons')
   const [quantity, setQuantity] = useState<number>(product?.quantity ?? 100)
   const [reorderLevel, setReorderLevel] = useState<number>(product?.reorderLevel ?? 20)
+  const [expiryDate, setExpiryDate] = useState<string>(product?.expiryDate || '')
+  const [manufacturingDate, setManufacturingDate] = useState<string>(product?.manufacturingDate || '')
 
   // Pricing & Valuation
   const [costPrice, setCostPrice] = useState<number>(product?.costPrice ?? 350)
@@ -1135,6 +1141,8 @@ function ProductEditorModal({
       isPurchasedProduct,
       purchaseCost: isPurchasedProduct ? Number(purchaseCost) || Number(costPrice) : undefined,
       purchaseInvoiceImage: isPurchasedProduct ? purchaseInvoiceImage || undefined : undefined,
+      expiryDate: expiryDate.trim() || undefined,
+      manufacturingDate: manufacturingDate.trim() || undefined,
       status,
       updatedAt: now,
     }
@@ -1292,6 +1300,40 @@ function ProductEditorModal({
                   id="input-product-desc"
                 />
               </label>
+
+              {/* Optional Expiry & Manufacturing Dates */}
+              <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-stone-50/70 p-3 rounded-lg border border-stone-200">
+                <div>
+                  <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                    Manufacturing Date <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={manufacturingDate}
+                    onChange={(e) => setManufacturingDate(e.target.value)}
+                    className="w-full border border-stone-200 rounded-lg px-3 py-1.5 text-xs bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                    id="input-product-mfg-date"
+                  />
+                  <span className="text-[11px] text-stone-500 mt-1 block">Production / Bottling date</span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-stone-700 mb-0 block">
+                      Expiry Date <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
+                    </label>
+                    {expiryDate && <ExpiryDateBadge date={expiryDate} />}
+                  </div>
+                  <input
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="w-full border border-stone-200 rounded-lg px-3 py-1.5 text-xs bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                    id="input-product-expiry-date"
+                  />
+                  <span className="text-[11px] text-stone-500 mt-1 block">Triggers green/amber/red countdown badges & alerts</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1648,6 +1690,18 @@ function ProductDetailsModal({
               <div className="text-lg font-bold text-gray-900">{formatPKR(product.costPrice)}</div>
               <div className="text-[10px] text-gray-500">Base / production rate</div>
             </div>
+
+            {product.expiryDate && (
+              <div className="col-span-2 sm:col-span-4 bg-amber-50/50 p-3 rounded-lg border border-amber-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-stone-900">Product Batch Shelf Life & Expiry</div>
+                  <div className="text-[11px] text-stone-600">
+                    {product.manufacturingDate ? `Mfg Date: ${product.manufacturingDate} • ` : ''}Expiry Date: {product.expiryDate}
+                  </div>
+                </div>
+                <ExpiryDateBadge date={product.expiryDate} />
+              </div>
+            )}
 
             <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200/70">
               <div className="text-[11px] text-emerald-800 font-medium">Wholesale Rate</div>

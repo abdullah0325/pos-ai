@@ -61,6 +61,8 @@ export interface ProductItem {
   isPurchasedProduct?: boolean // true if purchased (outsourced), false if manufactured in-house
   purchaseCost?: number // purchase cost if purchased
   purchaseInvoiceImage?: string // attached invoice image
+  expiryDate?: string // Optional product batch expiry date (YYYY-MM-DD)
+  manufacturingDate?: string // Optional manufacturing date
   reorderLevel: number
   status: Status
   updatedAt: string
@@ -88,6 +90,8 @@ export interface RawMaterialItem {
   totalReceived?: number // Total quantity received/opening
   totalConsumed?: number // Total quantity consumed in production
   quantity: number // Remaining warehouse stock
+  expiryDate?: string // Optional raw material/ingredient expiry date
+  manufacturingDate?: string // Optional manufacturing / batch date
   reorderLevel: number
   status: Status
   updatedAt: string
@@ -213,6 +217,7 @@ export interface InvoiceItem {
   invoiceNumber: string
   date: string
   time?: string
+  dueDate?: string // Optional due date for pending customer payments
   customerId: string
   customerName: string
   customerType: CustomerType
