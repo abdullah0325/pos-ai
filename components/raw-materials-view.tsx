@@ -339,7 +339,10 @@ export default function RawMaterialsView({
 
       {/* KPI Stats Grid */}
       <div className="stat-grid">
-        <div className="stat-card" id="metric-total-materials">
+        <div className="stat-card relative" id="metric-total-materials">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+            <Boxes className="w-4 h-4" />
+          </div>
           <div className="stat-label">Total Raw Items</div>
           <strong>{totalItemsCount} Items</strong>
           <span className="stat-change text-blue-700">
@@ -347,13 +350,19 @@ export default function RawMaterialsView({
           </span>
         </div>
 
-        <div className="stat-card" id="metric-raw-valuation">
+        <div className="stat-card relative" id="metric-raw-valuation">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <DollarSign className="w-4 h-4" />
+          </div>
           <div className="stat-label">Total Material Valuation</div>
           <strong>{formatPKR(totalValuation)}</strong>
           <span className="stat-change text-emerald-700">Based on landed purchase & handling cost</span>
         </div>
 
-        <div className="stat-card" id="metric-raw-alerts">
+        <div className="stat-card relative" id="metric-raw-alerts">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+            <AlertTriangle className="w-4 h-4" />
+          </div>
           <div className="stat-label">Low Stock Alerts</div>
           <strong className={lowStockCount > 0 ? 'text-amber-700' : 'text-stone-900'}>
             {lowStockCount} Materials
@@ -365,7 +374,10 @@ export default function RawMaterialsView({
           </span>
         </div>
 
-        <div className="stat-card" id="metric-total-suppliers">
+        <div className="stat-card relative" id="metric-total-suppliers">
+          <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+            <Truck className="w-4 h-4" />
+          </div>
           <div className="stat-label">Registered Suppliers</div>
           <strong>{db.suppliers.length} Suppliers</strong>
           <span className="stat-change text-purple-700">Vendors supplying packaging & ingredients</span>

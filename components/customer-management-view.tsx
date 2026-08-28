@@ -530,61 +530,51 @@ export default function CustomerManagementView({
             </div>
           </div>
 
-          {/* Top Stats Bar — Evenly Spaced Structured Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
-            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Total Accounts</span>
-                <Users className="w-4 h-4 text-stone-400" />
+          {/* Top Stats Bar — Consistent Stat Grid & Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5" id="customer-kpi-stats">
+            <div className="stat-card relative" id="kpi-total-customers">
+              <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center">
+                <Users className="w-4 h-4" />
               </div>
-              <div className="mt-2">
-                <strong className="text-2xl font-black text-stone-900 block">{metrics.totalCount}</strong>
-                <span className="text-[11px] text-stone-500 font-medium">All registered profiles</span>
-              </div>
+              <div className="stat-label">Total Accounts</div>
+              <strong>{metrics.totalCount}</strong>
+              <span className="stat-change text-stone-600">All registered profiles</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Distributors</span>
-                <Building2 className="w-4 h-4 text-blue-600" />
+            <div className="stat-card relative" id="kpi-distributors">
+              <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                <Building2 className="w-4 h-4" />
               </div>
-              <div className="mt-2">
-                <strong className="text-2xl font-black text-blue-700 block">{metrics.distributors}</strong>
-                <span className="text-[11px] text-stone-500 font-medium">Wholesale hub accounts</span>
-              </div>
+              <div className="stat-label">Distributors</div>
+              <strong className="text-blue-800">{metrics.distributors}</strong>
+              <span className="stat-change text-blue-700">Wholesale hub accounts</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Retailers (Shops)</span>
-                <Store className="w-4 h-4 text-emerald-600" />
+            <div className="stat-card relative" id="kpi-retailers">
+              <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <Store className="w-4 h-4" />
               </div>
-              <div className="mt-2">
-                <strong className="text-2xl font-black text-emerald-700 block">{metrics.retailers}</strong>
-                <span className="text-[11px] text-stone-500 font-medium">Direct retail shops & marts</span>
-              </div>
+              <div className="stat-label">Retailers (Shops)</div>
+              <strong className="text-emerald-800">{metrics.retailers}</strong>
+              <span className="stat-change text-emerald-700">Direct retail shops & marts</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Sales Men / Reps</span>
-                <UserCheck className="w-4 h-4 text-purple-600" />
+            <div className="stat-card relative" id="kpi-salesmen">
+              <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+                <UserCheck className="w-4 h-4" />
               </div>
-              <div className="mt-2">
-                <strong className="text-2xl font-black text-purple-700 block">{metrics.salesMen}</strong>
-                <span className="text-[11px] text-stone-500 font-medium">Route order bookers</span>
-              </div>
+              <div className="stat-label">Sales Men / Reps</div>
+              <strong className="text-purple-800">{metrics.salesMen}</strong>
+              <span className="stat-change text-purple-700">Route order bookers</span>
             </div>
 
-            <div className="col-span-2 md:col-span-1 bg-amber-50/60 p-4 rounded-xl border border-amber-200/80 shadow-2xs flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Total Outstanding</span>
-                <DollarSign className="w-4 h-4 text-amber-700" />
+            <div className="stat-card relative col-span-2 lg:col-span-1" id="kpi-receivables">
+              <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                <DollarSign className="w-4 h-4" />
               </div>
-              <div className="mt-2">
-                <strong className="text-2xl font-black text-amber-900 block">{formatPKR(metrics.totalReceivables)}</strong>
-                <span className="text-[11px] text-amber-700 font-semibold">Total receivable dues</span>
-              </div>
+              <div className="stat-label">Total Outstanding</div>
+              <strong className="text-amber-800">{formatPKR(metrics.totalReceivables)}</strong>
+              <span className="stat-change text-amber-700">Total receivable dues</span>
             </div>
           </div>
 
