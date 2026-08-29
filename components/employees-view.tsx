@@ -1379,6 +1379,17 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                             <span className="badge badge-success text-xs font-semibold">
                               <CheckCircle2 className="w-3 h-3 mr-1 inline" /> Paid ({formatDate(emp.lastSalaryPaidDate)})
                             </span>
+                          ) : emp.currentSalaryStatus === 'Partial' ? (
+                            <div>
+                              <span className="badge badge-warning text-xs font-semibold bg-amber-100 text-amber-800 border-amber-300">
+                                <Clock className="w-3 h-3 mr-1 inline text-amber-600" /> Partial Paid
+                              </span>
+                              {emp.pendingSalaryAmount ? (
+                                <div className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                                  Pending: {formatPKR(emp.pendingSalaryAmount)}
+                                </div>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="badge badge-warning text-xs font-semibold">
                               <Clock className="w-3 h-3 mr-1 inline" /> Pending Payment
@@ -1387,7 +1398,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                         </td>
 
                         <td className="text-right">
-                          {isPaid && recentPayment ? (
+                          {recentPayment ? (
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 className="button secondary text-xs py-1 px-2.5"
@@ -1402,6 +1413,14 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                                   title="View Online Transaction Screenshot"
                                 >
                                   <Eye className="w-3.5 h-3.5" /> Proof
+                                </button>
+                              )}
+                              {emp.currentSalaryStatus === 'Partial' && (
+                                <button
+                                  className="button primary text-xs py-1 px-2.5"
+                                  onClick={() => handleOpenDisburse(emp)}
+                                >
+                                  <DollarSign className="w-3.5 h-3.5 mr-1" /> Pay Remaining
                                 </button>
                               )}
                             </div>

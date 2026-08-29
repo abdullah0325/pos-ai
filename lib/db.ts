@@ -305,19 +305,24 @@ export interface ExpenseItem {
   expenseNumber: string
   voucherNumber?: string // Alias for compatibility
   date: string
-  category: ExpenseCategory
+  category: ExpenseCategory | string
   description: string
   title?: string // Alias for compatibility
   amount: number
   paidTo: string
   employeeId?: string // Linked Employee Profile ID
   employeeName?: string // Linked Employee Name
+  salaryMonth?: string // e.g. "August 2026"
+  baseSalary?: number // Total monthly salary / full payable
+  pendingSalaryBalance?: number // Remaining unpaid balance if partial
+  isRecurring?: boolean // Marked as Recurring Monthly
+  recurringFrequency?: 'Monthly' | 'Weekly' | 'Quarterly' | 'Yearly'
   paymentMethod: 'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque'
   paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
   transactionRef?: string
   receiptImage?: string
   paymentScreenshot?: string
-  status: 'Paid'
+  status: 'Paid' | 'Partial' | 'Pending'
   notes?: string
   createdAt: string
 }
@@ -425,10 +430,11 @@ export interface SalaryPaymentRecord {
   absentDeduction?: number
   netPayable: number
   amountPaid: number
+  pendingBalance?: number
   paymentMethod: 'Cash' | 'Online' | 'Bank Transfer' | 'Cheque' | 'Card'
   paymentAccount: 'cash-in-hand' | 'meezan-bank' | 'hbl-bank'
   paymentScreenshot?: string // Base64 image
-  status: 'Paid' | 'Pending'
+  status: 'Paid' | 'Pending' | 'Partial'
   notes?: string
   createdAt: string
 }
@@ -461,7 +467,8 @@ export interface EmployeeItem {
   shift: 'Morning' | 'Evening' | 'Night' | 'General Day' | 'Rotating'
   joiningDate: string
   status: 'Active' | 'On Leave' | 'Terminated'
-  currentSalaryStatus: 'Pending' | 'Paid'
+  currentSalaryStatus: 'Pending' | 'Paid' | 'Partial'
+  pendingSalaryAmount?: number
   lastSalaryPaidDate?: string
   totalLoanBalance: number
   address?: string

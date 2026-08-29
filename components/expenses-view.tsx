@@ -34,6 +34,7 @@ import {
   FolderTree,
   Tag,
   Palette,
+  RotateCw,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -169,9 +170,22 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
     const d = new Date()
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   })
+  const [markRemainingAsPending, setMarkRemainingAsPending] = useState<boolean>(true)
+  const [isRecurring, setIsRecurring] = useState<boolean>(false)
 
   const receiptInputRef = useRef<HTMLInputElement>(null)
   const screenshotInputRef = useRef<HTMLInputElement>(null)
+
+  // Category classification helpers
+  const isSalaryCategory = (cat: string) => {
+    const c = (cat || '').trim().toLowerCase()
+    return c === 'salaries' || c === 'salary' || c === 'payroll' || (c.includes('salary') && !c.includes('advance') && !c.includes('loan'))
+  }
+
+  const isLoanCategory = (cat: string) => {
+    const c = (cat || '').trim().toLowerCase()
+    return c.includes('loan') || c.includes('advance')
+  }
 
   // Active Category Items list
   const currentCategories: CategoryItem[] = useMemo(() => {
@@ -195,6 +209,23 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
     if (!selectedEmployeeId) return null
     return db.employees?.find((e) => e.id === selectedEmployeeId) || null
   }, [db.employees, selectedEmployeeId])
+
+  // Last recorded expense in current category (for reference note)
+  const lastRecordedExpenseForCategory = useMemo(() => {
+    const cat = (expenseCategory === 'Other' && customCategoryInput.trim() ? customCategoryInput.trim() : expenseCategory).trim().toLowerCase()
+    if (!cat) return null
+    return (
+      db.expenses
+        .filter((e) => e.id !== editingExpense?.id && (e.category || '').trim().toLowerCase() === cat)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] || null
+    )
+  }, [db.expenses, expenseCategory, customCategoryInput, editingExpense])
+
+  // Total default payable for selected employee
+  const selectedEmpTotalPayable = useMemo(() => {
+    if (!selectedEmployee) return 0
+    return (selectedEmployee.baseSalary || 0) + (selectedEmployee.totalAllowances || 0)
+  }, [selectedEmployee])
 
   // Date Filtering Helper
   const isDateInFilter = (dateStr: string, filter: typeof dateRangeFilter) => {
@@ -323,6 +354,9 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
     setPaymentScreenshot('')
     setNotes('')
     setSelectedEmployeeId('')
+    setMarkRemainingAsPending(true)
+    setIsRecurring(false)
+    setSalaryMonth(new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
     setIsModalOpen(true)
   }
 
@@ -343,6 +377,9 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
     setPaymentScreenshot(exp.paymentScreenshot || '')
     setNotes(exp.notes || '')
     setSelectedEmployeeId(exp.employeeId || '')
+    setMarkRemainingAsPending(true)
+    setIsRecurring(!!exp.isRecurring)
+    setSalaryMonth(exp.salaryMonth || new Date(exp.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
     setIsModalOpen(true)
   }
 
@@ -352,11 +389,11 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
     const emp = db.employees?.find((e) => e.id === empId)
     if (emp) {
       setPaidTo(emp.name)
-      if (expenseCategory === 'Salaries') {
-        const totalPay = emp.baseSalary + (emp.totalAllowances || 0)
+      if (isSalaryCategory(expenseCategory)) {
+        const totalPay = (emp.baseSalary || 0) + (emp.totalAllowances || 0)
         setAmount(totalPay)
         setDescription(`Monthly Salary for ${emp.name} (${salaryMonth}) - ${emp.role}`)
-      } else if (expenseCategory.includes('Loan') || expenseCategory.includes('Advance')) {
+      } else if (isLoanCategory(expenseCategory)) {
         setDescription(`Salary Advance / Emergency Loan to ${emp.name} (${emp.role})`)
       }
     }
@@ -372,19 +409,26 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
     }
 
     const finalCategory = expenseCategory === 'Other' && customCategoryInput.trim() ? customCategoryInput.trim() : expenseCategory
+    const isSalary = isSalaryCategory(finalCategory)
+    const isLoan = isLoanCategory(finalCategory)
 
     // Validation for Employee Linkage
-    if (finalCategory === 'Salaries' && !selectedEmployeeId) {
+    if (isSalary && !selectedEmployeeId) {
       alert('Please select an Employee profile for Salary payments to ensure universal employee profile auto-linking.')
       return
     }
-    if ((finalCategory === 'Loan/Advance to employee' || finalCategory === 'Loan/Advance') && !selectedEmployeeId) {
+    if (isLoan && !selectedEmployeeId) {
       alert('Please select an Employee profile to link this loan/advance.')
       return
     }
 
     const newExpenseId = editingExpense ? editingExpense.id : `exp-${Date.now()}`
     const empName = selectedEmployee ? selectedEmployee.name : paidTo
+
+    // Calculate Salary breakdown
+    const defaultMonthlyTotal = selectedEmployee ? (selectedEmployee.baseSalary || 0) + (selectedEmployee.totalAllowances || 0) : numericAmount
+    const pendingSalaryBal = isSalary && markRemainingAsPending ? Math.max(0, defaultMonthlyTotal - numericAmount) : 0
+    const isFullSalary = isSalary ? pendingSalaryBal === 0 : true
 
     const updatedExpense: ExpenseItem = {
       id: newExpenseId,
@@ -396,12 +440,16 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       paidTo: paidTo.trim() || empName || 'General Vendor',
       employeeId: selectedEmployeeId || undefined,
       employeeName: selectedEmployee ? selectedEmployee.name : undefined,
+      salaryMonth: isSalary ? salaryMonth : undefined,
+      baseSalary: isSalary ? defaultMonthlyTotal : undefined,
+      pendingSalaryBalance: isSalary && pendingSalaryBal > 0 ? pendingSalaryBal : undefined,
+      isRecurring: isRecurring || undefined,
       paymentMethod,
       paymentAccount,
       transactionRef: transactionRef.trim() || undefined,
       receiptImage: receiptImage || undefined,
       paymentScreenshot: paymentScreenshot || undefined,
-      status: 'Paid',
+      status: isSalary ? (isFullSalary ? 'Paid' : 'Partial') : 'Paid',
       notes: notes.trim() || undefined,
       createdAt: editingExpense ? editingExpense.createdAt : new Date().toISOString(),
     }
@@ -424,10 +472,12 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       if (editingExpense.employeeId) {
         updatedEmployees = updatedEmployees.map((emp) => {
           if (emp.id === editingExpense.employeeId) {
-            let updatedSalaryHistory = emp.salaryHistory.filter((s) => !s.receiptNumber.includes(editingExpense.expenseNumber))
-            let updatedLoans = emp.loans.filter((l) => l.reason !== editingExpense.description)
+            const updatedSalaryHistory = emp.salaryHistory.filter(
+              (s) => !s.receiptNumber.includes(editingExpense.expenseNumber) && s.id !== `sal-${editingExpense.id}`
+            )
+            const updatedLoans = emp.loans.filter((l) => l.reason !== editingExpense.description)
             let newLoanBal = emp.totalLoanBalance
-            if (editingExpense.category.includes('Loan') || editingExpense.category.includes('Advance')) {
+            if (isLoanCategory(editingExpense.category)) {
               newLoanBal = Math.max(0, (emp.totalLoanBalance || 0) - editingExpense.amount)
             }
             return {
@@ -435,6 +485,8 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               salaryHistory: updatedSalaryHistory,
               loans: updatedLoans,
               totalLoanBalance: newLoanBal,
+              currentSalaryStatus: emp.salaryHistory.length > 1 ? emp.currentSalaryStatus : 'Pending',
+              pendingSalaryAmount: undefined,
             }
           }
           return emp
@@ -462,7 +514,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
           const empCopy = { ...emp }
 
           // Auto-create Salary Payment Record
-          if (finalCategory === 'Salaries') {
+          if (isSalary) {
             const salaryRec: SalaryPaymentRecord = {
               id: `sal-${Date.now()}`,
               receiptNumber: `SAL-${updatedExpense.expenseNumber}`,
@@ -470,23 +522,25 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               paymentDate: expenseDate,
               baseSalary: emp.baseSalary,
               allowances: emp.totalAllowances || 0,
-              netPayable: numericAmount,
+              netPayable: defaultMonthlyTotal,
               amountPaid: numericAmount,
+              pendingBalance: pendingSalaryBal > 0 ? pendingSalaryBal : undefined,
               paymentMethod: paymentMethod === 'Card' ? 'Online' : paymentMethod,
               paymentAccount,
               paymentScreenshot: paymentScreenshot || receiptImage || undefined,
-              status: 'Paid',
-              notes: `${description} | Recorded via Expenses module`,
+              status: isFullSalary ? 'Paid' : (numericAmount > 0 ? 'Partial' : 'Pending'),
+              notes: `${description} | Recorded via Expenses module${pendingSalaryBal > 0 ? ` (Pending Balance: Rs. ${pendingSalaryBal.toLocaleString()})` : ''}`,
               createdAt: new Date().toISOString(),
             }
             empCopy.salaryHistory = [salaryRec, ...empCopy.salaryHistory]
-            empCopy.currentSalaryStatus = 'Paid'
+            empCopy.currentSalaryStatus = isFullSalary ? 'Paid' : 'Partial'
+            empCopy.pendingSalaryAmount = pendingSalaryBal > 0 ? pendingSalaryBal : undefined
             empCopy.lastSalaryPaidDate = expenseDate
             empCopy.updatedAt = new Date().toISOString().slice(0, 10)
           }
 
           // Auto-create Loan / Advance Record
-          if (finalCategory === 'Loan/Advance to employee' || finalCategory === 'Loan/Advance') {
+          if (isLoan) {
             const loanRec: LoanAdvanceRecord = {
               id: `loan-${Date.now()}`,
               date: expenseDate,
@@ -849,15 +903,23 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
                     {/* Category */}
                     <td className="py-3 px-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${getExpenseCategoryBadgeClass(exp.category, currentCategories)}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getExpenseCategoryDotClass(exp.category, currentCategories)}`} />
-                        {exp.category}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${getExpenseCategoryBadgeClass(exp.category, currentCategories)}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getExpenseCategoryDotClass(exp.category, currentCategories)}`} />
+                          {exp.category}
+                        </span>
+                        {exp.isRecurring && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                            <RotateCw className="w-2.5 h-2.5" /> Recurring
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Description */}
                     <td className="py-3 px-4 max-w-xs">
                       <div className="font-medium text-stone-900 line-clamp-1">{exp.description}</div>
+                      {exp.salaryMonth && <div className="text-[10px] font-semibold text-lime-700">Salary Month: {exp.salaryMonth}</div>}
                       {exp.notes && <div className="text-[11px] text-stone-500 line-clamp-1 italic">{exp.notes}</div>}
                     </td>
 
@@ -870,7 +932,9 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                             <span className="font-semibold text-lime-800 hover:underline cursor-pointer" onClick={() => onNavigate && onNavigate('employees')}>
                               {exp.employeeName}
                             </span>
-                            <span className="text-[10px] block text-stone-400">Employee Profile</span>
+                            <span className="text-[10px] block text-stone-400">
+                              {exp.pendingSalaryBalance ? `Partial Paid (Bal: ${formatPKR(exp.pendingSalaryBalance)})` : 'Employee Profile'}
+                            </span>
                           </div>
                         </div>
                       ) : (
@@ -894,6 +958,11 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                     {/* Amount */}
                     <td className="py-3 px-4 text-right">
                       <span className="font-bold text-sm text-stone-900">{formatPKR(exp.amount)}</span>
+                      {exp.pendingSalaryBalance && exp.pendingSalaryBalance > 0 ? (
+                        <div className="text-[10px] font-semibold text-amber-700 mt-0.5">
+                          Pending: {formatPKR(exp.pendingSalaryBalance)}
+                        </div>
+                      ) : null}
                     </td>
 
                     {/* Receipt Image / Proof */}
@@ -1015,19 +1084,28 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                   value={expenseCategory}
                   onChange={(e) => {
                     setExpenseCategory(e.target.value)
-                    if (e.target.value !== 'Salaries' && !e.target.value.includes('Loan')) {
-                      // reset employee if normal category
-                    }
                   }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
                 >
                   {allCategories.map((cat) => (
                     <option key={cat} value={cat}>
-                      {cat} {cat === 'Salaries' ? '⭐ (Auto-links to Employee Profile)' : ''}
+                      {cat} {isSalaryCategory(cat) ? '⭐ (Auto-links to Employee Profile & Payroll)' : ''}
                     </option>
                   ))}
                   <option value="Other">+ Custom Category (Type below)</option>
                 </select>
+
+                {/* Last Recorded Expense Reference Note */}
+                {lastRecordedExpenseForCategory && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50/90 px-3 py-1.5 rounded-xl border border-amber-200/80 mt-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="truncate">
+                      <strong>Previous {lastRecordedExpenseForCategory.category} Record:</strong>{' '}
+                      {formatPKR(lastRecordedExpenseForCategory.amount)} on {formatDate(lastRecordedExpenseForCategory.date)}{' '}
+                      {lastRecordedExpenseForCategory.paidTo ? `(${lastRecordedExpenseForCategory.paidTo})` : ''}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Custom Category Input */}
@@ -1039,19 +1117,19 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                     required
                     value={customCategoryInput}
                     onChange={(e) => setCustomCategoryInput(e.target.value)}
-                    placeholder="e.g. Legal Fees, ISO Certification, etc."
+                    placeholder="e.g. Legal Fees, ISO Certification, Factory Repairs, etc."
                     className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
                   />
                 </div>
               )}
 
               {/* SPECIAL EMPLOYEE LINKAGE BOX IF SALARIES OR LOANS */}
-              {(expenseCategory === 'Salaries' || expenseCategory.includes('Loan') || expenseCategory.includes('Advance')) && (
+              {(isSalaryCategory(expenseCategory) || isLoanCategory(expenseCategory)) && (
                 <div className="p-4 rounded-xl bg-lime-50 border border-lime-200 space-y-3">
                   <div className="flex items-center gap-2">
                     <UserCheck className="w-4 h-4 text-lime-700" />
                     <span className="text-xs font-bold text-lime-900">
-                      {expenseCategory === 'Salaries'
+                      {isSalaryCategory(expenseCategory)
                         ? 'Universal Profile Linking: Select Employee for Salary Payment'
                         : 'Universal Profile Linking: Select Employee for Loan / Advance'}
                     </span>
@@ -1077,7 +1155,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                       </select>
                     </div>
 
-                    {expenseCategory === 'Salaries' && (
+                    {isSalaryCategory(expenseCategory) && (
                       <div>
                         <label className="block text-[11px] font-bold text-lime-800 mb-1">Salary Month</label>
                         <input
@@ -1091,16 +1169,52 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                     )}
                   </div>
 
-                  {selectedEmployee && (
-                    <div className="text-[11px] text-lime-900 bg-white/80 p-2.5 rounded-lg border border-lime-200 flex items-center justify-between">
-                      <div>
-                        <strong>{selectedEmployee.name}</strong> • {selectedEmployee.department}
-                        <span className="block text-stone-500 text-[10px]">
-                          Base: {formatPKR(selectedEmployee.baseSalary)} | Allowances: {formatPKR(selectedEmployee.totalAllowances || 0)}
+                  {selectedEmployee && isSalaryCategory(expenseCategory) && (
+                    <div className="space-y-2 pt-1">
+                      <div className="text-[11px] text-lime-900 bg-white/90 p-2.5 rounded-lg border border-lime-200 flex items-center justify-between">
+                        <div>
+                          <strong>{selectedEmployee.name}</strong> • {selectedEmployee.department || selectedEmployee.role}
+                          <span className="block text-stone-600 text-[10px] mt-0.5">
+                            Base: {formatPKR(selectedEmployee.baseSalary)} + Allowances: {formatPKR(selectedEmployee.totalAllowances || 0)} ={' '}
+                            <strong className="text-stone-900">Total Payable: {formatPKR(selectedEmpTotalPayable)}</strong>
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md font-semibold text-[10px] bg-emerald-100 text-emerald-800">
+                          {Number(amount) >= selectedEmpTotalPayable ? 'Full Disbursal' : 'Partial Payment'}
                         </span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md font-semibold text-[10px] bg-emerald-100 text-emerald-800">
-                        {expenseCategory === 'Salaries' ? 'Auto-updates to PAID' : `Existing Loan: ${formatPKR(selectedEmployee.totalLoanBalance || 0)}`}
+
+                      {/* Partial Payment Notice & Toggle */}
+                      {Number(amount) > 0 && Number(amount) < selectedEmpTotalPayable && (
+                        <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-amber-900 font-semibold text-[11px]">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>
+                              Paying {formatPKR(Number(amount))} of full {formatPKR(selectedEmpTotalPayable)}. Remaining balance is{' '}
+                              <strong>{formatPKR(selectedEmpTotalPayable - Number(amount))}</strong>.
+                            </span>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer text-[11px] text-amber-800">
+                            <input
+                              type="checkbox"
+                              checked={markRemainingAsPending}
+                              onChange={(e) => setMarkRemainingAsPending(e.target.checked)}
+                              className="rounded text-amber-600 focus:ring-amber-500"
+                            />
+                            <span>Mark remaining balance ({formatPKR(selectedEmpTotalPayable - Number(amount))}) as Pending in Payroll</span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedEmployee && isLoanCategory(expenseCategory) && (
+                    <div className="text-[11px] text-lime-900 bg-white/80 p-2.5 rounded-lg border border-lime-200 flex items-center justify-between">
+                      <div>
+                        <strong>{selectedEmployee.name}</strong> • {selectedEmployee.role}
+                      </div>
+                      <span className="px-2 py-0.5 rounded-md font-semibold text-[10px] bg-purple-100 text-purple-800">
+                        Existing Loan Balance: {formatPKR(selectedEmployee.totalLoanBalance || 0)}
                       </span>
                     </div>
                   )}
@@ -1154,6 +1268,25 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                   />
                 </div>
               </div>
+
+              {/* Recurring Monthly Expense Option */}
+              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer hover:bg-stone-100/70 transition">
+                <input
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  className="w-4 h-4 text-lime-600 rounded border-stone-300 focus:ring-lime-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                    <RotateCw className="w-3.5 h-3.5 text-stone-600" />
+                    Mark as Recurring Monthly Expense
+                  </span>
+                  <span className="text-[11px] text-stone-500 block">
+                    For regular monthly bills (Electricity, Factory Rent, Fuel/Diesel, Internet, Maintenance) to show reminders and comparison notes.
+                  </span>
+                </div>
+              </label>
 
               {/* Payment Method & Payment Account */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

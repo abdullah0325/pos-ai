@@ -1904,61 +1904,121 @@ function PurchaseOrderModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-2xl w-full p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto" id="purchase-order-modal">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8" id="purchase-order-modal">
+        {/* Modal Header - Identical styling to Expense Form */}
+        <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-              <Truck className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <Truck className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-stone-900">
+                <h3 className="font-bold text-base">
                   {editingPurchase ? 'Edit Purchase Order' : 'Create New Purchase Order'}
-                </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                </h3>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-stone-800 text-emerald-400 border border-stone-700">
                   {poNumber}
                 </span>
               </div>
-              <p className="text-[11px] text-stone-500">Guided procurement flow • Category → Supplier → Items → Terms</p>
+              <p className="text-xs text-stone-400">Record supplier procurement, inventory replenishment & payment terms</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 p-1 rounded-lg hover:bg-stone-100 transition-colors">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="text-stone-400 hover:text-white p-1 rounded-lg transition-colors">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* ========================================================================= */}
-          {/* SECTION 1: 3-STEP DROPDOWN-DRIVEN VENDOR & GENERAL DETAILS */}
-          {/* ========================================================================= */}
-          <div className="bg-stone-50/80 p-3.5 rounded-xl border border-stone-200 space-y-3">
-            <span className="text-[11px] font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-              1. Category, Supplier & Date
-            </span>
+        {/* Modal Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* PO Number & Purchase Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">PO / Order #</label>
+              <input
+                type="text"
+                required
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 font-mono bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </div>
 
-            {/* Inline Add Supplier Drawer */}
-            {showInlineSupplierForm && (
-              <div className="bg-white p-3 rounded-lg border border-emerald-300 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-800">Quick Add Custom Supplier</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowInlineSupplierForm(false)}
-                    className="text-stone-400 hover:text-stone-600 text-xs"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">Purchase Date</label>
+              <input
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          {/* Category Dropdown */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-stone-700">
+                Procurement Category <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsCustomCategory(!isCustomCategory)}
+                className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+              >
+                {isCustomCategory ? 'Use Standard List' : '+ Custom Category'}
+              </button>
+            </div>
+            {isCustomCategory ? (
+              <input
+                type="text"
+                placeholder="Type custom procurement category (e.g. Laboratory Chemicals)..."
+                value={customCategoryLabel}
+                onChange={(e) => setCustomCategoryLabel(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                required
+              />
+            ) : (
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              >
+                {purchaseCategories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Supplier Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-stone-700">
+                Supplier / Vendor <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowInlineSupplierForm(!showInlineSupplierForm)}
+                className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+              >
+                {showInlineSupplierForm ? 'Cancel Quick Add' : '+ Add New Supplier'}
+              </button>
+            </div>
+
+            {showInlineSupplierForm ? (
+              <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2.5 mb-2">
+                <span className="text-xs font-bold text-emerald-900 block">Quick Register New Supplier</span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input
                     type="text"
-                    placeholder="Business Name *"
+                    placeholder="Company / Vendor Name *"
                     value={inlineSupplierName}
                     onChange={(e) => setInlineSupplierName(e.target.value)}
-                    className="h-9 px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                   />
                   <input
@@ -1966,173 +2026,101 @@ function PurchaseOrderModal({
                     placeholder="Phone (0300...)"
                     value={inlineSupplierPhone}
                     onChange={(e) => setInlineSupplierPhone(e.target.value)}
-                    className="h-9 px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                   <input
                     type="text"
-                    placeholder="City (e.g. Lahore)"
+                    placeholder="City (e.g. Faisalabad)"
                     value={inlineSupplierCity}
                     onChange={(e) => setInlineSupplierCity(e.target.value)}
-                    className="h-9 px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setShowInlineSupplierForm(false)}
-                    className="px-2.5 py-1 text-xs text-stone-500 hover:text-stone-700"
+                    className="px-3 py-1 text-xs text-stone-600 hover:text-stone-800 font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={handleSaveInlineSupplier}
-                    className="px-3 py-1 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-2xs"
+                    className="px-3 py-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs"
                   >
-                    Use This Supplier
+                    Select & Use Supplier
                   </button>
                 </div>
               </div>
+            ) : (
+              <select
+                value={supplierId}
+                onChange={(e) => handleSupplierSelect(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                required
+              >
+                <option value="">-- Choose Supplier / Party --</option>
+                {filteredSuppliersForForm.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.city || 'Punjab'}) {s.category ? `• ${s.category}` : ''}
+                  </option>
+                ))}
+              </select>
             )}
 
-            {/* Dropdown Grid: Category, Supplier, Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {/* Step 1: Procurement Category Dropdown */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-semibold text-stone-700">Category *</label>
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomCategory(!isCustomCategory)}
-                    className="text-[10px] font-semibold text-emerald-700 hover:underline"
-                  >
-                    {isCustomCategory ? 'Standard' : '+ Custom'}
-                  </button>
-                </div>
-                {isCustomCategory ? (
-                  <input
-                    type="text"
-                    placeholder="Custom Category Name..."
-                    value={customCategoryLabel}
-                    onChange={(e) => setCustomCategoryLabel(e.target.value)}
-                    className="h-9 w-full px-2.5 text-xs bg-white border border-emerald-400 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
-                    required
-                  />
-                ) : (
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900 cursor-pointer"
-                  >
-                    {purchaseCategories.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Step 2: Select Supplier Dropdown */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-semibold text-stone-700">Supplier *</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowInlineSupplierForm(!showInlineSupplierForm)}
-                    className="text-[10px] font-semibold text-emerald-700 hover:underline"
-                  >
-                    {showInlineSupplierForm ? 'Close' : '+ New Supplier'}
-                  </button>
-                </div>
-                <select
-                  value={supplierId}
-                  onChange={(e) => handleSupplierSelect(e.target.value)}
-                  className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900 cursor-pointer"
-                  required
-                >
-                  <option value="">-- Select Supplier --</option>
-                  {filteredSuppliersForForm.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.city || 'Punjab'}) {s.category ? `• ${s.category}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Step 3: Purchase Date */}
-              <div>
-                <label className="text-[11px] font-semibold text-stone-700 block mb-1">Purchase Date *</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Smart Supplier Hint Info Strip */}
             {selectedSupplierObj && (
-              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg px-3 py-1.5 text-xs text-emerald-900 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-[11px]">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                  <span className="font-bold">{selectedSupplierObj.name}</span>
-                  <span className="text-emerald-700 font-mono">• Current Balance: {formatPKR(selectedSupplierObj.currentBalance || 0)}</span>
+              <div className="mt-2 text-[11px] text-emerald-900 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200 flex items-center justify-between">
+                <div>
+                  <strong>{selectedSupplierObj.name}</strong> • {selectedSupplierObj.city || 'Vendor'}
+                  <span className="block text-stone-500 text-[10px]">
+                    Current Payable Balance: <strong className="text-emerald-800 font-mono">{formatPKR(selectedSupplierObj.currentBalance || 0)}</strong>
+                  </span>
                 </div>
                 {lastPurchaseFromSupplier && (
-                  <span className="text-[10.5px] text-emerald-700 font-medium">
-                    Last PO: #{lastPurchaseFromSupplier.poNumber} ({formatDate(lastPurchaseFromSupplier.date)})
+                  <span className="px-2 py-0.5 rounded-md font-medium text-[10px] bg-emerald-100 text-emerald-800">
+                    Last PO: #{lastPurchaseFromSupplier.poNumber}
                   </span>
                 )}
               </div>
             )}
           </div>
 
-          {/* ========================================================================= */}
-          {/* SECTION 2: COMPACT LINE ITEMS BUILDER */}
-          {/* ========================================================================= */}
-          <div className="space-y-2.5">
+          {/* Line Items Section */}
+          <div className="space-y-2.5 pt-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Boxes className="w-3.5 h-3.5 text-emerald-600" />
-                2. Items & Quantities ({isCustomCategory ? customCategoryLabel : category})
-              </span>
+              <label className="block text-xs font-bold text-stone-700">
+                Items & Quantities <span className="text-stone-400 font-normal">({isCustomCategory ? customCategoryLabel || 'Custom' : category})</span>
+              </label>
               <button
                 type="button"
                 onClick={handleAddItem}
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200"
+                className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline inline-flex items-center gap-1"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Add Item Row</span>
+                <Plus className="w-3.5 h-3.5" /> Add Another Item
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {items.map((item, index) => {
                 const lastItemMatch = (db.purchases || [])
                   .flatMap((p) => p.items || [])
                   .find((i) => i.name.toLowerCase() === item.name.toLowerCase())
 
                 return (
-                  <div
-                    key={index}
-                    className="p-2.5 bg-stone-50 border border-stone-200 rounded-xl space-y-1.5"
-                  >
-                    <div className="grid grid-cols-12 gap-2 items-center">
-                      {/* Item Description / Selection */}
+                  <div key={index} className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
+                    <div className="grid grid-cols-12 gap-2.5 items-center">
                       <div className="col-span-12 sm:col-span-5">
-                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-0.5">
-                          Item Description / Material
+                        <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
+                          Item / Material Name
                         </label>
                         <input
                           type="text"
-                          placeholder="Type or pick material..."
+                          placeholder="Material description..."
                           value={item.name}
                           onChange={(e) => handleItemChange(index, 'name', e.target.value)}
                           list={`item-suggestions-${index}`}
-                          className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                           required
                         />
                         <datalist id={`item-suggestions-${index}`}>
@@ -2142,9 +2130,8 @@ function PurchaseOrderModal({
                         </datalist>
                       </div>
 
-                      {/* Quantity */}
                       <div className="col-span-4 sm:col-span-2">
-                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-0.5">
+                        <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
                           Quantity
                         </label>
                         <input
@@ -2153,25 +2140,24 @@ function PurchaseOrderModal({
                           step="any"
                           value={item.quantity}
                           onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900 text-right font-mono font-bold"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-mono font-bold text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                           required
                         />
                       </div>
 
-                      {/* Unit */}
                       <div className="col-span-4 sm:col-span-2">
-                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-0.5">
+                        <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
                           Unit
                         </label>
                         <select
                           value={item.unit}
                           onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                          className="h-9 w-full px-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-700"
+                          className="w-full px-2 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                         >
                           <option value="kg">kg</option>
                           <option value="Cartons">Cartons</option>
                           <option value="Liters">Liters</option>
-                          <option value="Bags">Bags (50kg)</option>
+                          <option value="Bags">Bags</option>
                           <option value="Rolls">Rolls</option>
                           <option value="Pieces">Pieces</option>
                           <option value="Boxes">Boxes</option>
@@ -2179,9 +2165,8 @@ function PurchaseOrderModal({
                         </select>
                       </div>
 
-                      {/* Rate (PKR) */}
                       <div className="col-span-3 sm:col-span-2">
-                        <label className="text-[10px] font-semibold text-stone-500 uppercase block mb-0.5">
+                        <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
                           Rate (PKR)
                         </label>
                         <input
@@ -2190,39 +2175,33 @@ function PurchaseOrderModal({
                           step="any"
                           value={item.unitPrice}
                           onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900 text-right font-mono font-bold"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-mono font-bold text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                           required
                         />
                       </div>
 
-                      {/* Delete */}
-                      <div className="col-span-1 flex justify-center items-end pt-3">
+                      <div className="col-span-1 flex justify-center items-end pt-5">
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(index)}
                           disabled={items.length <= 1}
-                          className="h-9 w-8 flex items-center justify-center text-stone-400 hover:text-rose-600 disabled:opacity-20 transition-colors"
-                          title="Remove Line Item"
+                          className="p-1.5 text-stone-400 hover:text-red-600 disabled:opacity-20 transition-colors"
+                          title="Remove item"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
 
-                    {/* Line total & Previous Price Helper */}
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-stone-100">
+                    <div className="flex items-center justify-between text-[11px] pt-1 text-stone-500">
                       {lastItemMatch ? (
-                        <span className="text-stone-500">
-                          💡 Prev rate: Rs. {lastItemMatch.unitPrice} / {lastItemMatch.unit}
-                        </span>
+                        <span>💡 Previous rate: Rs. {lastItemMatch.unitPrice} / {lastItemMatch.unit}</span>
                       ) : (
-                        <span className="text-stone-400 italic text-[10px]">
-                          Enter quantity and unit rate
-                        </span>
+                        <span className="text-stone-400 italic">Enter unit price and quantity</span>
                       )}
-                      <div className="font-mono font-bold text-stone-900">
-                        Line Total: {formatPKR(item.total)}
-                      </div>
+                      <span className="font-mono font-bold text-stone-900">
+                        Total: {formatPKR(item.total)}
+                      </span>
                     </div>
                   </div>
                 )
@@ -2230,32 +2209,23 @@ function PurchaseOrderModal({
             </div>
           </div>
 
-          {/* ========================================================================= */}
-          {/* SECTION 3: PAYMENT, SETTLEMENT, DUE DATE & TERMS */}
-          {/* ========================================================================= */}
-          <div className="bg-stone-50/80 p-3.5 rounded-xl border border-stone-200 space-y-3">
-            <span className="text-[11px] font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-              3. Payment Settlement & Terms
-            </span>
-
-            {/* Total Display */}
-            <div className="flex items-center justify-between bg-white px-3.5 py-2 rounded-lg border border-stone-200">
-              <span className="text-xs font-semibold text-stone-700">Order Grand Total:</span>
-              <span className="text-lg font-bold text-stone-900 font-mono">{formatPKR(grandTotal)}</span>
+          {/* Grand Total & Payment Terms */}
+          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+            <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-stone-200">
+              <span className="text-xs font-bold text-stone-700">Total Purchase Amount</span>
+              <span className="text-base font-bold text-stone-900 font-mono">{formatPKR(grandTotal)}</span>
             </div>
 
-            {/* Payment Terms Segmented Control */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-stone-700 block">Payment Terms *</label>
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1.5">Payment Terms</label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => handleStatusTypeChange('Paid')}
-                  className={`h-9 px-3 rounded-lg text-xs font-bold transition-all border ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                     paymentStatusType === 'Paid'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
                   }`}
                 >
                   ✓ Paid in Full
@@ -2263,10 +2233,10 @@ function PurchaseOrderModal({
                 <button
                   type="button"
                   onClick={() => handleStatusTypeChange('Partial')}
-                  className={`h-9 px-3 rounded-lg text-xs font-bold transition-all border ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                     paymentStatusType === 'Partial'
                       ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
                   }`}
                 >
                   ◑ Partial Paid
@@ -2274,178 +2244,114 @@ function PurchaseOrderModal({
                 <button
                   type="button"
                   onClick={() => handleStatusTypeChange('Pending')}
-                  className={`h-9 px-3 rounded-lg text-xs font-bold transition-all border ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
                     paymentStatusType === 'Pending'
                       ? 'bg-stone-800 text-white border-stone-800 shadow-xs'
-                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
                   }`}
                 >
-                  ⏳ Pending (100% Credit)
+                  ⏳ 100% Credit
                 </button>
               </div>
             </div>
 
-            {/* Amount Paid & Due Date Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {paymentStatusType !== 'Pending' && (
                 <div>
-                  <label className="text-[11px] font-semibold text-stone-700 block mb-1">Amount Paid Now (PKR) *</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={grandTotal}
-                    value={amountPaid}
-                    onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
-                    className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono text-stone-900 font-bold"
-                    required
-                  />
-                  {paymentStatusType === 'Partial' && (
-                    <div className="flex gap-1.5 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setAmountPaid(Math.round(grandTotal * 0.25))}
-                        className="px-2 py-0.5 text-[10px] bg-stone-200 rounded font-bold text-stone-700 hover:bg-stone-300"
-                      >
-                        25%
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAmountPaid(Math.round(grandTotal * 0.5))}
-                        className="px-2 py-0.5 text-[10px] bg-stone-200 rounded font-bold text-stone-700 hover:bg-stone-300"
-                      >
-                        50%
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAmountPaid(Math.round(grandTotal * 0.75))}
-                        className="px-2 py-0.5 text-[10px] bg-stone-200 rounded font-bold text-stone-700 hover:bg-stone-300"
-                      >
-                        75%
-                      </button>
-                    </div>
-                  )}
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Amount Paid Now (PKR)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-stone-400">Rs.</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={grandTotal}
+                      value={amountPaid}
+                      onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
+                      className="w-full pl-9 pr-3 py-2 text-xs font-bold rounded-xl border border-stone-200 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      required
+                    />
+                  </div>
                 </div>
               )}
 
-              {/* Payment Due Date with Color-Coded Due Date Badge */}
               <div className={paymentStatusType === 'Pending' ? 'col-span-full' : ''}>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-semibold text-stone-700">
+                  <label className="block text-xs font-bold text-stone-700">
                     Payment Due Date {balanceDue > 0 ? '*' : '(Optional)'}
                   </label>
-                  {dueDate && (
-                    <DueDateBadge dueDate={dueDate} balanceDue={balanceDue} />
-                  )}
+                  {dueDate && <DueDateBadge dueDate={dueDate} balanceDue={balanceDue} />}
                 </div>
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                 />
-                {balanceDue > 0 && (
-                  <div className="text-[10.5px] text-stone-500 mt-1 flex items-center justify-between">
-                    <span>Payable Balance: <strong className="text-amber-700 font-mono">{formatPKR(balanceDue)}</strong></span>
-                    <span className="text-stone-400">Color-coded alerts</span>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Payment Method & Deduct Account (if amountPaid > 0) */}
             {amountPaid > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-stone-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
-                  <label className="text-[11px] font-semibold text-stone-700 block mb-1">Payment Method</label>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Payment Method</label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as any)}
-                    className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   >
                     <option value="Cash">Cash in Hand</option>
                     <option value="Bank Transfer">Bank Transfer (IBFT)</option>
-                    <option value="Online">Online (Raast ID)</option>
+                    <option value="Online">Online / Raast</option>
                     <option value="Cheque">Bank Cheque</option>
-                    <option value="Card">Corporate Debit Card</option>
+                    <option value="Card">Debit Card</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-stone-700 block mb-1">Deduct From Account</label>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Deduct From Account</label>
                   <select
                     value={paymentAccount}
                     onChange={(e) => setPaymentAccount(e.target.value as any)}
-                    className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   >
-                    <option value="cash-in-hand">Cash Register (Factory Cash)</option>
-                    <option value="meezan-bank">Meezan Bank Ltd (010203040510)</option>
-                    <option value="hbl-bank">Habib Bank Ltd (998877665520)</option>
+                    {db.accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} (Bal: {formatPKR(acc.balance)})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
             )}
-
-            {/* Return / Defect Flag & Notes */}
-            <div className="pt-2 border-t border-stone-200 space-y-2">
-              <label className="flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isReturnOrDefect}
-                  onChange={(e) => setIsReturnOrDefect(e.target.checked)}
-                  className="rounded text-rose-600 focus:ring-rose-500"
-                />
-                <span>Flag shipment as Return / Defect / Quality Issue</span>
-              </label>
-
-              {isReturnOrDefect && (
-                <input
-                  type="text"
-                  placeholder="Explain defect reason (e.g. 5 bags torn, high moisture content)..."
-                  value={defectNote}
-                  onChange={(e) => setDefectNote(e.target.value)}
-                  className="h-9 w-full px-2.5 text-xs bg-rose-50 border border-rose-300 rounded-lg focus:ring-2 focus:ring-rose-500 text-rose-900"
-                />
-              )}
-
-              <div>
-                <label className="text-[11px] font-semibold text-stone-700 block mb-1">Optional Notes / PO Reference</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Delivery truck # LEB-4920, driver contact, bill ref..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="h-9 w-full px-2.5 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 text-stone-900"
-                />
-              </div>
-            </div>
-
-            {/* Multi-Module Sync Summary */}
-            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-2.5 text-xs text-emerald-900 space-y-0.5">
-              <span className="font-bold flex items-center gap-1 text-[11px] text-emerald-800">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                Automatic Multi-Module Sync:
-              </span>
-              <p className="text-[11px] text-emerald-700">
-                Records PO to <strong>{supplierName || 'supplier'}</strong> ledger (+{formatPKR(balanceDue)} payable), updates raw material inventory, and generates expense voucher for paid amount.
-              </p>
-            </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-stone-200">
+          {/* Notes & Defect Flag */}
+          <div>
+            <label className="block text-xs font-bold text-stone-700 mb-1">Notes / Challan Ref (Optional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Delivery truck LEB-4920, Gate pass ref..."
+              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
+          </div>
+
+          {/* Modal Footer */}
+          <div className="pt-4 border-t border-stone-100 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="h-9 px-4 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="h-9 px-5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all transform active:scale-95"
+              className="px-5 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition"
               id="btn-save-purchase-order"
             >
-              {editingPurchase ? 'Update Purchase Order' : 'Save & Sync Purchase'}
+              {editingPurchase ? 'Save Changes' : 'Create Purchase Order'}
             </button>
           </div>
         </form>
