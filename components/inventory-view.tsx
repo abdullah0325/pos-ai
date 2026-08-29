@@ -36,6 +36,7 @@ import {
   formatPKR,
   formatDate,
   fileToBase64,
+  defaultRawMaterialCategories,
   type AppDatabase,
   type ProductItem,
   type RawMaterialItem,
@@ -954,6 +955,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       {(isCreatingRaw || selectedRawMaterial) && (
         <RawMaterialEditorModal
           material={selectedRawMaterial}
+          categories={db.rawMaterialCategories || defaultRawMaterialCategories}
           suppliers={db.suppliers}
           onClose={() => {
             setIsCreatingRaw(false)
@@ -2116,18 +2118,21 @@ function CategoryManagerModal({
 ========================================================================= */
 function RawMaterialEditorModal({
   material,
+  categories,
   suppliers,
   onClose,
   onSave,
 }: {
   material: RawMaterialItem | null
+  categories?: CategoryItem[]
   suppliers: AppDatabase['suppliers']
   onClose: () => void
   onSave: (item: RawMaterialItem) => void
 }) {
+  const catList = categories && categories.length > 0 ? categories : defaultRawMaterialCategories
   const [sku, setSku] = useState(material?.sku || `RAW-${Date.now().toString().slice(-4)}`)
   const [name, setName] = useState(material?.name || '')
-  const [category, setCategory] = useState<RawMaterialCategory>(material?.category || 'Ingredients')
+  const [category, setCategory] = useState<string>(material?.category || catList[0]?.name || 'Ingredients')
   const [unit, setUnit] = useState(material?.unit || 'Kg')
   const [quantity, setQuantity] = useState(material?.quantity || 500)
   const [reorderLevel, setReorderLevel] = useState(material?.reorderLevel || 100)
@@ -2185,12 +2190,12 @@ function RawMaterialEditorModal({
 
           <label>
             Category *
-            <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
-              <option value="Ingredients">Ingredients</option>
-              <option value="Packaging">Packaging (Preforms, Caps, Boxes)</option>
-              <option value="Flavors">Flavor & Concentrate</option>
-              <option value="Chemicals & Minerals">Chemicals & Minerals</option>
-              <option value="Other">Other</option>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {catList.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </label>
 

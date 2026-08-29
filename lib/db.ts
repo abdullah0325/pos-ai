@@ -4,7 +4,7 @@
 export type Status = 'Active' | 'In stock' | 'Low stock' | 'Out of stock' | 'In production' | 'Completed' | 'Pending' | 'Paid' | 'Partial' | 'Unpaid' | 'Delivered'
 
 export type ProductCategory = string
-export type RawMaterialCategory = 'Ingredients' | 'Packaging' | 'Chemicals & Minerals' | 'Flavors' | 'Other'
+export type RawMaterialCategory = 'Ingredients' | 'Packaging' | 'Chemicals & Minerals' | 'Flavors' | 'Other' | string
 export type CustomerType = 'Retailer' | 'Distributor' | 'Sales Man' | 'Sales Representative' | 'Wholesaler' | 'Other' | 'Counter' | 'Walk-in' | string
 export type SupplierSupplyCategory = 'Raw Material' | 'Product' | 'Both' | string
 
@@ -508,6 +508,7 @@ export interface PhonebookContactItem {
 
 export interface AppDatabase {
   categories: CategoryItem[]
+  rawMaterialCategories?: CategoryItem[]
   customerCategories?: CustomerCategoryItem[]
   products: ProductItem[]
   rawMaterials: RawMaterialItem[]
@@ -549,6 +550,13 @@ export const defaultPurchaseCategories: PurchaseCategoryItem[] = [
   { id: 'pcat-8', name: 'Finished Product', description: 'Outsourced trade goods and third-party stock', color: 'indigo' },
 ]
 
+export const defaultRawMaterialCategories: CategoryItem[] = [
+  { id: 'rmcat-1', name: 'Packaging', color: 'blue', description: 'Bottling preforms, caps, wrappers, labels, cartons', createdAt: '2026-08-01' },
+  { id: 'rmcat-2', name: 'Ingredients', color: 'emerald', description: 'Sugar, fruit pulp, concentrates, salt, food base', createdAt: '2026-08-01' },
+  { id: 'rmcat-3', name: 'Chemicals & Minerals', color: 'amber', description: 'RO minerals, citric acid, sanitizers, preservatives', createdAt: '2026-08-01' },
+  { id: 'rmcat-4', name: 'Flavors', color: 'purple', description: 'Food grade flavors, seasonings, essences & aromas', createdAt: '2026-08-01' },
+]
+
 export const defaultProductCategories: CategoryItem[] = [
   { id: 'cat-1', name: 'Mineral Water', description: 'Purified mineral water in bottles & gallons', createdAt: '2026-08-01' },
   { id: 'cat-2', name: 'Fruit Juice', description: 'Mango, Apple, Guava, Orange juices & nectars', createdAt: '2026-08-01' },
@@ -585,6 +593,7 @@ export const initialDatabase: AppDatabase = {
   version: 2,
   lastBackupDate: '2026-08-21T10:00:00.000Z',
   categories: defaultProductCategories,
+  rawMaterialCategories: defaultRawMaterialCategories,
   customerCategories: defaultCustomerCategories,
   purchaseCategories: defaultPurchaseCategories,
   accounts: [

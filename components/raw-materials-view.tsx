@@ -16,21 +16,22 @@ import {
   Receipt,
   UploadCloud,
   ImageIcon,
-  FileText,
   DollarSign,
   Truck,
-  TrendingDown,
   Layers,
-  Sparkles,
-  ExternalLink,
+  Tag,
+  Check,
+  Palette,
 } from 'lucide-react'
 import {
   formatPKR,
   formatDate,
   fileToBase64,
+  defaultRawMaterialCategories,
   type AppDatabase,
   type RawMaterialItem,
   type RawMaterialCategory,
+  type CategoryItem,
   type Status,
 } from '@/lib/db'
 import { exportToCSV } from '@/lib/pdf-export'
@@ -40,6 +41,44 @@ interface RawMaterialsViewProps {
   db: AppDatabase
   onSaveDatabase: (updated: AppDatabase) => void
   onNavigateToSupplier?: (supplierId: string) => void
+}
+
+export const RAW_CATEGORY_COLORS = [
+  { id: 'blue', label: 'Blue (Packaging)', class: 'bg-blue-600 text-white', dot: 'bg-blue-600' },
+  { id: 'emerald', label: 'Emerald / Green (Ingredients)', class: 'bg-emerald-600 text-white', dot: 'bg-emerald-600' },
+  { id: 'amber', label: 'Amber / Orange (Chemicals)', class: 'bg-amber-600 text-white', dot: 'bg-amber-600' },
+  { id: 'purple', label: 'Purple (Flavors)', class: 'bg-purple-600 text-white', dot: 'bg-purple-600' },
+  { id: 'rose', label: 'Rose / Red', class: 'bg-rose-600 text-white', dot: 'bg-rose-600' },
+  { id: 'indigo', label: 'Indigo', class: 'bg-indigo-600 text-white', dot: 'bg-indigo-600' },
+  { id: 'teal', label: 'Teal', class: 'bg-teal-600 text-white', dot: 'bg-teal-600' },
+  { id: 'sky', label: 'Sky / Cyan', class: 'bg-sky-600 text-white', dot: 'bg-sky-600' },
+  { id: 'stone', label: 'Stone / Gray', class: 'bg-stone-700 text-white', dot: 'bg-stone-700' },
+]
+
+export function getCategoryBadgeClass(categoryName: string, rawCategories?: CategoryItem[]) {
+  const cat = (categoryName || '').trim()
+  const matched = rawCategories?.find((c) => c.name.toLowerCase() === cat.toLowerCase())
+  const color = matched?.color?.toLowerCase()
+
+  if (color === 'blue') return 'bg-blue-600 text-white'
+  if (color === 'emerald' || color === 'green') return 'bg-emerald-600 text-white'
+  if (color === 'amber' || color === 'orange') return 'bg-amber-600 text-white'
+  if (color === 'purple') return 'bg-purple-600 text-white'
+  if (color === 'rose' || color === 'red') return 'bg-rose-600 text-white'
+  if (color === 'indigo') return 'bg-indigo-600 text-white'
+  if (color === 'teal') return 'bg-teal-600 text-white'
+  if (color === 'sky' || color === 'cyan') return 'bg-sky-600 text-white'
+  if (color === 'stone' || color === 'gray') return 'bg-stone-700 text-white'
+
+  // Fallbacks by naming keywords
+  const lower = cat.toLowerCase()
+  if (lower.includes('packag')) return 'bg-blue-600 text-white'
+  if (lower.includes('chem') || lower.includes('mineral')) return 'bg-amber-600 text-white'
+  if (lower.includes('flavor')) return 'bg-purple-600 text-white'
+  if (lower.includes('ingred') || lower.includes('sugar') || lower.includes('concentrate') || lower.includes('pulp')) {
+    return 'bg-emerald-600 text-white'
+  }
+  return 'bg-stone-700 text-white'
 }
 
 export default function RawMaterialsView({
@@ -57,6 +96,7 @@ export default function RawMaterialsView({
   // Modals
   const [selectedRawMaterial, setSelectedRawMaterial] = useState<RawMaterialItem | null>(null)
   const [isCreatingMaterial, setIsCreatingMaterial] = useState(false)
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
   const [viewDetailsMaterial, setViewDetailsMaterial] = useState<RawMaterialItem | null>(null)
   const [viewingInvoiceImage, setViewingInvoiceImage] = useState<string | null>(null)
   const [stockAdjustmentItem, setStockAdjustmentItem] = useState<{
@@ -64,6 +104,12 @@ export default function RawMaterialsView({
     name: string
     current: number
   } | null>(null)
+
+  // Dynamic Categories
+  const rawCategories: CategoryItem[] =
+    db.rawMaterialCategories && db.rawMaterialCategories.length > 0
+      ? db.rawMaterialCategories
+      : defaultRawMaterialCategories
 
   // Calculate live consumption from production runs for each raw material
   const getMaterialConsumption = (materialId: string, materialSku: string, materialName: string): number => {
@@ -110,15 +156,6 @@ export default function RawMaterialsView({
 
     return history
   }
-
-  // Categories list
-  const categories: RawMaterialCategory[] = [
-    'Ingredients',
-    'Packaging',
-    'Flavors',
-    'Chemicals & Minerals',
-    'Other',
-  ]
 
   // Category counts
   const categoryCounts: Record<string, number> = {}
@@ -199,7 +236,6 @@ export default function RawMaterialsView({
   }
 
   const handleDeleteMaterial = (id: string, name: string) => {
-    // Check if raw material is used in any recipe / production runs
     const usedCount = db.productionRuns.filter((p) =>
       p.consumedMaterials?.some((c) => c.rawMaterialId === id || c.name === name)
     ).length
@@ -293,23 +329,6 @@ export default function RawMaterialsView({
     }
   }
 
-  const getCategoryBadgeClass = (category: string) => {
-    const cat = (category || '').toLowerCase()
-    if (cat.includes('packag')) {
-      return 'bg-blue-600/90 text-white'
-    }
-    if (cat.includes('chem') || cat.includes('mineral')) {
-      return 'bg-amber-600/90 text-white'
-    }
-    if (cat.includes('flavor')) {
-      return 'bg-purple-600/90 text-white'
-    }
-    if (cat.includes('ingred') || cat.includes('sugar') || cat.includes('concentrate')) {
-      return 'bg-[#7cb518]/90 text-white'
-    }
-    return 'bg-stone-700/90 text-white'
-  }
-
   return (
     <div className="page-stack" id="raw-materials-management-view">
       {/* Top Heading */}
@@ -322,6 +341,13 @@ export default function RawMaterialsView({
           </p>
         </div>
         <div className="heading-actions">
+          <button
+            className="button secondary"
+            onClick={() => setIsManagingCategories(true)}
+            id="btn-manage-raw-categories"
+          >
+            <Tag className="w-4 h-4" /> Manage Categories
+          </button>
           <button className="button secondary" onClick={handleExportCSV} id="btn-export-raw-csv">
             <Download className="w-4 h-4" /> Export CSV
           </button>
@@ -347,7 +373,7 @@ export default function RawMaterialsView({
           <div className="stat-label">Total Raw Items</div>
           <strong>{totalItemsCount} Items</strong>
           <span className="stat-change text-blue-700">
-            {categories.length} categories across plant storage
+            {rawCategories.length} categories across plant storage
           </span>
         </div>
 
@@ -421,9 +447,9 @@ export default function RawMaterialsView({
             id="filter-raw-category"
           >
             <option value="All">All Categories ({db.rawMaterials.length})</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c} {categoryCounts[c] ? `(${categoryCounts[c]})` : ''}
+            {rawCategories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name} {categoryCounts[c.name] ? `(${categoryCounts[c.name]})` : ''}
               </option>
             ))}
           </select>
@@ -600,7 +626,8 @@ export default function RawMaterialsView({
                       <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
                         <span
                           className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs ${getCategoryBadgeClass(
-                            r.category
+                            r.category,
+                            rawCategories
                           )}`}
                         >
                           {r.category}
@@ -690,15 +717,34 @@ export default function RawMaterialsView({
       </div>
 
       {/* MODAL: ADD / EDIT RAW MATERIAL */}
-      {isCreatingMaterial && (
+      {(isCreatingMaterial || selectedRawMaterial) && (
         <RawMaterialEditorModal
           material={selectedRawMaterial}
+          categories={rawCategories}
           suppliers={db.suppliers}
+          existingMaterials={db.rawMaterials}
           onClose={() => {
             setIsCreatingMaterial(false)
             setSelectedRawMaterial(null)
           }}
           onSave={handleSaveMaterial}
+          onOpenCategoryManager={() => setIsManagingCategories(true)}
+        />
+      )}
+
+      {/* MODAL: CATEGORY MANAGER */}
+      {isManagingCategories && (
+        <RawMaterialCategoryManagerModal
+          categories={rawCategories}
+          rawMaterials={db.rawMaterials}
+          onClose={() => setIsManagingCategories(false)}
+          onSaveCategories={(updatedCats, updatedMaterials) => {
+            onSaveDatabase({
+              ...db,
+              rawMaterialCategories: updatedCats,
+              rawMaterials: updatedMaterials || db.rawMaterials,
+            })
+          }}
         />
       )}
 
@@ -712,6 +758,7 @@ export default function RawMaterialsView({
             viewDetailsMaterial.sku,
             viewDetailsMaterial.name
           )}
+          rawCategories={rawCategories}
           suppliers={db.suppliers}
           onClose={() => setViewDetailsMaterial(null)}
           onEdit={() => {
@@ -784,22 +831,358 @@ export default function RawMaterialsView({
 }
 
 /* =========================================================================
-   RAW MATERIAL EDITOR MODAL (Add / Edit with all specified fields)
+   RAW MATERIAL CATEGORY MANAGER MODAL (Add, Edit, Delete with Colors)
+========================================================================= */
+function RawMaterialCategoryManagerModal({
+  categories,
+  rawMaterials,
+  onClose,
+  onSaveCategories,
+}: {
+  categories: CategoryItem[]
+  rawMaterials: RawMaterialItem[]
+  onClose: () => void
+  onSaveCategories: (updatedCats: CategoryItem[], updatedMaterials?: RawMaterialItem[]) => void
+}) {
+  const [isAddingNew, setIsAddingNew] = useState(false)
+  const [editingCatId, setEditingCatId] = useState<string | null>(null)
+  const [catName, setCatName] = useState('')
+  const [catColor, setCatColor] = useState('blue')
+  const [catDesc, setCatDesc] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  // Count usage per category
+  const counts: Record<string, number> = {}
+  rawMaterials.forEach((r) => {
+    counts[r.category] = (counts[r.category] || 0) + 1
+  })
+
+  const handleStartEdit = (cat: CategoryItem) => {
+    setEditingCatId(cat.id)
+    setCatName(cat.name)
+    setCatColor(cat.color || 'blue')
+    setCatDesc(cat.description || '')
+    setIsAddingNew(false)
+    setError(null)
+  }
+
+  const handleDeleteCategory = (cat: CategoryItem) => {
+    if (categories.length <= 1) {
+      setError('You must maintain at least one raw material category.')
+      return
+    }
+
+    const linkedCount = counts[cat.name] || 0
+    let confirmMsg = `Are you sure you want to delete "${cat.name}" category?`
+    if (linkedCount > 0) {
+      confirmMsg = `Category "${cat.name}" is currently assigned to ${linkedCount} raw material item(s). If deleted, these items will be reassigned to the default category. Continue?`
+    }
+
+    if (!window.confirm(confirmMsg)) return
+
+    const remainingCats = categories.filter((c) => c.id !== cat.id)
+    const fallbackCategoryName = remainingCats[0]?.name || 'Ingredients'
+
+    let updatedMaterials: RawMaterialItem[] | undefined
+    if (linkedCount > 0) {
+      updatedMaterials = rawMaterials.map((r) =>
+        r.category === cat.name ? { ...r, category: fallbackCategoryName } : r
+      )
+    }
+
+    onSaveCategories(remainingCats, updatedMaterials)
+  }
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    const trimmed = catName.trim()
+    if (!trimmed) {
+      setError('Category Name is required.')
+      return
+    }
+
+    // Check duplicate
+    const duplicate = categories.find(
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase() && c.id !== editingCatId
+    )
+    if (duplicate) {
+      setError(`A category named "${trimmed}" already exists.`)
+      return
+    }
+
+    if (editingCatId) {
+      const oldCat = categories.find((c) => c.id === editingCatId)
+      const oldName = oldCat?.name
+
+      const updatedCats = categories.map((c) =>
+        c.id === editingCatId
+          ? {
+              ...c,
+              name: trimmed,
+              color: catColor,
+              description: catDesc.trim() || undefined,
+            }
+          : c
+      )
+
+      let updatedMaterials: RawMaterialItem[] | undefined
+      if (oldName && oldName !== trimmed) {
+        updatedMaterials = rawMaterials.map((r) =>
+          r.category === oldName ? { ...r, category: trimmed } : r
+        )
+      }
+
+      onSaveCategories(updatedCats, updatedMaterials)
+      setEditingCatId(null)
+    } else {
+      const newCat: CategoryItem = {
+        id: `rmcat-${Date.now()}`,
+        name: trimmed,
+        color: catColor,
+        description: catDesc.trim() || undefined,
+        createdAt: new Date().toISOString().slice(0, 10),
+      }
+
+      onSaveCategories([...categories, newCat])
+      setIsAddingNew(false)
+    }
+
+    setCatName('')
+    setCatColor('blue')
+    setCatDesc('')
+  }
+
+  const activeColorObj = RAW_CATEGORY_COLORS.find((c) => c.id === catColor) || RAW_CATEGORY_COLORS[0]
+
+  return (
+    <div className="editor-overlay">
+      <div className="editor-modal max-w-lg w-full" id="raw-category-manager-modal">
+        <div className="editor-header">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-[#7cb518]/15 text-[#7cb518] flex items-center justify-center">
+              <Tag className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="eyebrow">Inventory Settings</p>
+              <h2>Manage Raw Material Categories</h2>
+            </div>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2 rounded-lg text-xs flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Add / Edit Form */}
+        {isAddingNew || editingCatId ? (
+          <form
+            onSubmit={handleFormSubmit}
+            className="mb-4 bg-stone-50/90 p-4 rounded-xl border border-stone-200 space-y-3.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-[#7cb518]" />
+                {isAddingNew ? 'Add New Category' : 'Edit Category'}
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold shadow-xs ${activeColorObj.class}`}>
+                {catName.trim() || 'Badge Preview'}
+              </span>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                Category Name *
+              </label>
+              <input
+                value={catName}
+                onChange={(e) => setCatName(e.target.value)}
+                placeholder="e.g. Packaging, Ingredients, Preservatives"
+                required
+                autoFocus
+                className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                id="input-raw-cat-name"
+              />
+            </div>
+
+            {/* Color Palette Selector */}
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1.5 block">
+                Badge Color Theme *
+              </label>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
+                {RAW_CATEGORY_COLORS.map((col) => {
+                  const isSelected = catColor === col.id
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => setCatColor(col.id)}
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-left text-xs transition-all ${
+                        isSelected
+                          ? 'border-stone-900 bg-white ring-2 ring-stone-900/10 font-bold shadow-xs'
+                          : 'border-stone-200 bg-white hover:bg-stone-50 text-stone-700 font-medium'
+                      }`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded-full ${col.dot} flex-shrink-0 flex items-center justify-center`}>
+                        {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                      </span>
+                      <span className="truncate text-[11px]">{col.label.split(' ')[0]}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                Description / Notes <span className="text-stone-400 font-normal">(Optional)</span>
+              </label>
+              <input
+                value={catDesc}
+                onChange={(e) => setCatDesc(e.target.value)}
+                placeholder="Brief description or usage notes"
+                className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="button secondary text-xs py-1.5 px-3"
+                onClick={() => {
+                  setIsAddingNew(false)
+                  setEditingCatId(null)
+                  setError(null)
+                }}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="button primary text-xs py-1.5 px-4" id="btn-save-raw-category">
+                {isAddingNew ? 'Create Category' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="mb-4 flex justify-between items-center bg-stone-50 px-4 py-3 rounded-xl border border-stone-200">
+            <div>
+              <span className="text-xs font-bold text-stone-800">
+                {categories.length} Categories Registered
+              </span>
+              <p className="text-[11px] text-stone-500">Available in raw material dropdowns & badges</p>
+            </div>
+            <button
+              type="button"
+              className="button primary text-xs py-1.5 px-3"
+              onClick={() => {
+                setIsAddingNew(true)
+                setCatName('')
+                setCatColor('blue')
+                setCatDesc('')
+                setError(null)
+              }}
+              id="btn-add-raw-category-start"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Category
+            </button>
+          </div>
+        )}
+
+        {/* Categories List */}
+        <div className="divide-y divide-stone-100 max-h-72 overflow-y-auto border border-stone-200 rounded-xl bg-white">
+          {categories.length === 0 ? (
+            <div className="p-6 text-center text-xs text-stone-400">
+              No categories found. Click "+ Add Category" above.
+            </div>
+          ) : (
+            categories.map((c) => {
+              const count = counts[c.name] || 0
+              const badgeClass = getCategoryBadgeClass(c.name, categories)
+              return (
+                <div
+                  key={c.id}
+                  className="p-3.5 flex items-center justify-between hover:bg-stone-50/80 transition-colors"
+                >
+                  <div className="pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md shadow-2xs ${badgeClass}`}>
+                        {c.name}
+                      </span>
+                      <span className="text-[10px] bg-stone-100 text-stone-700 font-semibold px-2 py-0.5 rounded-md">
+                        {count} {count === 1 ? 'material' : 'materials'}
+                      </span>
+                    </div>
+                    {c.description && (
+                      <p className="text-[11px] text-stone-500 mt-1">{c.description}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="p-1.5 text-stone-500 hover:text-blue-600 rounded-md hover:bg-stone-100 transition-colors"
+                      title="Edit Category"
+                      onClick={() => handleStartEdit(c)}
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className="p-1.5 text-stone-500 hover:text-rose-600 rounded-md hover:bg-stone-100 transition-colors"
+                      title="Delete Category"
+                      onClick={() => handleDeleteCategory(c)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <div className="editor-actions mt-5">
+          <button type="button" className="button secondary w-full py-2 text-xs" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* =========================================================================
+   RAW MATERIAL EDITOR MODAL (Cleaned Up UI with Fixed Footer & Better Spacing)
 ========================================================================= */
 function RawMaterialEditorModal({
   material,
+  categories,
   suppliers,
+  existingMaterials,
   onClose,
   onSave,
+  onOpenCategoryManager,
 }: {
   material: RawMaterialItem | null
+  categories: CategoryItem[]
   suppliers: AppDatabase['suppliers']
+  existingMaterials: RawMaterialItem[]
   onClose: () => void
   onSave: (item: RawMaterialItem) => void
+  onOpenCategoryManager: () => void
 }) {
   const [name, setName] = useState(material?.name || '')
   const [sku, setSku] = useState(material?.sku || `RAW-${Date.now().toString().slice(-4)}`)
-  const [category, setCategory] = useState<RawMaterialCategory>(material?.category || 'Ingredients')
+  const [category, setCategory] = useState<string>(
+    material?.category || categories[0]?.name || 'Ingredients'
+  )
   const [description, setDescription] = useState(material?.description || '')
   const [imageUrl, setImageUrl] = useState(material?.imageUrl || '')
   const [size, setSize] = useState(material?.size || '')
@@ -872,6 +1255,15 @@ function RawMaterialEditorModal({
       return
     }
 
+    // SKU duplicate check
+    const duplicate = existingMaterials.find(
+      (m) => m.sku.toLowerCase() === sku.trim().toLowerCase() && m.id !== material?.id
+    )
+    if (duplicate) {
+      setError(`SKU "${sku}" is already assigned to "${duplicate.name}". Please use a unique SKU code.`)
+      return
+    }
+
     const matchedSupplier = suppliers.find((s) => s.id === supplierId)
     const now = new Date().toISOString().slice(0, 10)
     const numQty = Number(quantity) || 0
@@ -882,7 +1274,7 @@ function RawMaterialEditorModal({
       id: material?.id || `raw-${Date.now()}`,
       name: name.trim(),
       sku: sku.trim().toUpperCase(),
-      category,
+      category: category.trim(),
       description: description.trim() || undefined,
       imageUrl: imageUrl || undefined,
       size: size.trim() || undefined,
@@ -910,13 +1302,22 @@ function RawMaterialEditorModal({
 
   return (
     <div className="editor-overlay">
-      <form className="editor-modal large" onSubmit={handleSubmit} id="raw-material-editor-form">
-        <div className="editor-header">
-          <div className="flex items-center gap-2">
-            <Boxes className="w-6 h-6 text-purple-600" />
+      <form
+        className="editor-modal large flex flex-col p-0 overflow-hidden"
+        onSubmit={handleSubmit}
+        id="raw-material-editor-form"
+      >
+        {/* Sticky Modal Header */}
+        <div className="p-5 border-b border-stone-200 flex items-center justify-between bg-white flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#7cb518]/15 text-[#7cb518] flex items-center justify-center">
+              <Boxes className="w-5 h-5" />
+            </div>
             <div>
-              <p className="eyebrow">Warehouse Inventory</p>
-              <h2>{material ? 'Edit Raw Material' : 'Add New Raw Material'}</h2>
+              <p className="eyebrow mb-0">Warehouse Inventory</p>
+              <h2 className="text-base font-bold text-stone-900 leading-tight">
+                {material ? `Edit Raw Material: ${material.name}` : 'Add New Raw Material'}
+              </h2>
             </div>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
@@ -924,131 +1325,155 @@ function RawMaterialEditorModal({
           </button>
         </div>
 
-        {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2 rounded-lg text-xs mb-3">
-            {error}
-          </div>
-        )}
+        {/* Scrollable Content Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+          {error && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-2.5 rounded-xl text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-        <div className="space-y-5 max-h-[72vh] overflow-y-auto pr-1">
-          {/* SECTION 1: PRIMARY IDENTIFICATION */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Boxes className="w-3.5 h-3.5 text-purple-600" /> 1. Material Identity & Classification
-            </h3>
+          {/* SECTION 1: MATERIAL IDENTITY & CLASSIFICATION */}
+          <div className="bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Boxes className="w-4 h-4 text-[#7cb518]" /> 1. Material Identity & Classification
+              </h3>
+              <button
+                type="button"
+                className="text-[11px] text-[#7cb518] hover:underline font-semibold flex items-center gap-1"
+                onClick={onOpenCategoryManager}
+              >
+                <Tag className="w-3 h-3" /> Manage Categories
+              </button>
+            </div>
 
-            <div className="form-grid three">
-              <label>
-                Material Name *
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Material Name *
+                </label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Refined White Sugar / PET Preforms 500ml"
+                  placeholder="e.g. Refined White Sugar"
                   required
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-name"
                 />
-              </label>
+              </div>
 
-              <label>
-                SKU Code *
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  SKU Code * <span className="text-[10px] text-stone-400 font-normal">(Unique)</span>
+                </label>
                 <input
                   value={sku}
                   onChange={(e) => setSku(e.target.value)}
                   placeholder="e.g. RAW-SGR-01"
                   required
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-sku"
                 />
-              </label>
-
-              <label>
-                Category *
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as RawMaterialCategory)}
-                  id="select-material-category"
-                >
-                  <option value="Ingredients">Ingredients (Sugar, Pulp, Concentrates, Salt)</option>
-                  <option value="Packaging">Packaging (Preforms, Caps, Labels, Boxes)</option>
-                  <option value="Flavors">Flavors & Seasoning (Mango, Apple, Masala)</option>
-                  <option value="Chemicals & Minerals">Chemicals & Minerals (RO Minerals, Citric Acid)</option>
-                  <option value="Other">Other Miscellaneous Supplies</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-              <label>
-                Description / Technical Specifications (Optional)
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={2}
-                  placeholder="Grade A specification, mesh size, food safety certificate, storage instructions..."
-                  className="w-full text-xs"
-                  id="input-material-desc"
-                />
-              </label>
-
-              {/* Size & Unit selection with dropdown */}
-              <div className="grid grid-cols-2 gap-2">
-                <label>
-                  Size / Package Capacity
-                  <input
-                    value={size}
-                    onChange={(e) => setSize(e.target.value)}
-                    placeholder="e.g. 50, 25, 500"
-                    id="input-material-size"
-                  />
-                  <span className="text-[10px] text-gray-500 mt-0.5 block">Net weight or pack volume</span>
-                </label>
-
-                <label>
-                  Unit of Measurement *
-                  <select
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    className="bg-white"
-                    required
-                    id="select-material-unit"
-                  >
-                    <optgroup label="Weight & Volume (Standard)">
-                      <option value="kg">kg (Kilograms)</option>
-                      <option value="g">g (Grams)</option>
-                      <option value="L">L (Liters)</option>
-                      <option value="ml">ml (Milliliters)</option>
-                    </optgroup>
-                    <optgroup label="Packaging & Discrete Units">
-                      <option value="Pcs">Pcs (Pieces / Units)</option>
-                      <option value="Bags">Bags (50kg / 25kg Sacks)</option>
-                      <option value="Drums">Drums (200L Barrels)</option>
-                      <option value="Rolls">Rolls (Label / Foil Rolls)</option>
-                      <option value="Cartons">Cartons (Master Boxes)</option>
-                    </optgroup>
-                  </select>
-                  <span className="text-[10px] text-gray-500 mt-0.5 block">Standard inventory metric</span>
-                </label>
               </div>
             </div>
 
-            {/* Optional Expiry & Manufacturing Dates for Ingredients/Materials */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               <div>
-                <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                  Batch / Receiving Date <span className="text-[10px] text-gray-400 font-normal">(Optional)</span>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Category *
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                  id="select-material-category"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Description / Storage Notes <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. Food-grade, stored in dry area"
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                  id="input-material-desc"
+                />
+              </div>
+            </div>
+
+            {/* Size & Unit */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-white p-3 rounded-lg border border-stone-200">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Size / Package Capacity <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  value={size}
+                  onChange={(e) => setSize(e.target.value)}
+                  placeholder="e.g. 50"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                  id="input-material-size"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Unit of Measurement *
+                </label>
+                <select
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                  required
+                  id="select-material-unit"
+                >
+                  <optgroup label="Standard Metrics">
+                    <option value="kg">kg (Kilograms)</option>
+                    <option value="g">g (Grams)</option>
+                    <option value="L">L (Liters)</option>
+                    <option value="ml">ml (Milliliters)</option>
+                  </optgroup>
+                  <optgroup label="Packaging Units">
+                    <option value="Pcs">Pcs (Pieces)</option>
+                    <option value="Bags">Bags (Sacks)</option>
+                    <option value="Drums">Drums (Barrels)</option>
+                    <option value="Rolls">Rolls (Foil/Label Rolls)</option>
+                    <option value="Cartons">Cartons (Boxes)</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+
+            {/* Optional Dates with Expiry Helper Text */}
+            <div className="pt-3 border-t border-stone-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Batch / Receiving Date <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="date"
                   value={manufacturingDate}
                   onChange={(e) => setManufacturingDate(e.target.value)}
-                  className="bg-white w-full text-xs"
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-mfg-date"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-gray-700 mb-0 block">
-                    Expiry Date <span className="text-[10px] text-gray-400 font-normal">(Optional)</span>
+                  <label className="text-xs font-semibold text-stone-700 mb-0 block">
+                    Expiry Date <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
                   </label>
                   {expiryDate && <ExpiryDateBadge date={expiryDate} />}
                 </div>
@@ -1056,23 +1481,28 @@ function RawMaterialEditorModal({
                   type="date"
                   value={expiryDate}
                   onChange={(e) => setExpiryDate(e.target.value)}
-                  className="bg-white w-full text-xs"
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-expiry-date"
                 />
-                <span className="text-[10px] text-gray-500 mt-0.5 block">Color-coded badges (Green &gt; 15d, Orange &le; 15d, Red expired)</span>
+                <span className="text-[10px] text-stone-400 font-normal mt-1 block">
+                  Green &gt; 15d, Orange ≤ 15d, Red expired
+                </span>
               </div>
             </div>
           </div>
 
-          {/* SECTION 2: COSTING & EXPENSE BREAKDOWN */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-[#7cb518]" /> 2. Price, Other Costs & Landed Cost Rate
+          {/* SECTION 2: PRICE, OTHER COSTS & LANDED COST RATE */}
+          <div className="bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <DollarSign className="w-4 h-4 text-[#7cb518]" /> 2. Price, Other Costs & Landed Cost Rate
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <label>
-                Base Price per Unit (Rs) *
+            {/* 2-column or 3-column wrap (no horizontal scroll) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Base Price per Unit (Rs) *
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -1081,13 +1511,16 @@ function RawMaterialEditorModal({
                   onChange={(e) => setUnitCost(Number(e.target.value))}
                   placeholder="e.g. 145"
                   required
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-unit-cost"
                 />
-                <span className="text-[10px] text-gray-500 mt-0.5 block">Direct supplier invoice rate per {unit}</span>
-              </label>
+                <span className="text-[10px] text-stone-400 mt-1 block">Supplier base rate per {unit}</span>
+              </div>
 
-              <label>
-                Other Cost (Rs) (Transport, Handling, Loading)
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Other Cost (Rs)
+                </label>
                 <input
                   type="number"
                   min="0"
@@ -1095,125 +1528,142 @@ function RawMaterialEditorModal({
                   value={otherCost}
                   onChange={(e) => setOtherCost(Number(e.target.value))}
                   placeholder="e.g. 15"
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-other-cost"
                 />
-                <span className="text-[10px] text-gray-500 mt-0.5 block">Freight, carriage, unloading expense</span>
-              </label>
+                <span className="text-[10px] text-stone-400 mt-1 block">Transport, carriage, unloading</span>
+              </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-gray-700">Total Landed Cost / {unit}</label>
-                  <label className="flex items-center gap-1 text-[11px] text-purple-700 font-semibold cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={isManualTotalCost}
-                      onChange={(e) => setIsManualTotalCost(e.target.checked)}
-                      className="rounded text-purple-600 focus:ring-purple-500"
-                    />
-                    Manual Override
-                  </label>
-                </div>
-
-                {isManualTotalCost ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={manualTotalCostPerUnit}
-                    onChange={(e) => setManualTotalCostPerUnit(Number(e.target.value))}
-                    className="bg-purple-50 border-purple-300 font-bold text-purple-900"
-                    id="input-manual-total-cost"
-                  />
-                ) : (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-md p-2 text-emerald-900 font-bold text-base">
-                    {formatPKR(autoCalculatedTotalCostPerUnit)} <span className="text-xs font-normal text-emerald-700">/ {unit}</span>
-                  </div>
-                )}
-                <span className="text-[10px] text-gray-500 mt-0.5 block">
-                  {isManualTotalCost
-                    ? 'Manually set landed rate applied to BOM production runs'
-                    : 'Auto-calculated: Base Rate + Other Handling Cost'}
-                </span>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Primary Supplier
+                </label>
+                <select
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
+                  id="select-material-supplier"
+                >
+                  <option value="">No Supplier Assigned</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.category})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-stone-400 mt-1 block">Linked vendor account</span>
               </div>
-            </div>
-          </div>
 
-          {/* SECTION 3: WAREHOUSE STOCK & SUPPLIER REFERENCE */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Truck className="w-3.5 h-3.5 text-blue-600" /> 3. Warehouse Stock & Supplier Reference
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <label>
-                Current Warehouse Stock ({unit}) *
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Warehouse Stock ({unit}) *
+                </label>
                 <input
                   type="number"
                   min="0"
                   step="any"
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
+                  placeholder="e.g. 500"
                   required
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-stock-qty"
                 />
-                <span className="text-[10px] text-gray-500 mt-0.5 block">Available quantity in factory storage</span>
-              </label>
+                <span className="text-[10px] text-stone-400 mt-1 block">Current physical balance</span>
+              </div>
 
-              <label>
-                Reorder Alert Threshold ({unit}) *
+              <div>
+                <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                  Reorder Alert Threshold *
+                </label>
                 <input
                   type="number"
                   min="1"
                   step="any"
                   value={reorderLevel}
                   onChange={(e) => setReorderLevel(Number(e.target.value))}
+                  placeholder="e.g. 100"
                   required
+                  className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                   id="input-material-reorder-level"
                 />
-                <span className="text-[10px] text-gray-500 mt-0.5 block">Warn when stock falls to or below this level</span>
-              </label>
-
-              <label>
-                Primary Supplier Reference
-                <select
-                  value={supplierId}
-                  onChange={(e) => setSupplierId(e.target.value)}
-                  className="bg-white"
-                  id="select-material-supplier"
-                >
-                  <option value="">No Supplier Assigned</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.category} - {s.city || 'Pakistan'})
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[10px] text-gray-500 mt-0.5 block">Linked to Supplier accounts module</span>
-              </label>
+                <span className="text-[10px] text-stone-400 mt-1 block">Low stock safety minimum</span>
+              </div>
             </div>
 
-            {/* Total Valuation Card */}
-            <div className="bg-white p-3 rounded-lg border border-gray-200 mt-3 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold text-gray-600 block">Total Material Warehouse Valuation:</span>
-                <span className="text-[11px] text-gray-500">
-                  {quantity} {unit} × {formatPKR(effectiveTotalCostPerUnit)} / {unit}
+            {/* Total Landed Cost Result Box (Prominent & Clear) */}
+            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs mt-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-stone-800 uppercase tracking-wider">
+                      Total Landed Cost Rate / {unit}
+                    </span>
+                    <label className="flex items-center gap-1 text-[11px] text-[#7cb518] font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isManualTotalCost}
+                        onChange={(e) => setIsManualTotalCost(e.target.checked)}
+                        className="rounded border-stone-300 text-[#7cb518] focus:ring-[#7cb518]"
+                      />
+                      Manual Override
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    {isManualTotalCost
+                      ? 'Manually set custom rate applied to production recipes'
+                      : `Formula: Base (${formatPKR(unitCost)}) + Other (${formatPKR(otherCost)})`}
+                  </p>
+                </div>
+
+                <div>
+                  {isManualTotalCost ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-purple-900">Rs</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={manualTotalCostPerUnit}
+                        onChange={(e) => setManualTotalCostPerUnit(Number(e.target.value))}
+                        className="w-32 py-1.5 px-2.5 text-sm font-extrabold text-purple-900 bg-purple-50 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        id="input-manual-total-cost"
+                      />
+                      <span className="text-xs text-stone-500 font-medium">/ {unit}</span>
+                    </div>
+                  ) : (
+                    <div className="text-right">
+                      <div className="text-xl font-extrabold text-[#7cb518]">
+                        {formatPKR(autoCalculatedTotalCostPerUnit)}{' '}
+                        <span className="text-xs font-normal text-stone-500">/ {unit}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Valuation Footer Strip */}
+              <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs">
+                <span className="text-stone-500">
+                  Warehouse Stock Valuation: <strong className="text-stone-800">{quantity} {unit}</strong> × {formatPKR(effectiveTotalCostPerUnit)}
+                </span>
+                <span className="font-extrabold text-sm text-stone-900">
+                  {formatPKR(totalValuation)}
                 </span>
               </div>
-              <div className="text-lg font-bold text-[#7cb518]">{formatPKR(totalValuation)}</div>
             </div>
           </div>
 
-          {/* SECTION 4: MEDIA & INVOICE ATTACHMENT */}
-          <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-200/80">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <UploadCloud className="w-3.5 h-3.5 text-purple-600" /> 4. Material Photo & Purchase Invoice Attachment
+          {/* SECTION 3: MEDIA & INVOICE ATTACHMENT */}
+          <div className="bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
+            <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <UploadCloud className="w-4 h-4 text-[#7cb518]" /> 3. Material Photo & Purchase Invoice Attachment
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Material Image */}
-              <div className="bg-white p-3.5 rounded-lg border border-gray-200 space-y-2">
-                <label className="text-xs font-bold text-gray-700 block">Raw Material Photo (Optional)</label>
+              <div className="bg-white p-3.5 rounded-xl border border-stone-200 space-y-2">
+                <label className="text-xs font-bold text-stone-700 block">Raw Material Photo <span className="text-[10px] text-stone-400 font-normal">(Optional)</span></label>
                 <input
                   type="file"
                   ref={imageInputRef}
@@ -1223,11 +1673,11 @@ function RawMaterialEditorModal({
                 />
 
                 <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 rounded-lg bg-gray-50 border border-gray-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+                  <div className="w-16 h-16 rounded-xl bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center flex-shrink-0">
                     {imageUrl ? (
                       <img src={imageUrl} alt="Material preview" className="w-full h-full object-cover" />
                     ) : (
-                      <Boxes className="w-6 h-6 text-gray-300" />
+                      <Boxes className="w-6 h-6 text-stone-300" />
                     )}
                   </div>
 
@@ -1237,7 +1687,7 @@ function RawMaterialEditorModal({
                       className="button secondary text-xs w-full py-1.5"
                       onClick={() => imageInputRef.current?.click()}
                     >
-                      <UploadCloud className="w-3.5 h-3.5" /> {imageUrl ? 'Change Photo' : 'Upload Material Photo'}
+                      <UploadCloud className="w-3.5 h-3.5" /> {imageUrl ? 'Change Photo' : 'Upload Photo'}
                     </button>
                     {imageUrl && (
                       <button
@@ -1253,9 +1703,9 @@ function RawMaterialEditorModal({
               </div>
 
               {/* Purchase Invoice Attachment */}
-              <div className="bg-white p-3.5 rounded-lg border border-gray-200 space-y-2">
-                <label className="text-xs font-bold text-gray-700 block">
-                  Purchase Invoice / Bill Image (Optional)
+              <div className="bg-white p-3.5 rounded-xl border border-stone-200 space-y-2">
+                <label className="text-xs font-bold text-stone-700 block">
+                  Purchase Invoice / Bill Image <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="file"
@@ -1266,11 +1716,11 @@ function RawMaterialEditorModal({
                 />
 
                 <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 rounded-lg bg-gray-50 border border-gray-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+                  <div className="w-16 h-16 rounded-xl bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center flex-shrink-0">
                     {purchaseInvoiceImage ? (
                       <img src={purchaseInvoiceImage} alt="Invoice preview" className="w-full h-full object-cover" />
                     ) : (
-                      <Receipt className="w-6 h-6 text-gray-300" />
+                      <Receipt className="w-6 h-6 text-stone-300" />
                     )}
                   </div>
 
@@ -1281,7 +1731,7 @@ function RawMaterialEditorModal({
                       onClick={() => invoiceInputRef.current?.click()}
                     >
                       <Receipt className="w-3.5 h-3.5 text-blue-600" />{' '}
-                      {purchaseInvoiceImage ? 'Change Invoice' : 'Attach Purchase Invoice'}
+                      {purchaseInvoiceImage ? 'Change Invoice' : 'Attach Invoice'}
                     </button>
                     {purchaseInvoiceImage && (
                       <button
@@ -1299,12 +1749,13 @@ function RawMaterialEditorModal({
           </div>
         </div>
 
-        <div className="editor-actions">
+        {/* Sticky Fixed Bottom Actions (Always visible without scrolling) */}
+        <div className="p-4 border-t border-stone-200 bg-stone-50/95 backdrop-blur-xs flex items-center justify-end gap-3 rounded-b-2xl flex-shrink-0">
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
           <button type="submit" className="button primary" id="btn-save-raw-material-submit">
-            {material ? 'Update Raw Material' : 'Create Raw Material'}
+            {material ? 'Update Material' : 'Add Material'}
           </button>
         </div>
       </form>
@@ -1319,6 +1770,7 @@ function RawMaterialDetailsModal({
   material,
   consumptionHistory,
   totalConsumed,
+  rawCategories,
   suppliers,
   onClose,
   onEdit,
@@ -1336,6 +1788,7 @@ function RawMaterialDetailsModal({
     totalCost: number
   }>
   totalConsumed: number
+  rawCategories: CategoryItem[]
   suppliers: AppDatabase['suppliers']
   onClose: () => void
   onEdit: () => void
@@ -1351,27 +1804,28 @@ function RawMaterialDetailsModal({
       : material.unitCost + (material.otherCost || 0)
   const totalVal = material.quantity * effectiveCost
   const supplier = suppliers.find((s) => s.id === material.supplierId)
+  const badgeClass = getCategoryBadgeClass(material.category, rawCategories)
 
   return (
     <div className="editor-overlay">
       <div className="editor-modal large" id="raw-material-details-modal">
         <div className="editor-header">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-200 overflow-hidden flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center flex-shrink-0">
               {material.imageUrl ? (
                 <img src={material.imageUrl} alt={material.name} className="w-full h-full object-cover" />
               ) : (
-                <Boxes className="w-6 h-6 text-purple-600" />
+                <Boxes className="w-6 h-6 text-[#7cb518]" />
               )}
             </div>
             <div>
-              <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded mr-2">
+              <span className="text-xs font-mono text-stone-500 bg-stone-100 px-2 py-0.5 rounded mr-2">
                 {material.sku}
               </span>
-              <span className="text-xs bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded">
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded shadow-2xs ${badgeClass}`}>
                 {material.category}
               </span>
-              <h2 className="text-lg font-bold text-gray-900 mt-1">{material.name}</h2>
+              <h2 className="text-lg font-bold text-stone-900 mt-1">{material.name}</h2>
             </div>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
@@ -1382,22 +1836,22 @@ function RawMaterialDetailsModal({
         <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
           {/* Key Metric Blocks */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-              <div className="text-[11px] text-gray-500 font-medium">Remaining Stock</div>
+            <div className="bg-stone-50 p-3 rounded-lg border border-stone-200">
+              <div className="text-[11px] text-stone-500 font-medium">Remaining Stock</div>
               <div
                 className={`text-lg font-bold ${
-                  isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-gray-900'
+                  isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-stone-900'
                 }`}
               >
                 {material.quantity} {material.unit}
               </div>
-              <div className="text-[10px] text-gray-500">Reorder alert at: {material.reorderLevel} {material.unit}</div>
+              <div className="text-[10px] text-stone-500">Reorder alert at: {material.reorderLevel} {material.unit}</div>
             </div>
 
-            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-              <div className="text-[11px] text-gray-500 font-medium">Base Price / Unit</div>
-              <div className="text-lg font-bold text-gray-900">{formatPKR(material.unitCost)}</div>
-              <div className="text-[10px] text-gray-500">Per {material.unit}</div>
+            <div className="bg-stone-50 p-3 rounded-lg border border-stone-200">
+              <div className="text-[11px] text-stone-500 font-medium">Base Price / Unit</div>
+              <div className="text-lg font-bold text-stone-900">{formatPKR(material.unitCost)}</div>
+              <div className="text-[10px] text-stone-500">Per {material.unit}</div>
             </div>
 
             <div className="bg-purple-50 p-3 rounded-lg border border-purple-200/80">
@@ -1417,27 +1871,27 @@ function RawMaterialDetailsModal({
 
           {/* Specifications & Supplier Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
-              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Specifications & Metrics</h3>
+            <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+              <h3 className="text-xs font-bold text-stone-700 uppercase tracking-wider">Specifications & Metrics</h3>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Packaging Size:</span>
-                  <span className="font-semibold text-gray-900">
+                <div className="flex justify-between py-1 border-b border-stone-100">
+                  <span className="text-stone-500">Packaging Size:</span>
+                  <span className="font-semibold text-stone-900">
                     {material.size ? `${material.size} ${material.unit}` : 'Standard bulk'}
                   </span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Other Overhead Cost:</span>
-                  <span className="font-semibold text-gray-900">{formatPKR(material.otherCost || 0)} / {material.unit}</span>
+                <div className="flex justify-between py-1 border-b border-stone-100">
+                  <span className="text-stone-500">Other Overhead Cost:</span>
+                  <span className="font-semibold text-stone-900">{formatPKR(material.otherCost || 0)} / {material.unit}</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Total Inflow / Received:</span>
-                  <span className="font-semibold text-gray-900">
+                <div className="flex justify-between py-1 border-b border-stone-100">
+                  <span className="text-stone-500">Total Inflow / Received:</span>
+                  <span className="font-semibold text-stone-900">
                     {material.totalReceived !== undefined ? material.totalReceived : material.quantity + totalConsumed} {material.unit}
                   </span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-500">Consumed in Production Runs:</span>
+                  <span className="text-stone-500">Consumed in Production Runs:</span>
                   <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
                     {totalConsumed} {material.unit}
                   </span>
@@ -1445,16 +1899,16 @@ function RawMaterialDetailsModal({
               </div>
 
               {material.description && (
-                <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600">
-                  <span className="font-semibold text-gray-700 block mb-1">Technical Specs / Description:</span>
+                <div className="mt-2 pt-2 border-t border-stone-100 text-xs text-stone-600">
+                  <span className="font-semibold text-stone-700 block mb-1">Technical Specs / Description:</span>
                   {material.description}
                 </div>
               )}
             </div>
 
             {/* Supplier & Document Copies */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
-              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Supplier & Attached Documents</h3>
+            <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+              <h3 className="text-xs font-bold text-stone-700 uppercase tracking-wider">Supplier & Attached Documents</h3>
 
               {supplier ? (
                 <div className="bg-blue-50/60 p-3 rounded-lg border border-blue-200/70 text-xs space-y-1">
@@ -1468,16 +1922,16 @@ function RawMaterialDetailsModal({
                   <div className="text-blue-700 text-[11px]">Current Ledger Balance: {formatPKR(supplier.currentBalance)}</div>
                 </div>
               ) : material.supplierName ? (
-                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 text-xs">
-                  <span className="text-gray-500">Supplier:</span> <strong>{material.supplierName}</strong>
+                <div className="bg-stone-50 p-2.5 rounded-lg border border-stone-200 text-xs">
+                  <span className="text-stone-500">Supplier:</span> <strong>{material.supplierName}</strong>
                 </div>
               ) : (
-                <div className="text-xs text-gray-400">No supplier linked to this material.</div>
+                <div className="text-xs text-stone-400">No supplier linked to this material.</div>
               )}
 
               {/* Invoice Attachment Preview */}
               <div className="mt-3">
-                <div className="text-xs font-bold text-gray-700 mb-1.5 flex items-center justify-between">
+                <div className="text-xs font-bold text-stone-700 mb-1.5 flex items-center justify-between">
                   <span>Attached Purchase Invoice</span>
                   {material.purchaseInvoiceImage && (
                     <button
@@ -1492,7 +1946,7 @@ function RawMaterialDetailsModal({
 
                 {material.purchaseInvoiceImage ? (
                   <div
-                    className="w-full h-28 rounded-lg bg-gray-50 border border-gray-200 overflow-hidden cursor-pointer group relative flex items-center justify-center"
+                    className="w-full h-28 rounded-lg bg-stone-50 border border-stone-200 overflow-hidden cursor-pointer group relative flex items-center justify-center"
                     onClick={() => onViewInvoice(material.purchaseInvoiceImage!)}
                   >
                     <img
@@ -1505,7 +1959,7 @@ function RawMaterialDetailsModal({
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center text-xs text-gray-400">
+                  <div className="p-3 bg-stone-50 rounded-lg border border-stone-200 text-center text-xs text-stone-400">
                     No purchase invoice attached for this raw material.
                   </div>
                 )}
@@ -1514,19 +1968,19 @@ function RawMaterialDetailsModal({
           </div>
 
           {/* Production Usage History Table */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
-            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+            <h3 className="text-xs font-bold text-stone-700 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-emerald-600" /> Linked Production Engine Consumption History
             </h3>
 
             {consumptionHistory.length === 0 ? (
-              <p className="text-xs text-gray-500 py-3 text-center bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-xs text-stone-500 py-3 text-center bg-stone-50 rounded-lg border border-stone-200">
                 No production runs have logged consumption for this raw material yet.
               </p>
             ) : (
-              <div className="table-scroll border border-gray-200 rounded-lg">
+              <div className="table-scroll border border-stone-200 rounded-lg">
                 <table className="w-full text-xs">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-stone-50">
                     <tr>
                       <th>Batch #</th>
                       <th>Date</th>
@@ -1538,9 +1992,9 @@ function RawMaterialDetailsModal({
                   <tbody>
                     {consumptionHistory.map((h, idx) => (
                       <tr key={idx}>
-                        <td className="font-mono font-bold text-gray-900">{h.batchNumber}</td>
+                        <td className="font-mono font-bold text-stone-900">{h.batchNumber}</td>
                         <td>{formatDate(h.date)}</td>
-                        <td className="font-medium text-gray-900">{h.productName}</td>
+                        <td className="font-medium text-stone-900">{h.productName}</td>
                         <td className="font-bold text-emerald-800">
                           {h.quantity} {h.unit}
                         </td>
@@ -1612,8 +2066,8 @@ function StockAdjustmentModal({
           </button>
         </div>
 
-        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4 text-xs">
-          Current Warehouse Stock: <strong className="text-sm text-gray-900">{item.current} units</strong>
+        <div className="bg-stone-50 p-3 rounded-lg border border-stone-200 mb-4 text-xs">
+          Current Warehouse Stock: <strong className="text-sm text-stone-900">{item.current} units</strong>
         </div>
 
         <div className="form-grid single">
