@@ -140,13 +140,13 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
 
     // 2. PRODUCTS (Finished Goods)
     db.products.forEach((p) => {
-      if (match(p.name, p.sku, p.category, p.flavor, p.size, p.barcode)) {
+      if (match(p.name, p.sku, p.category, p.description, p.size)) {
         results.push({
           id: `prod-${p.id}`,
           category: 'products',
           title: p.name,
           codeOrId: p.sku,
-          subtitle: `Rate: ${formatPKR(p.price)} / ${p.unit} · Stock: ${p.quantity} ${p.unit}`,
+          subtitle: `Rate: ${formatPKR(p.retailPrice || p.wholesalePrice || 0)} / ${p.unit} · Stock: ${p.quantity} ${p.unit}`,
           extraInfo: p.category,
           badgeText: p.quantity <= 0 ? 'Out of Stock' : `${p.quantity} ${p.unit}`,
           badgeVariant: p.quantity <= 0 ? 'rose' : p.quantity <= (p.reorderLevel || 10) ? 'amber' : 'emerald',
@@ -159,13 +159,13 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
 
     // 3. SUPPLIERS
     db.suppliers.forEach((s) => {
-      if (match(s.name, s.supplierId, s.phone, s.company, s.city, s.category, s.contactPerson)) {
+      if (match(s.name, s.supplierCode, s.phone, s.city, s.category, s.contactPerson)) {
         results.push({
           id: `sup-${s.id}`,
           category: 'suppliers',
           title: s.name,
-          codeOrId: s.supplierId,
-          subtitle: `${s.company ? `${s.company} · ` : ''}${s.phone || 'No phone'} · ${s.city || 'City N/A'}`,
+          codeOrId: s.supplierCode || s.id,
+          subtitle: `${s.contactPerson ? `${s.contactPerson} · ` : ''}${s.phone || 'No phone'} · ${s.city || 'City N/A'}`,
           extraInfo: s.category || 'Vendor',
           badgeText: s.currentBalance > 0 ? `Payable: ${formatPKR(s.currentBalance)}` : 'Clear',
           badgeVariant: s.currentBalance > 0 ? 'rose' : 'emerald',
@@ -177,12 +177,12 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
 
     // 4. EMPLOYEES
     db.employees.forEach((e) => {
-      if (match(e.name, e.employeeId, e.phone, e.role, e.department, e.dutyTiming)) {
+      if (match(e.name, e.id, e.phone, e.role, e.department, e.dutyTiming)) {
         results.push({
           id: `emp-${e.id}`,
           category: 'employees',
           title: e.name,
-          codeOrId: e.employeeId,
+          codeOrId: e.id,
           subtitle: `${e.role} (${e.department}) · ${e.phone || 'No phone'} · ${e.dutyTiming}`,
           extraInfo: e.department,
           badgeText: e.currentSalaryStatus === 'Paid' ? 'Paid' : 'Salary Pending',
@@ -221,7 +221,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
           category: 'raw_materials',
           title: r.name,
           codeOrId: r.sku,
-          subtitle: `Stock: ${r.quantity} ${r.unit} · Cost: ${formatPKR(r.unitCost || r.costPerUnit || 0)}/${r.unit}`,
+          subtitle: `Stock: ${r.quantity} ${r.unit} · Cost: ${formatPKR(r.unitCost || 0)}/${r.unit}`,
           extraInfo: r.category,
           badgeText: r.quantity <= 0 ? 'Depleted' : `${r.quantity} ${r.unit}`,
           badgeVariant: r.quantity <= 0 ? 'rose' : r.quantity <= (r.reorderLevel || 20) ? 'amber' : 'blue',

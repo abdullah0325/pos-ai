@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Standalone output causes ENOENT with Vercel's NFT tracer; only use in Docker/custom server
-  ...(process.env.VERCEL ? {} : { output: 'standalone' }),
+  output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -11,5 +10,6 @@ const nextConfig = {
 }
 
 export default nextConfig
+
 
 

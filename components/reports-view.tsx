@@ -228,8 +228,20 @@ export default function ReportsView({
     })
   }, [db.expenses, dateRange, expenseCategoryFilter, searchQuery])
 
+  const allSalaryPayments = useMemo(() => {
+    return (db.employees || []).flatMap((e) =>
+      (e.salaryHistory || []).map((sp) => ({
+        ...sp,
+        employeeId: e.id,
+        employeeName: e.name,
+        voucherNumber: sp.receiptNumber,
+        department: e.department,
+      }))
+    )
+  }, [db.employees])
+
   const filteredSalaryPayments = useMemo(() => {
-    return (db.salaryPayments || []).filter((sp) => {
+    return allSalaryPayments.filter((sp) => {
       if (!isDateInRange(sp.paymentDate || sp.month)) return false
       if (payrollDeptFilter !== 'All') {
         const emp = db.employees.find((e) => e.id === sp.employeeId)
@@ -238,13 +250,13 @@ export default function ReportsView({
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
         const match =
-          (sp.voucherNumber || '').toLowerCase().includes(q) ||
+          (sp.voucherNumber || sp.receiptNumber || '').toLowerCase().includes(q) ||
           (sp.employeeName || '').toLowerCase().includes(q)
         if (!match) return false
       }
       return true
     })
-  }, [db.salaryPayments, db.employees, dateRange, payrollDeptFilter, searchQuery])
+  }, [allSalaryPayments, db.employees, dateRange, payrollDeptFilter, searchQuery])
 
   // Overview Core Calculations
   const overviewMetrics = useMemo(() => {
@@ -652,15 +664,15 @@ export default function ReportsView({
     } else if (activeCategory === 'salary') {
       const headers = ['Employee Name', 'Designation', 'Department', 'Monthly Salary', 'Paid This Period', 'Total Advances', 'Status']
       const rows = db.employees.map((emp) => {
-        const empPayments = (db.salaryPayments || []).filter((sp) => sp.employeeId === emp.id && isDateInRange(sp.paymentDate || sp.month))
+        const empPayments = (emp.salaryHistory || []).filter((sp) => isDateInRange(sp.paymentDate || sp.month))
         const totalPaid = empPayments.reduce((sum, sp) => sum + sp.amountPaid, 0)
         return [
           emp.name,
-          emp.designation,
+          emp.role,
           emp.department,
-          emp.monthlySalary || 0,
+          emp.baseSalary || 0,
           totalPaid,
-          emp.totalAdvanceGiven || 0,
+          emp.totalLoanBalance || 0,
           emp.status,
         ]
       })
@@ -831,20 +843,20 @@ export default function ReportsView({
         filename: 'Payroll_Report',
         kpiStats: [
           { label: 'Total Staff', value: `${db.employees.length}` },
-          { label: 'Monthly Payroll Base', value: formatPKR(db.employees.reduce((s, e) => s + (e.monthlySalary || 0), 0)) },
+          { label: 'Monthly Payroll Base', value: formatPKR(db.employees.reduce((s, e) => s + (e.baseSalary || 0), 0)) },
           { label: 'Paid in Period', value: formatPKR(overviewMetrics.totalSalaries) },
         ],
         headers: ['Employee Name', 'Designation', 'Department', 'Monthly Salary', 'Paid This Period', 'Total Advances', 'Status'],
         rows: db.employees.map((emp) => {
-          const empPayments = (db.salaryPayments || []).filter((sp) => sp.employeeId === emp.id && isDateInRange(sp.paymentDate || sp.month))
+          const empPayments = (emp.salaryHistory || []).filter((sp) => isDateInRange(sp.paymentDate || sp.month))
           const totalPaid = empPayments.reduce((sum, sp) => sum + sp.amountPaid, 0)
           return [
             emp.name,
-            emp.designation,
+            emp.role,
             emp.department,
-            formatPKR(emp.monthlySalary || 0),
+            formatPKR(emp.baseSalary || 0),
             formatPKR(totalPaid),
-            formatPKR(emp.totalAdvanceGiven || 0),
+            formatPKR(emp.totalLoanBalance || 0),
             emp.status,
           ]
         }),
@@ -2165,7 +2177,7 @@ export default function ReportsView({
             <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
               <span className="text-xs font-semibold text-stone-500">Monthly Payroll Obligation</span>
               <div className="text-2xl font-black text-stone-900 mt-1">
-                {formatPKR(db.employees.reduce((s, e) => s + (e.monthlySalary || 0), 0))}
+                {formatPKR(db.employees.reduce((s, e) => s + (e.baseSalary || 0), 0))}
               </div>
               <span className="text-[11px] text-stone-500">Base salary run</span>
             </div>
@@ -2177,7 +2189,7 @@ export default function ReportsView({
             <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
               <span className="text-xs font-semibold text-stone-500">Staff Loan Advances</span>
               <div className="text-2xl font-black text-amber-800 mt-1">
-                {formatPKR(db.employees.reduce((s, e) => s + (e.totalAdvanceGiven || 0), 0))}
+                {formatPKR(db.employees.reduce((s, e) => s + (e.totalLoanBalance || 0), 0))}
               </div>
               <span className="text-[11px] text-amber-700 font-bold">Active loan balances</span>
             </div>
@@ -2226,19 +2238,19 @@ export default function ReportsView({
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {db.employees.map((emp) => {
-                    const empPayments = (db.salaryPayments || []).filter(
-                      (sp) => sp.employeeId === emp.id && isDateInRange(sp.paymentDate || sp.month)
+                    const empPayments = (emp.salaryHistory || []).filter(
+                      (sp) => isDateInRange(sp.paymentDate || sp.month)
                     )
                     const totalPaid = empPayments.reduce((sum, sp) => sum + sp.amountPaid, 0)
 
                     return (
                       <tr key={emp.id} className="hover:bg-stone-50/80">
                         <td className="py-2 px-3 font-bold text-stone-900">{emp.name}</td>
-                        <td className="py-2 px-3 text-stone-700">{emp.designation}</td>
+                        <td className="py-2 px-3 text-stone-700">{emp.role}</td>
                         <td className="py-2 px-3 text-stone-600">{emp.department}</td>
-                        <td className="py-2 px-3 text-right font-bold text-stone-900">{formatPKR(emp.monthlySalary || 0)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-stone-900">{formatPKR(emp.baseSalary || 0)}</td>
                         <td className="py-2 px-3 text-right font-bold text-emerald-700">{formatPKR(totalPaid)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-amber-800">{formatPKR(emp.totalAdvanceGiven || 0)}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-amber-800">{formatPKR(emp.totalLoanBalance || 0)}</td>
                         <td className="py-2 px-3 text-center">
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${

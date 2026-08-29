@@ -28,6 +28,13 @@ import {
   Store,
   Check,
   ExternalLink,
+  ShieldAlert,
+  FolderTree,
+  Tag,
+  CreditCard,
+  Layers,
+  AlertCircle,
+  Users,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -35,6 +42,8 @@ import {
   type AppDatabase,
   type ProductItem,
   type CustomerItem,
+  type CustomerCategoryItem,
+  defaultCustomerCategories,
   type InvoiceItem,
   type InvoiceLineItem,
   type LedgerEntry,
@@ -50,9 +59,6 @@ interface PosViewProps {
   onNavigate?: (module: string, subTab?: string) => void
 }
 
-export type MainBuyerCategory = 'Customer' | 'Retailer Shop' | 'Wholesaler'
-export type WholesalerSubFilter = 'All' | 'Distributor' | 'Sales Man'
-
 export interface CartItem {
   product: ProductItem
   quantity: number
@@ -67,8 +73,7 @@ export interface CartItem {
 export interface PosDraft {
   id: string
   savedAt: string
-  buyerCategory: MainBuyerCategory
-  wholesalerSubFilter?: WholesalerSubFilter
+  selectedCategoryName: string
   selectedCustomerId?: string
   customerName: string
   cart: CartItem[]
@@ -78,25 +83,95 @@ export interface PosDraft {
 }
 
 export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps) {
-  // 1. Exactly 3 Main Buyer Categories: 'Customer' (Default) | 'Retailer Shop' | 'Wholesaler'
-  const [buyerCategory, setBuyerCategory] = useState<MainBuyerCategory>('Customer')
+  // 1. DYNAMIC CUSTOMER CATEGORIES (Pulled directly from Customer Management)
+  const liveCustomerCategories = useMemo<CustomerCategoryItem[]>(() => {
+    const base =
+      db.customerCategories && db.customerCategories.length > 0
+        ? db.customerCategories
+        : defaultCustomerCategories
 
-  // Wholesaler internal sub-filter / tag distinction (Distributor vs Salesman)
-  const [wholesalerSubFilter, setWholesalerSubFilter] = useState<WholesalerSubFilter>('All')
+    // Also include any unique custom types that exist on registered customers
+    const knownNames = new Set(base.map((c) => c.name.toLowerCase().trim()))
+    const extra: CustomerCategoryItem[] = []
 
-  // Selected Profile for Retailer Shop or Wholesaler
+    db.customers.forEach((cust) => {
+      const t = (cust.type || '').trim()
+      if (t && !knownNames.has(t.toLowerCase())) {
+        knownNames.add(t.toLowerCase())
+        const isWholesale =
+          t.toLowerCase().includes('distributor') ||
+          t.toLowerCase().includes('wholesal') ||
+          t.toLowerCase().includes('sales') ||
+          t.toLowerCase().includes('van')
+        const isWalkin =
+          t.toLowerCase().includes('walk') ||
+          t.toLowerCase().includes('counter') ||
+          t.toLowerCase().includes('direct')
+        extra.push({
+          id: `cat-${t.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+          name: t,
+          parentType: isWholesale ? 'Wholesaler' : isWalkin ? 'Walk-in' : 'Retailer',
+          description: `Custom category (${t})`,
+        })
+      }
+    })
+
+    return [...base, ...extra]
+  }, [db.customerCategories, db.customers])
+
+  // Active selected Category name (defaults to 'Walk-in Customer' or first category)
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string>('Walk-in Customer')
+
+  // Find category object
+  const activeCustomerCategory = useMemo<CustomerCategoryItem>(() => {
+    const found = liveCustomerCategories.find(
+      (c) => c.name.toLowerCase() === (selectedCategoryName || '').toLowerCase()
+    )
+    if (found) return found
+    return (
+      liveCustomerCategories[0] || {
+        id: 'ccat-default',
+        name: selectedCategoryName || 'Walk-in Customer',
+        parentType: 'Walk-in',
+      }
+    )
+  }, [liveCustomerCategories, selectedCategoryName])
+
+  // Check if current category uses wholesale rates
+  const isWholesaleActive = useMemo(() => {
+    if (activeCustomerCategory.parentType === 'Wholesaler') return true
+    const n = activeCustomerCategory.name.toLowerCase()
+    return (
+      n.includes('distributor') ||
+      n.includes('wholesal') ||
+      n.includes('sales man') ||
+      n.includes('salesman') ||
+      n.includes('sales representative') ||
+      n.includes('rep') ||
+      n.includes('van')
+    )
+  }, [activeCustomerCategory])
+
+  // Check if current category is Walk-in
+  const isWalkinActive = useMemo(() => {
+    if (activeCustomerCategory.parentType === 'Walk-in') return true
+    const n = activeCustomerCategory.name.toLowerCase()
+    return n.includes('walk') || n.includes('counter') || n.includes('direct')
+  }, [activeCustomerCategory])
+
+  // Selected Customer ID & Search Dropdown
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [customerSearchQuery, setCustomerSearchQuery] = useState('')
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false)
 
-  // Customer (Direct / Walk-in) details - default pre-filled
+  // Walk-in direct buyer details
   const [walkinCustomerName, setWalkinCustomerName] = useState('Walk-in Retail Customer')
   const [walkinCustomerPhone, setWalkinCustomerPhone] = useState('')
 
   // Quick Add Customer Modal
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false)
   const [newCustName, setNewCustName] = useState('')
-  const [newCustType, setNewCustType] = useState<CustomerType>('Retailer')
+  const [newCustType, setNewCustType] = useState<string>('Retailer')
   const [newCustPhone, setNewCustPhone] = useState('')
   const [newCustAddress, setNewCustAddress] = useState('')
   const [newCustCity, setNewCustCity] = useState('')
@@ -132,35 +207,58 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Filtered customer profiles based on active Buyer Type
+  // Filtered registered customer profiles for the active category
   const filteredProfiles = useMemo(() => {
+    const q = customerSearchQuery.trim().toLowerCase()
+    const catName = activeCustomerCategory.name.toLowerCase()
+    const parentType = activeCustomerCategory.parentType
+
     let pool: CustomerItem[] = []
 
-    if (buyerCategory === 'Retailer Shop') {
-      pool = db.customers.filter((c) => c.type === 'Retailer' || c.type === 'Other')
-      if (pool.length === 0) {
-        pool = db.customers.filter((c) => c.type !== 'Distributor' && c.type !== 'Sales Man' && c.type !== 'Sales Representative')
-      }
-    } else if (buyerCategory === 'Wholesaler') {
-      if (wholesalerSubFilter === 'Distributor') {
-        pool = db.customers.filter((c) => c.type === 'Distributor')
-      } else if (wholesalerSubFilter === 'Sales Man') {
-        pool = db.customers.filter((c) => c.type === 'Sales Man' || c.type === 'Sales Representative')
-      } else {
-        pool = db.customers.filter(
-          (c) =>
-            c.type === 'Wholesaler' ||
-            c.type === 'Distributor' ||
-            c.type === 'Sales Man' ||
-            c.type === 'Sales Representative'
+    if (isWalkinActive) {
+      pool = db.customers.filter((c) => {
+        const t = (c.type || '').toLowerCase()
+        return (
+          t.includes('walk') ||
+          t.includes('counter') ||
+          t.includes('direct') ||
+          t === 'other' ||
+          t === ''
         )
+      })
+      if (pool.length === 0) {
+        pool = db.customers
       }
     } else {
-      pool = db.customers.filter((c) => c.type === 'Counter' || c.type === 'Other')
+      pool = db.customers.filter((c) => {
+        const cType = (c.type || '').trim().toLowerCase()
+        if (cType === catName) return true
+        if (parentType === 'Wholesaler') {
+          return (
+            cType.includes('distributor') ||
+            cType.includes('wholesal') ||
+            cType.includes('sales') ||
+            cType.includes('rep') ||
+            cType.includes('van')
+          )
+        }
+        if (parentType === 'Retailer') {
+          return cType.includes('retail') || cType.includes('shop') || cType.includes('mart')
+        }
+        return false
+      })
+
+      // If no customer matches the specific category filter, show all non-walk-in customers
+      if (pool.length === 0) {
+        pool = db.customers.filter((c) => {
+          const t = (c.type || '').toLowerCase()
+          return !t.includes('walk') && !t.includes('counter')
+        })
+      }
     }
 
-    const q = customerSearchQuery.trim().toLowerCase()
     if (!q) return pool
+
     return pool.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
@@ -170,13 +268,13 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         c.phone.includes(q) ||
         (c.city && c.city.toLowerCase().includes(q))
     )
-  }, [db.customers, buyerCategory, wholesalerSubFilter, customerSearchQuery])
+  }, [db.customers, activeCustomerCategory, isWalkinActive, customerSearchQuery])
 
   // Currently selected customer profile
   const selectedCustomer = useMemo(() => {
-    if (buyerCategory === 'Customer') return null
+    if (!selectedCustomerId) return null
     return db.customers.find((c) => c.id === selectedCustomerId) || null
-  }, [db.customers, buyerCategory, selectedCustomerId])
+  }, [db.customers, selectedCustomerId])
 
   // Extract all categories from products & categories
   const availableCategories = useMemo(() => {
@@ -230,16 +328,17 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     }
   }, [db.invoices])
 
-  // Pricing Rule: Retailer (Shop) & Wholesaler auto-apply Wholesale rate; Customer applies Retail rate
+  // Pricing Rule: Wholesale category auto-applies Wholesale rate; Retail / Walk-in applies Retail rate
   const getProductPriceForQty = (
     product: ProductItem,
     qty: number,
-    cat: MainBuyerCategory
+    wholesaleActive: boolean
   ): { price: number; tier: 'Retail' | 'Wholesale' } => {
-    if (cat === 'Retailer Shop' || cat === 'Wholesaler') {
+    if (wholesaleActive) {
       return { price: product.wholesalePrice, tier: 'Wholesale' }
     }
-    const wholesaleLimit = product.wholesaleMinQty && product.wholesaleMinQty > 0 ? product.wholesaleMinQty : 999999
+    const wholesaleLimit =
+      product.wholesaleMinQty && product.wholesaleMinQty > 0 ? product.wholesaleMinQty : 999999
     if (qty >= wholesaleLimit) {
       return { price: product.wholesalePrice, tier: 'Wholesale' }
     }
@@ -250,7 +349,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
   const calculateItemLine = (
     product: ProductItem,
     qty: number,
-    cat: MainBuyerCategory,
+    wholesaleActive: boolean,
     discountType: 'percent' | 'fixed' = 'fixed',
     discountValue: number = 0,
     forcedTier?: 'Retail' | 'Wholesale'
@@ -262,7 +361,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       tier = forcedTier
       unitPrice = forcedTier === 'Wholesale' ? product.wholesalePrice : product.retailPrice
     } else {
-      const calculated = getProductPriceForQty(product, qty, cat)
+      const calculated = getProductPriceForQty(product, qty, wholesaleActive)
       tier = calculated.tier
       unitPrice = calculated.price
     }
@@ -293,7 +392,6 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   // One-click add to cart: if already in cart, increases quantity
   const handleAddToCart = (product: ProductItem) => {
-    // Look up fresh product data from db.products so imageUrl and warehouse stock are completely fresh
     const freshProduct = db.products.find((p) => p.id === product.id) || product
     const existingIndex = cart.findIndex((item) => item.product.id === freshProduct.id)
 
@@ -309,7 +407,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       const updatedItem = calculateItemLine(
         freshProduct,
         newQty,
-        buyerCategory,
+        isWholesaleActive,
         existing.discountType,
         existing.discountValue
       )
@@ -321,7 +419,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         alert(`Product is currently Out of Stock (${freshProduct.quantity} in inventory).`)
         return
       }
-      const newItem = calculateItemLine(freshProduct, 1, buyerCategory, 'fixed', 0)
+      const newItem = calculateItemLine(freshProduct, 1, isWholesaleActive, 'fixed', 0)
       setCart([...cart, newItem])
     }
   }
@@ -340,7 +438,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const updated = calculateItemLine(
       current.product,
       newQty,
-      buyerCategory,
+      isWholesaleActive,
       current.discountType,
       current.discountValue
     )
@@ -359,7 +457,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const updated = calculateItemLine(
       current.product,
       current.quantity,
-      buyerCategory,
+      isWholesaleActive,
       type,
       val
     )
@@ -375,7 +473,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const updated = calculateItemLine(
       current.product,
       current.quantity,
-      buyerCategory,
+      isWholesaleActive,
       current.discountType,
       current.discountValue,
       nextTier
@@ -390,19 +488,22 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     setCart(cart.filter((_, i) => i !== index))
   }
 
-  // Switch Main Buyer Category (3 Categories: 'Customer' | 'Retailer Shop' | 'Wholesaler')
-  const handleBuyerCategoryChange = (newCat: MainBuyerCategory) => {
-    setBuyerCategory(newCat)
+  // Switch Customer Category Dropdown
+  const handleCategoryChange = (newCatName: string) => {
+    setSelectedCategoryName(newCatName)
     setSelectedCustomerId('')
     setCustomerSearchQuery('')
     setIsCustomerDropdownOpen(false)
 
-    // Re-evaluate pricing for items in cart based on newly selected buyer category
+    const targetCat = liveCustomerCategories.find((c) => c.name === newCatName)
+    const isWholesale = targetCat ? targetCat.parentType === 'Wholesaler' || targetCat.name.toLowerCase().includes('distributor') || targetCat.name.toLowerCase().includes('wholesal') : false
+
+    // Re-evaluate pricing for items in cart
     const reevaluatedCart = cart.map((item) =>
       calculateItemLine(
         item.product,
         item.quantity,
-        newCat,
+        isWholesale,
         item.discountType,
         item.discountValue
       )
@@ -442,17 +543,8 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       customers: [newCustomer, ...db.customers],
     })
 
-    // Auto-select this newly created customer
-    if (newCustType === 'Retailer') {
-      setBuyerCategory('Retailer Shop')
-    } else if (newCustType === 'Distributor' || newCustType === 'Sales Man' || newCustType === 'Wholesaler') {
-      setBuyerCategory('Wholesaler')
-      if (newCustType === 'Distributor') setWholesalerSubFilter('Distributor')
-      if (newCustType === 'Sales Man') setWholesalerSubFilter('Sales Man')
-    } else {
-      setBuyerCategory('Customer')
-    }
-
+    // Auto-select this newly created category and customer
+    setSelectedCategoryName(newCustType)
     setSelectedCustomerId(newId)
     setShowNewCustomerModal(false)
 
@@ -493,16 +585,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       return
     }
 
-    const draftName =
-      buyerCategory === 'Customer'
-        ? walkinCustomerName || 'Customer Sale'
-        : selectedCustomer?.name || `${buyerCategory} Sale`
+    const draftName = isWalkinActive
+      ? walkinCustomerName || 'Walk-in Sale'
+      : selectedCustomer?.name || `${selectedCategoryName} Sale`
 
     const newDraft: PosDraft = {
       id: `draft-${Date.now()}`,
       savedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      buyerCategory,
-      wholesalerSubFilter,
+      selectedCategoryName,
       selectedCustomerId: selectedCustomerId || undefined,
       customerName: draftName,
       cart: [...cart],
@@ -519,8 +609,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   // Resume Draft Sale
   const handleResumeDraft = (draft: PosDraft) => {
-    setBuyerCategory(draft.buyerCategory || 'Customer')
-    if (draft.wholesalerSubFilter) setWholesalerSubFilter(draft.wholesalerSubFilter)
+    setSelectedCategoryName(draft.selectedCategoryName || 'Walk-in Customer')
     if (draft.selectedCustomerId) {
       setSelectedCustomerId(draft.selectedCustomerId)
     }
@@ -540,8 +629,8 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       return
     }
 
-    if ((buyerCategory === 'Retailer Shop' || buyerCategory === 'Wholesaler') && !selectedCustomer) {
-      alert(`Please select an existing ${buyerCategory === 'Retailer Shop' ? 'Retailer (Shop)' : 'Wholesaler / Distributor'} profile before checkout, or switch to Customer (Retail).`)
+    if (!isWalkinActive && !selectedCustomer) {
+      alert(`Please select a registered ${selectedCategoryName} profile before checkout, or switch to Walk-in Customer.`)
       return
     }
 
@@ -576,32 +665,23 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
     const nextInvoiceNumber = `INV-${now.getFullYear()}-${1000 + db.invoices.length + 1}`
 
-    const customerId =
-      buyerCategory === 'Customer'
-        ? 'cust-direct-customer'
-        : selectedCustomer?.id || `cust-${Date.now()}`
+    const customerId = isWalkinActive
+      ? selectedCustomer?.id || 'cust-direct-customer'
+      : selectedCustomer?.id || `cust-${Date.now()}`
 
-    const customerName =
-      buyerCategory === 'Customer'
-        ? walkinCustomerName.trim() || 'Walk-in Retail Customer'
-        : selectedCustomer?.businessName || selectedCustomer?.name || `${buyerCategory} Client`
+    const customerName = isWalkinActive
+      ? selectedCustomer?.name || walkinCustomerName.trim() || 'Walk-in Retail Customer'
+      : selectedCustomer?.businessName || selectedCustomer?.name || `${selectedCategoryName} Client`
 
-    const customerType: CustomerType =
-      buyerCategory === 'Wholesaler'
-        ? (selectedCustomer?.type as CustomerType) || 'Wholesaler'
-        : buyerCategory === 'Retailer Shop'
-        ? 'Retailer'
-        : 'Counter'
+    const customerType: CustomerType = (selectedCustomer?.type as CustomerType) || (isWholesaleActive ? 'Wholesaler' : isWalkinActive ? 'Counter' : 'Retailer')
 
-    const phone =
-      buyerCategory === 'Customer'
-        ? walkinCustomerPhone || '—'
-        : selectedCustomer?.phone || '—'
+    const phone = isWalkinActive
+      ? selectedCustomer?.phone || walkinCustomerPhone || '—'
+      : selectedCustomer?.phone || '—'
 
-    const address =
-      buyerCategory === 'Customer'
-        ? 'Factory Gate Counter'
-        : selectedCustomer?.address || 'Pakistan'
+    const address = isWalkinActive
+      ? selectedCustomer?.address || 'Factory Gate Counter'
+      : selectedCustomer?.address || 'Pakistan'
 
     const effectiveAmountPaid =
       paymentStatus === 'Paid'
@@ -643,7 +723,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       partyId: selectedCustomer?.id || undefined,
       phone,
       address,
-      saleType: buyerCategory === 'Wholesaler' ? 'Distributor' : buyerCategory === 'Retailer Shop' ? 'Retail' : 'Counter',
+      saleType: isWholesaleActive ? 'Distributor' : isWalkinActive ? 'Counter' : 'Retail',
       items: invoiceLines,
       subtotal: grossSubtotal,
       discount: totalDiscountsCombined,
@@ -658,7 +738,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       paymentAccount,
       status: paymentStatus,
       deliveryStatus: 'Delivered',
-      notes: orderNotes.trim() || `POS Sale (${buyerCategory})`,
+      notes: orderNotes.trim() || `POS Sale (${selectedCategoryName})`,
       createdAt: now.toISOString(),
     }
 
@@ -806,389 +886,411 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     alert('Receipt text copied to clipboard! Ready to paste into WhatsApp.')
   }
 
-  // Quick navigation helper to customer management
-  const handleNavigateToCustomerManagement = (type: 'retailers' | 'distributors') => {
-    if (onNavigate) {
-      onNavigate('customer-management', type)
-    } else {
-      setNewCustType(type === 'retailers' ? 'Retailer' : 'Distributor')
-      setShowNewCustomerModal(true)
-    }
-  }
-
   return (
     <div className="space-y-4" id="pos-terminal-root">
-      {/* 1. MINIMAL POS METRICS BAR */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white p-3 rounded-2xl shadow-xs border border-stone-100">
-        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50/80">
-          <div className="w-8 h-8 rounded-lg bg-lime-100/80 flex items-center justify-center text-lime-700 shrink-0">
-            <ShoppingCart className="w-4 h-4" />
+      {/* 1. TOP STATS BAR: CRISP BORDERED STAT CARDS */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Stat 1: Today's Sales */}
+        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-lime-100/80 flex items-center justify-center text-lime-700 shrink-0 shadow-2xs">
+            <ShoppingCart className="w-5 h-5" />
           </div>
-          <div>
-            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Today&apos;s Sales</span>
-            <span className="text-sm font-bold text-stone-900">{posMetrics.todayCount} Invoices</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50/80">
-          <div className="w-8 h-8 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-700 shrink-0">
-            <TrendingUp className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Revenue</span>
-            <span className="text-sm font-bold text-stone-900">{formatPKR(posMetrics.todayRevenue)}</span>
+          <div className="min-w-0">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
+              Today&apos;s Sales
+            </span>
+            <span className="text-base sm:text-lg font-bold text-stone-900 mt-1 block">
+              {posMetrics.todayCount} Invoices
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-50/80">
-          <div className="w-8 h-8 rounded-lg bg-emerald-100/80 flex items-center justify-center text-emerald-700 shrink-0">
-            <Banknote className="w-4 h-4" />
+        {/* Stat 2: Revenue */}
+        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-100/80 flex items-center justify-center text-blue-700 shrink-0 shadow-2xs">
+            <TrendingUp className="w-5 h-5" />
           </div>
-          <div>
-            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Cash Collected</span>
-            <span className="text-sm font-bold text-emerald-800">{formatPKR(posMetrics.todayCollected)}</span>
+          <div className="min-w-0">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
+              Total Revenue
+            </span>
+            <span className="text-base sm:text-lg font-bold text-stone-900 mt-1 block truncate">
+              {formatPKR(posMetrics.todayRevenue)}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-2 rounded-xl bg-stone-50/80">
-          <div>
-            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block leading-none">Pending Credit</span>
-            <span className="text-sm font-bold text-amber-800">{formatPKR(posMetrics.todayPending)}</span>
+        {/* Stat 3: Cash Collected */}
+        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100/80 flex items-center justify-center text-emerald-700 shrink-0 shadow-2xs">
+            <Banknote className="w-5 h-5" />
           </div>
+          <div className="min-w-0">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
+              Cash Collected
+            </span>
+            <span className="text-base sm:text-lg font-bold text-emerald-800 mt-1 block truncate">
+              {formatPKR(posMetrics.todayCollected)}
+            </span>
+          </div>
+        </div>
+
+        {/* Stat 4: Pending Credit */}
+        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-amber-100/80 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
+                Pending Credit
+              </span>
+              <span className="text-base sm:text-lg font-bold text-amber-800 mt-1 block truncate">
+                {formatPKR(posMetrics.todayPending)}
+              </span>
+            </div>
+          </div>
+
           {drafts.length > 0 && (
             <button
               onClick={() => setShowDraftsModal(true)}
-              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold flex items-center gap-1 transition shadow-xs"
+              className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold flex items-center gap-1.5 transition shadow-xs shrink-0"
+              title="View held drafts"
             >
               <PauseCircle className="w-3.5 h-3.5" />
-              Drafts ({drafts.length})
+              <span>Drafts ({drafts.length})</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. CUSTOMER SELECTION: 3 CATEGORIES (CUSTOMER RETAIL | RETAILER SHOP | WHOLESALER) */}
-      <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-stone-100 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          {/* 3 Main Buyer Tabs */}
-          <div className="flex items-center gap-1.5 p-1 bg-stone-100/80 rounded-xl w-full sm:w-auto">
-            {/* 1. Customer (Retail) */}
-            <button
-              type="button"
-              onClick={() => handleBuyerCategoryChange('Customer')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                buyerCategory === 'Customer'
-                  ? 'bg-white text-stone-900 shadow-xs ring-1 ring-stone-200/60'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <User className={`w-3.5 h-3.5 ${buyerCategory === 'Customer' ? 'text-lime-600' : 'text-stone-400'}`} />
-              <span>Customer (Retail)</span>
-            </button>
-
-            {/* 2. Retailer (Shop) */}
-            <button
-              type="button"
-              onClick={() => handleBuyerCategoryChange('Retailer Shop')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                buyerCategory === 'Retailer Shop'
-                  ? 'bg-white text-stone-900 shadow-xs ring-1 ring-stone-200/60'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Store className={`w-3.5 h-3.5 ${buyerCategory === 'Retailer Shop' ? 'text-lime-600' : 'text-stone-400'}`} />
-              <span>Retailer (Shop)</span>
-            </button>
-
-            {/* 3. Wholesaler */}
-            <button
-              type="button"
-              onClick={() => handleBuyerCategoryChange('Wholesaler')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                buyerCategory === 'Wholesaler'
-                  ? 'bg-white text-stone-900 shadow-xs ring-1 ring-stone-200/60'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Building2 className={`w-3.5 h-3.5 ${buyerCategory === 'Wholesaler' ? 'text-lime-600' : 'text-stone-400'}`} />
-              <span>Wholesaler</span>
-            </button>
+      {/* 2. DYNAMIC CUSTOMER CATEGORY & SELECTION SECTION */}
+      <div className="bg-white p-4 rounded-2xl shadow-xs border border-stone-200 space-y-3.5">
+        {/* Section Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-stone-100">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-lime-50 text-lime-700 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-stone-900 leading-none">Customer & Pricing Tier</h3>
+              <p className="text-[10px] text-stone-500 mt-0.5">
+                Pricing automatically adapts: {isWholesaleActive ? 'Wholesale Price Tier' : 'Retail Price Tier'}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex items-center gap-2">
             {drafts.length > 0 && (
               <button
+                type="button"
                 onClick={() => setShowDraftsModal(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition"
+                className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition"
               >
-                <Clock className="w-3.5 h-3.5" />
-                Drafts ({drafts.length})
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Held Sales ({drafts.length})</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setNewCustType(activeCustomerCategory.name)
+                setShowNewCustomerModal(true)
+              }}
+              className="px-3 py-1.5 rounded-xl bg-lime-600 hover:bg-lime-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-xs"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>+ Quick Add Customer</span>
+            </button>
+
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('customer-management')}
+                className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition"
+                title="Manage Customer Directory & Categories"
+              >
+                <FolderTree className="w-3.5 h-3.5 text-stone-500" />
+                <span className="hidden sm:inline">Categories</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Dynamic Buyer Profile Selector Area */}
-        {buyerCategory === 'Customer' ? (
-          /* Customer (Retail) - Walk-in Buyer */
-          <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-stone-100">
-            <div className="w-full sm:w-1/2">
-              <input
-                type="text"
-                value={walkinCustomerName}
-                onChange={(e) => setWalkinCustomerName(e.target.value)}
-                placeholder="Walk-in Retail Customer Name"
-                className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-stone-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
-              />
-            </div>
-            <div className="w-full sm:w-1/2">
-              <input
-                type="text"
-                value={walkinCustomerPhone}
-                onChange={(e) => setWalkinCustomerPhone(e.target.value)}
-                placeholder="Phone (Optional)"
-                className="w-full px-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-stone-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
-              />
+        {/* Dynamic Category Dropdown + Customer Search Bar */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+          {/* Dropdown 1: Live Customer Category Dropdown (Pulls from Customer Management) */}
+          <div className="md:col-span-4 space-y-1">
+            <label className="block text-[11px] font-bold text-stone-700">
+              Customer Category <span className="text-lime-700 font-normal">({liveCustomerCategories.length} live)</span>
+            </label>
+            <div className="relative">
+              <select
+                value={selectedCategoryName}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="w-full pl-3 pr-8 py-2.5 text-xs font-semibold text-stone-900 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/50 appearance-none transition cursor-pointer"
+              >
+                {liveCustomerCategories.map((cat) => (
+                  <option key={cat.id || cat.name} value={cat.name}>
+                    {cat.name} {cat.parentType ? `(${cat.parentType})` : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
             </div>
           </div>
-        ) : buyerCategory === 'Retailer Shop' ? (
-          /* Retailer (Shop) - Searchable Profile Dropdown + Inline Link to Customer Management */
-          <div className="space-y-2 pt-2 border-t border-stone-100">
+
+          {/* Dropdown 2 / Input: Customer Selection Listing & Search */}
+          <div className="md:col-span-8 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-stone-500">Select Registered Retailer / Shop Profile:</span>
-              <button
-                type="button"
-                onClick={() => handleNavigateToCustomerManagement('retailers')}
-                className="text-[11px] font-bold text-lime-700 hover:text-lime-800 hover:underline flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" />
-                + New Retailer
-              </button>
-            </div>
-
-            <div className="relative">
-              <div
-                onClick={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/60 hover:bg-white cursor-pointer flex items-center justify-between transition"
-              >
-                {selectedCustomer ? (
-                  <div className="flex items-center gap-2 font-medium text-stone-900 truncate">
-                    <Store className="w-3.5 h-3.5 text-lime-600 shrink-0" />
-                    <span className="font-bold">{selectedCustomer.name}</span>
-                    {selectedCustomer.businessName && (
-                      <span className="text-stone-500 text-[11px]">({selectedCustomer.businessName})</span>
-                    )}
-                    <span className="text-stone-400 text-[10px]">• {selectedCustomer.city || selectedCustomer.address}</span>
-                    <span className="ml-auto px-2 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[10px] font-bold">
-                      Balance: {formatPKR(selectedCustomer.currentBalance)}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-stone-400 flex items-center gap-1.5">
-                    <Store className="w-3.5 h-3.5 text-stone-400" />
-                    Select retailer / shop profile... ({filteredProfiles.length} available)
-                  </span>
-                )}
-                <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0 ml-2" />
-              </div>
-
-              {isCustomerDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 z-40 mt-1 bg-white rounded-xl shadow-lg border border-stone-200 max-h-56 overflow-y-auto p-1.5 space-y-1">
-                  <div className="sticky top-0 bg-white pb-1.5">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-stone-400" />
-                      <input
-                        type="text"
-                        autoFocus
-                        value={customerSearchQuery}
-                        onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                        placeholder="Search retailer shop name, phone, city..."
-                        className="w-full pl-7 pr-3 py-1.5 text-xs rounded-md border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
-                      />
-                    </div>
-                  </div>
-
-                  {filteredProfiles.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-stone-500">
-                      No matching retailer found.
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsCustomerDropdownOpen(false)
-                          handleNavigateToCustomerManagement('retailers')
-                        }}
-                        className="block mx-auto mt-1 text-lime-700 font-bold hover:underline text-[11px]"
-                      >
-                        + Create Retailer Profile in Customer Management
-                      </button>
-                    </div>
-                  ) : (
-                    filteredProfiles.map((cust) => (
-                      <div
-                        key={cust.id}
-                        onClick={() => {
-                          setSelectedCustomerId(cust.id)
-                          setIsCustomerDropdownOpen(false)
-                        }}
-                        className={`p-2 rounded-lg cursor-pointer text-xs flex items-center justify-between transition ${
-                          selectedCustomerId === cust.id ? 'bg-lime-50 text-lime-900 font-bold' : 'hover:bg-stone-50 text-stone-800'
-                        }`}
-                      >
-                        <div className="truncate">
-                          <span className="font-bold text-stone-900">{cust.name}</span>
-                          {cust.businessName && <span className="text-stone-500 text-[11px] ml-1">({cust.businessName})</span>}
-                          <span className="text-[10px] block text-stone-400">{cust.city || cust.address} • {cust.phone}</span>
-                        </div>
-                        <div className="text-right shrink-0 ml-2">
-                          <span className={`text-[11px] font-bold ${cust.currentBalance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {formatPKR(cust.currentBalance)}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+              <label className="block text-[11px] font-bold text-stone-700">
+                {isWalkinActive ? 'Walk-in Counter Details' : `Select Registered ${selectedCategoryName}`}
+              </label>
+              {!isWalkinActive && (
+                <span className="text-[10px] text-stone-500">
+                  {filteredProfiles.length} customer{filteredProfiles.length === 1 ? '' : 's'} available
+                </span>
               )}
             </div>
-          </div>
-        ) : (
-          /* Wholesaler - Covers both Distributors and Salesmen */
-          <div className="space-y-2 pt-2 border-t border-stone-100">
-            <div className="flex items-center justify-between">
-              {/* Optional small toggle / tag for labeling */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-stone-500">Filter Wholesaler:</span>
-                <div className="flex items-center gap-1 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setWholesalerSubFilter('All')}
-                    className={`px-2 py-0.5 rounded-md font-semibold transition ${
-                      wholesalerSubFilter === 'All' ? 'bg-stone-800 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWholesalerSubFilter('Distributor')}
-                    className={`px-2 py-0.5 rounded-md font-semibold transition flex items-center gap-1 ${
-                      wholesalerSubFilter === 'Distributor' ? 'bg-blue-600 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
-                    }`}
-                  >
-                    <Truck className="w-2.5 h-2.5" />
-                    Distributor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWholesalerSubFilter('Sales Man')}
-                    className={`px-2 py-0.5 rounded-md font-semibold transition flex items-center gap-1 ${
-                      wholesalerSubFilter === 'Sales Man' ? 'bg-purple-600 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
-                    }`}
-                  >
-                    <User className="w-2.5 h-2.5" />
-                    Salesman
-                  </button>
+
+            {isWalkinActive ? (
+              /* Walk-in Counter Inputs */
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={walkinCustomerName}
+                    onChange={(e) => setWalkinCustomerName(e.target.value)}
+                    placeholder="Walk-in Counter Name"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500 font-medium text-stone-900"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={walkinCustomerPhone}
+                    onChange={(e) => setWalkinCustomerPhone(e.target.value)}
+                    placeholder="Phone (Optional)"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500 font-medium text-stone-900"
+                  />
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={() => handleNavigateToCustomerManagement('distributors')}
-                className="text-[11px] font-bold text-lime-700 hover:text-lime-800 hover:underline flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" />
-                + New Wholesaler
-              </button>
-            </div>
-
-            {/* Profile Dropdown */}
-            <div className="relative">
-              <div
-                onClick={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/60 hover:bg-white cursor-pointer flex items-center justify-between transition"
-              >
-                {selectedCustomer ? (
-                  <div className="flex items-center gap-2 font-medium text-stone-900 truncate">
-                    <span className="px-1.5 py-0.2 rounded bg-lime-100 text-lime-800 text-[9px] font-bold uppercase">
-                      {selectedCustomer.type || 'Wholesaler'}
+            ) : (
+              /* Searchable Customer Dropdown */
+              <div className="relative">
+                <div
+                  onClick={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
+                  className={`w-full px-3.5 py-2 text-xs rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                    selectedCustomer
+                      ? 'border-lime-300 bg-lime-50/30 hover:bg-lime-50/50'
+                      : 'border-stone-200 bg-stone-50/60 hover:bg-white'
+                  }`}
+                >
+                  {selectedCustomer ? (
+                    <div className="flex items-center gap-2 font-medium text-stone-900 truncate min-w-0">
+                      <span className="px-1.5 py-0.5 rounded bg-lime-100 text-lime-800 text-[10px] font-bold uppercase shrink-0">
+                        {selectedCustomer.type || selectedCategoryName}
+                      </span>
+                      <span className="font-bold truncate text-stone-900">{selectedCustomer.name}</span>
+                      {selectedCustomer.businessName && (
+                        <span className="text-stone-500 text-[11px] truncate">
+                          ({selectedCustomer.businessName})
+                        </span>
+                      )}
+                      <span className="text-stone-400 text-[10px] hidden sm:inline truncate">
+                        • {selectedCustomer.city || selectedCustomer.address} • {selectedCustomer.phone}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-stone-400 flex items-center gap-2 truncate">
+                      <Search className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                      Click to choose registered customer ({filteredProfiles.length} found)...
                     </span>
-                    <span className="font-bold">{selectedCustomer.name}</span>
-                    {selectedCustomer.businessName && (
-                      <span className="text-stone-500 text-[11px]">({selectedCustomer.businessName})</span>
+                  )}
+
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {selectedCustomer && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedCustomerId('')
+                        }}
+                        className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition"
+                        title="Clear customer selection"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     )}
-                    <span className="text-stone-400 text-[10px]">• {selectedCustomer.city || selectedCustomer.address}</span>
-                    <span className="ml-auto px-2 py-0.5 rounded bg-stone-200/70 text-stone-700 text-[10px] font-bold">
-                      Balance: {formatPKR(selectedCustomer.currentBalance)}
-                    </span>
+                    <ChevronDown className="w-4 h-4 text-stone-400" />
                   </div>
-                ) : (
-                  <span className="text-stone-400 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-stone-400" />
-                    Select {wholesalerSubFilter === 'All' ? 'wholesaler / distributor / salesman' : wholesalerSubFilter} profile... ({filteredProfiles.length} available)
-                  </span>
-                )}
-                <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0 ml-2" />
-              </div>
+                </div>
 
-              {isCustomerDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 z-40 mt-1 bg-white rounded-xl shadow-lg border border-stone-200 max-h-56 overflow-y-auto p-1.5 space-y-1">
-                  <div className="sticky top-0 bg-white pb-1.5">
+                {/* Dropdown Menu Popup */}
+                {isCustomerDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 z-40 mt-1.5 bg-white rounded-2xl shadow-xl border border-stone-200 max-h-64 overflow-hidden flex flex-col p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+                    {/* Search Input */}
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-stone-400" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
                       <input
                         type="text"
                         autoFocus
                         value={customerSearchQuery}
                         onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                        placeholder="Search distributor / salesman name, phone, city..."
-                        className="w-full pl-7 pr-3 py-1.5 text-xs rounded-md border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
+                        placeholder={`Search ${selectedCategoryName} by name, business, phone, city...`}
+                        className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/50"
                       />
                     </div>
-                  </div>
 
-                  {filteredProfiles.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-stone-500">
-                      No matching profile found.
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsCustomerDropdownOpen(false)
-                          handleNavigateToCustomerManagement('distributors')
-                        }}
-                        className="block mx-auto mt-1 text-lime-700 font-bold hover:underline text-[11px]"
-                      >
-                        + Create Wholesaler / Distributor in Customer Management
-                      </button>
-                    </div>
-                  ) : (
-                    filteredProfiles.map((cust) => (
+                    {/* Customer Items List */}
+                    <div className="overflow-y-auto space-y-1 pr-1 max-h-48">
+                      {/* Top Quick Add Trigger inside Dropdown */}
                       <div
-                        key={cust.id}
                         onClick={() => {
-                          setSelectedCustomerId(cust.id)
                           setIsCustomerDropdownOpen(false)
+                          setNewCustType(activeCustomerCategory.name)
+                          setShowNewCustomerModal(true)
                         }}
-                        className={`p-2 rounded-lg cursor-pointer text-xs flex items-center justify-between transition ${
-                          selectedCustomerId === cust.id ? 'bg-lime-50 text-lime-900 font-bold' : 'hover:bg-stone-50 text-stone-800'
-                        }`}
+                        className="p-2 rounded-xl bg-lime-50/70 hover:bg-lime-100 text-lime-800 text-xs font-bold cursor-pointer flex items-center justify-between transition border border-dashed border-lime-300"
                       >
-                        <div className="truncate">
-                          <span className="px-1.5 py-0.2 rounded bg-stone-100 text-stone-600 text-[9px] font-bold uppercase mr-1.5">
-                            {cust.type || 'Wholesale'}
-                          </span>
-                          <span className="font-bold text-stone-900">{cust.name}</span>
-                          {cust.businessName && <span className="text-stone-500 text-[11px] ml-1">({cust.businessName})</span>}
-                          <span className="text-[10px] block text-stone-400">{cust.city || cust.address} • {cust.phone}</span>
+                        <div className="flex items-center gap-1.5">
+                          <UserPlus className="w-3.5 h-3.5 text-lime-700" />
+                          <span>+ Register New {selectedCategoryName} Customer</span>
                         </div>
-                        <div className="text-right shrink-0 ml-2">
-                          <span className={`text-[11px] font-bold ${cust.currentBalance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {formatPKR(cust.currentBalance)}
-                          </span>
-                        </div>
+                        <span className="text-[10px] text-lime-700">Quick Add</span>
                       </div>
-                    ))
+
+                      {filteredProfiles.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-stone-500">
+                          No registered customer matches &quot;{customerSearchQuery}&quot;.
+                        </div>
+                      ) : (
+                        filteredProfiles.map((cust) => {
+                          const isSelected = selectedCustomerId === cust.id
+                          return (
+                            <div
+                              key={cust.id}
+                              onClick={() => {
+                                setSelectedCustomerId(cust.id)
+                                setIsCustomerDropdownOpen(false)
+                              }}
+                              className={`p-2.5 rounded-xl cursor-pointer text-xs flex items-center justify-between transition ${
+                                isSelected
+                                  ? 'bg-lime-600 text-white font-bold shadow-xs'
+                                  : 'hover:bg-stone-50 text-stone-800 border border-transparent hover:border-stone-100'
+                              }`}
+                            >
+                              <div className="truncate min-w-0 pr-2">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="font-bold truncate">{cust.name}</span>
+                                  {cust.businessName && (
+                                    <span
+                                      className={`text-[11px] truncate ${
+                                        isSelected ? 'text-lime-100' : 'text-stone-500'
+                                      }`}
+                                    >
+                                      ({cust.businessName})
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  className={`text-[10px] mt-0.5 truncate ${
+                                    isSelected ? 'text-lime-200' : 'text-stone-400'
+                                  }`}
+                                >
+                                  {cust.phone} • {cust.city || cust.address || 'Pakistan'}
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span
+                                  className={`text-[11px] font-bold block ${
+                                    isSelected
+                                      ? 'text-white'
+                                      : cust.currentBalance > 0
+                                      ? 'text-amber-600'
+                                      : 'text-emerald-600'
+                                  }`}
+                                >
+                                  {formatPKR(cust.currentBalance)}
+                                </span>
+                                <span
+                                  className={`text-[9px] block ${
+                                    isSelected ? 'text-lime-200' : 'text-stone-400'
+                                  }`}
+                                >
+                                  Balance
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Inline Customer Financial & Credit Note (Visual Reference for Cashier) */}
+        {selectedCustomer && (
+          <div className="bg-stone-50/90 rounded-xl p-2.5 border border-stone-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in duration-150">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+              {/* Outstanding Balance */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-stone-500 text-[11px]">Outstanding Due:</span>
+                <span
+                  className={`font-bold ${
+                    selectedCustomer.currentBalance > 0 ? 'text-amber-700' : 'text-emerald-700'
+                  }`}
+                >
+                  {formatPKR(selectedCustomer.currentBalance)}
+                </span>
+              </div>
+
+              <span className="text-stone-300 hidden sm:inline">•</span>
+
+              {/* Credit Limit */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-stone-500 text-[11px]">Credit Limit:</span>
+                <span className="font-bold text-stone-800">
+                  {formatPKR(selectedCustomer.creditLimit || 200000)}
+                </span>
+              </div>
+
+              <span className="text-stone-300 hidden sm:inline">•</span>
+
+              {/* Available Limit */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-stone-500 text-[11px]">Available Credit:</span>
+                <span className="font-semibold text-stone-700">
+                  {formatPKR(
+                    Math.max(0, (selectedCustomer.creditLimit || 200000) - selectedCustomer.currentBalance)
                   )}
-                </div>
+                </span>
+              </div>
+            </div>
+
+            {/* Credit Standing Badge */}
+            <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+              {selectedCustomer.currentBalance > (selectedCustomer.creditLimit || 200000) ? (
+                <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-bold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 text-rose-600" />
+                  Credit Limit Exceeded
+                </span>
+              ) : selectedCustomer.currentBalance > 0 ? (
+                <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3 text-amber-600" />
+                  Balance Pending
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3 text-emerald-600" />
+                  Clear Standing
+                </span>
               )}
             </div>
           </div>
@@ -1240,7 +1342,6 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
             {filteredProducts.map((p) => {
               const inCartItem = cart.find((item) => item.product.id === p.id)
               const isOut = p.quantity <= 0
-              const isWholesaleActive = buyerCategory === 'Retailer Shop' || buyerCategory === 'Wholesaler'
               const currentPrice = isWholesaleActive ? p.wholesalePrice : p.retailPrice
 
               return (
@@ -1571,11 +1672,11 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 <div>
                   <span className="text-stone-500 block text-[10px]">Buyer / Account:</span>
                   <strong className="text-xs font-bold text-stone-900">
-                    {buyerCategory === 'Customer'
-                      ? walkinCustomerName
-                      : selectedCustomer?.name || 'Commercial Client'}
+                    {isWalkinActive
+                      ? walkinCustomerName || 'Walk-in Customer'
+                      : selectedCustomer?.name || `${selectedCategoryName} Client`}
                   </strong>
-                  <span className="text-[10px] text-stone-400 block">{buyerCategory}</span>
+                  <span className="text-[10px] text-stone-400 block">{selectedCategoryName}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-stone-500 block text-[10px]">Total Payable:</span>
@@ -2085,7 +2186,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                     <div>
                       <strong className="text-stone-900 block">{d.customerName}</strong>
                       <span className="text-[10px] text-stone-400">
-                        {d.buyerCategory} • {d.cart.length} items • {d.savedAt}
+                        {d.selectedCategoryName || 'Customer'} • {d.cart.length} items • {d.savedAt}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">

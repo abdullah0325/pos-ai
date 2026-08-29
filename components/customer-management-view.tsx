@@ -509,16 +509,16 @@ export default function CustomerManagementView({
 
   return (
     <div className="space-y-6" id="customer-management-root">
-      {/* Top Module Navigation Tabs: Customer Management vs Phone Book */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-stone-200 shadow-xs mb-2">
+      {/* Single Clean Header Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs" id="customer-management-header">
         <div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-              <Users className="w-3.5 h-3.5" /> Customer & Directory Hub
+              <Users className="w-3.5 h-3.5" /> Customer Management
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
-            {mainTab === 'phonebook' ? 'Phone Book Directory' : 'Customer Management'}
+            {mainTab === 'phonebook' ? 'Phone Book Directory' : 'Customer Accounts'}
           </h1>
           <p className="text-xs text-stone-500 mt-0.5">
             {mainTab === 'phonebook'
@@ -527,71 +527,46 @@ export default function CustomerManagementView({
           </p>
         </div>
 
-        {/* Top-Level Tabs Switcher */}
-        <div className="flex items-center gap-1 p-1 bg-stone-100/90 rounded-xl border border-stone-200 self-start sm:self-center shadow-2xs">
-          <button
-            onClick={() => {
-              setMainTab('customers')
-            }}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              mainTab === 'customers'
-                ? 'bg-white text-stone-900 shadow-xs'
-                : 'text-stone-600 hover:text-stone-900'
-            }`}
-            id="tab-customer-accounts"
-          >
-            <Users className={`w-4 h-4 ${mainTab === 'customers' ? 'text-emerald-600' : 'text-stone-400'}`} />
-            <span>Customers & Accounts</span>
-            <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">
-              {db.customers.length}
-            </span>
-          </button>
+        {/* Top-Level Tabs Switcher & Action Buttons in One Unified Row */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-1 p-1 bg-stone-100/90 rounded-xl border border-stone-200 shadow-2xs">
+            <button
+              onClick={() => setMainTab('customers')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                mainTab === 'customers'
+                  ? 'bg-white text-stone-900 shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+              id="tab-customer-accounts"
+            >
+              <Users className={`w-3.5 h-3.5 ${mainTab === 'customers' ? 'text-emerald-600' : 'text-stone-400'}`} />
+              <span>Customers & Accounts</span>
+              <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">
+                {db.customers.length}
+              </span>
+            </button>
 
-          <button
-            onClick={() => {
-              setMainTab('phonebook')
-              setSelectedCustomerId(null)
-            }}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              mainTab === 'phonebook'
-                ? 'bg-white text-stone-900 shadow-xs'
-                : 'text-stone-600 hover:text-stone-900'
-            }`}
-            id="tab-phonebook-directory"
-          >
-            <Phone className={`w-4 h-4 ${mainTab === 'phonebook' ? 'text-purple-600' : 'text-stone-400'}`} />
-            <span>Phone Book</span>
-            <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-purple-100 text-purple-800">
-              {db.phonebookContacts?.length || (db.customers.length + db.suppliers.length)}
-            </span>
-          </button>
-        </div>
-      </div>
+            <button
+              onClick={() => {
+                setMainTab('phonebook')
+                setSelectedCustomerId(null)
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                mainTab === 'phonebook'
+                  ? 'bg-white text-stone-900 shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+              id="tab-phonebook-directory"
+            >
+              <Phone className={`w-3.5 h-3.5 ${mainTab === 'phonebook' ? 'text-purple-600' : 'text-stone-400'}`} />
+              <span>Phone Book</span>
+              <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-purple-100 text-purple-800">
+                {db.phonebookContacts?.length || (db.customers.length + db.suppliers.length)}
+              </span>
+            </button>
+          </div>
 
-      {mainTab === 'phonebook' ? (
-        <div id="customer-phonebook-tab-wrapper">
-          <PhonebookView db={db} onSaveDatabase={onSaveDatabase} />
-        </div>
-      ) : (
-        <>
-          {/* ========================================================================= */}
-          {/* 1. LIST VIEW (When no customer profile is open) */}
-          {/* ========================================================================= */}
-          {!selectedCustomer && (
-        <>
-          {/* Header Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                  <Users className="w-3.5 h-3.5" /> Customer Accounts
-                </span>
-              </div>
-              <h1 className="text-2xl font-black text-stone-900 mt-1">Customer Management</h1>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Maintain directory of Retailers, Wholesalers, Distributors, Sales Men, and Walk-in customers with live ledgers & dues.
-              </p>
-            </div>
+          {mainTab === 'customers' && !selectedCustomer && (
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 className="button secondary text-xs"
@@ -607,8 +582,21 @@ export default function CustomerManagementView({
                 <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add New Customer
               </button>
             </div>
-          </div>
+          )}
+        </div>
+      </div>
 
+      {mainTab === 'phonebook' ? (
+        <div id="customer-phonebook-tab-wrapper">
+          <PhonebookView db={db} onSaveDatabase={onSaveDatabase} />
+        </div>
+      ) : (
+        <>
+          {/* ========================================================================= */}
+          {/* 1. LIST VIEW (When no customer profile is open) */}
+          {/* ========================================================================= */}
+          {!selectedCustomer && (
+        <>
           {/* Top Stats Bar — Consistent Stat Grid & Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5" id="customer-kpi-stats">
             <div className="stat-card relative" id="kpi-total-customers">
@@ -765,7 +753,7 @@ export default function CustomerManagementView({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4.5" id="customers-card-grid">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4.5" id="customers-card-grid">
               {filteredCustomers.map((c) => {
                 const cat = getCustomerCategoryInfo(c)
                 const isOverLimit = c.creditLimit > 0 && c.currentBalance > c.creditLimit
@@ -814,118 +802,133 @@ export default function CustomerManagementView({
                 const waUrl = waRaw ? `https://wa.me/${waFormatted}` : undefined
                 const waDisplay = c.altPhone || c.phone
 
+                const creditPercent = c.creditLimit > 0 ? Math.min(100, Math.round((c.currentBalance / c.creditLimit) * 100)) : 0
+
                 return (
                   <div
                     key={c.id}
-                    className="group bg-white rounded-2xl p-4 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative border border-stone-200/90 hover:border-stone-300"
+                    className="group bg-white rounded-2xl p-4.5 sm:p-5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative border border-stone-200 hover:border-stone-300"
                     id={`customer-card-${c.id}`}
                   >
-                    <div>
-                      {/* Top Row: Initials Avatar Circle & Category Badge */}
-                      <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-3.5">
+                      {/* Top Row: Avatar + Customer Name + Category Badge + ID */}
+                      <div className="flex items-start gap-3">
                         <div
-                          className={`w-10 h-10 rounded-full font-bold text-xs flex items-center justify-center shadow-2xs border shrink-0 transition-transform group-hover:scale-105 ${catAvatarClass}`}
+                          className={`w-11 h-11 rounded-xl font-bold text-xs flex items-center justify-center shadow-2xs border shrink-0 transition-transform group-hover:scale-105 ${catAvatarClass}`}
                           title={`${c.name} (${cat.name})`}
                         >
                           {initials}
                         </div>
 
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <h3
+                              className="font-bold text-stone-900 text-sm leading-snug group-hover:text-emerald-700 transition-colors truncate"
+                              title={c.name}
+                            >
+                              {c.name}
+                            </h3>
+                            {c.customerId && (
+                              <span className="text-[9.5px] font-mono font-bold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0 border border-stone-200/60">
+                                {c.customerId}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs shrink-0 ${catBadgeClass}`}
+                            >
+                              {catIcon}
+                              <span>{cat.name}</span>
+                            </span>
+                            {c.businessName && (
+                              <span className="text-[11px] text-stone-500 font-medium truncate" title={c.businessName}>
+                                {c.businessName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Location Row */}
+                      <div className="flex items-center gap-1.5 text-stone-500 text-xs">
+                        <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                         <span
-                          className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-md border shadow-2xs shrink-0 ${catBadgeClass}`}
+                          className="truncate text-[11.5px]"
+                          title={`${c.city ? c.city + ' · ' : ''}${c.address || 'Address not specified'}`}
                         >
-                          {catIcon}
-                          <span>{cat.name}</span>
+                          {c.city && <strong className="text-stone-700">{c.city} · </strong>}
+                          {c.address || 'Address not specified'}
                         </span>
                       </div>
 
-                      {/* Middle Section: Customer Name, Business Subtitle, City & Address */}
-                      <div className="mt-3">
-                        <div className="flex items-center justify-between gap-1.5">
-                          <h3
-                            className="font-bold text-stone-900 text-[13.5px] leading-snug group-hover:text-emerald-700 transition-colors truncate"
-                            title={c.name}
-                          >
-                            {c.name}
-                          </h3>
-                          {c.customerId && (
-                            <span className="text-[9.5px] font-mono font-semibold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
-                              {c.customerId}
+                      {/* Financial & Dues Box — Full Width & Structured */}
+                      <div
+                        className={`rounded-xl p-3 border transition-colors ${
+                          c.currentBalance > 0
+                            ? 'bg-rose-50/50 border-rose-200/80 text-rose-950'
+                            : 'bg-stone-50/90 border-stone-200/80 text-stone-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                            {c.currentBalance > 0 ? 'Outstanding Due' : 'Balance Settled'}
+                          </span>
+                          {isOverLimit ? (
+                            <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> Over Limit
+                            </span>
+                          ) : c.currentBalance > 0 ? (
+                            <span className="text-[10px] text-amber-800 bg-amber-100/90 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold">
+                              Receivable
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-emerald-800 bg-emerald-100/90 border border-emerald-200 px-1.5 py-0.5 rounded-md font-bold">
+                              Clear
                             </span>
                           )}
                         </div>
 
-                        <p
-                          className="text-[11.5px] text-stone-500 font-medium truncate mt-0.5"
-                          title={c.businessName || `${cat.name} Account`}
-                        >
-                          {c.businessName || `${cat.name} Account`}
-                        </p>
-
-                        <div className="flex items-center gap-1 text-stone-500 mt-1.5">
-                          <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
-                          <span
-                            className="truncate text-[11px]"
-                            title={`${c.city ? c.city + ' · ' : ''}${c.address || 'Address not specified'}`}
-                          >
-                            {c.city && <strong className="text-stone-700">{c.city} · </strong>}
-                            {c.address || 'Address not set'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Balance Row (Positioned Above Contact Number) */}
-                      <div
-                        className={`rounded-xl p-2.5 mt-3 border flex items-center justify-between transition-colors ${
-                          c.currentBalance > 0
-                            ? 'bg-amber-50/60 border-amber-200/70 text-amber-900'
-                            : 'bg-stone-50/80 border-stone-200/70 text-stone-800'
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[9.5px] font-bold uppercase tracking-wider block text-stone-500">
-                              {c.currentBalance > 0 ? 'Outstanding Due' : 'Balance Settled'}
-                            </span>
-                            {c.creditLimit > 0 && (
-                              <CreditLimitBadge currentBalance={c.currentBalance} creditLimit={c.creditLimit} />
-                            )}
-                          </div>
-                          <span className="text-[10px] text-stone-400 font-medium block mt-0.5">
-                            {c.creditLimit > 0 ? `Limit: ${formatPKR(c.creditLimit)}` : `Open: ${formatPKR(c.openingBalance)}`}
-                          </span>
-                        </div>
-                        <div className="text-right">
+                        <div className="mt-1">
                           <strong
-                            className={`text-[13px] font-bold block ${
-                              c.currentBalance > 0 ? 'text-rose-700 font-extrabold' : 'text-emerald-700'
+                            className={`text-base sm:text-lg font-black block tracking-tight ${
+                              c.currentBalance > 0 ? 'text-rose-700' : 'text-emerald-700'
                             }`}
                           >
                             {formatPKR(c.currentBalance)}
                           </strong>
-                          {isOverLimit && (
-                            <span className="text-[9px] text-rose-600 font-bold flex items-center justify-end gap-0.5">
-                              <AlertCircle className="w-2.5 h-2.5" /> Over Limit
+                        </div>
+
+                        <div className="mt-1.5 pt-1.5 border-t border-stone-200/60 flex items-center justify-between text-[11px] text-stone-500">
+                          <span>
+                            {c.creditLimit > 0 ? (
+                              <span>Limit: <strong className="text-stone-700">{formatPKR(c.creditLimit)}</strong></span>
+                            ) : (
+                              <span>Opening: <strong className="text-stone-700">{formatPKR(c.openingBalance)}</strong></span>
+                            )}
+                          </span>
+                          {c.creditLimit > 0 && (
+                            <span className="font-semibold text-stone-600">
+                              {creditPercent}% used
                             </span>
-                          )}
-                          {c.currentBalance <= 0 && (
-                            <span className="text-[9px] text-emerald-700 font-medium">Clear</span>
                           )}
                         </div>
                       </div>
 
-                      {/* Contact Row (Positioned Below Balance with Compact Buttons) */}
-                      <div className="flex items-center gap-1.5 mt-2.5">
+                      {/* Contact Row */}
+                      <div className="flex items-center gap-2">
                         <a
                           href={telUrl}
                           onClick={(e) => e.stopPropagation()}
-                          className={`flex-1 inline-flex items-center gap-1.5 text-[11px] font-mono py-1 px-2 rounded-lg border transition-all truncate ${
+                          className={`flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-mono py-1.5 px-2.5 rounded-xl border transition-all truncate ${
                             c.phone
-                              ? 'bg-stone-50/80 text-stone-700 border-stone-200/80 hover:bg-stone-100 hover:text-stone-900 active:scale-98'
+                              ? 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100 hover:text-stone-900 active:scale-98'
                               : 'bg-stone-50/40 text-stone-300 border-stone-100 pointer-events-none'
                           }`}
                           title={c.phone ? `Call ${c.name} (${c.phone})` : 'No phone number'}
                         >
-                          <Phone className="w-2.5 h-2.5 text-stone-400 shrink-0" />
+                          <Phone className="w-3 h-3 text-stone-500 shrink-0" />
                           <span className="truncate">{c.phone || 'No phone'}</span>
                         </a>
 
@@ -934,48 +937,48 @@ export default function CustomerManagementView({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className={`inline-flex items-center gap-1 text-[10.5px] font-medium py-1 px-2 rounded-lg border transition-all shrink-0 ${
+                          className={`inline-flex items-center justify-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-xl border transition-all shrink-0 ${
                             waUrl
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200/80 hover:bg-emerald-100 active:scale-98'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 active:scale-98'
                               : 'bg-stone-50/40 text-stone-300 border-stone-100 pointer-events-none'
                           }`}
                           title={waDisplay ? `WhatsApp ${c.name} (${waDisplay})` : 'No WhatsApp number'}
                         >
-                          <MessageCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           <span>WhatsApp</span>
                         </a>
                       </div>
                     </div>
 
-                    {/* Bottom Action Row (Compact & Proportional) */}
+                    {/* Bottom Action Row */}
                     <div
-                      className="pt-2 mt-3 border-t border-stone-100 flex items-center justify-between gap-1.5"
+                      className="pt-3 mt-3.5 border-t border-stone-100 flex items-center justify-between gap-2"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
                         type="button"
-                        className="flex-1 py-1 px-2.5 text-[11px] font-semibold text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 rounded-lg border border-emerald-200/80 transition-colors flex items-center justify-center gap-1 shadow-2xs"
+                        className="flex-1 py-1.5 px-3 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-xl border border-emerald-200 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
                         onClick={() => setSelectedCustomerId(c.id)}
                         title="Open Customer Profile (Ledger, Transactions, Invoices)"
                       >
-                        <Eye className="w-3 h-3 text-emerald-700" />
+                        <Eye className="w-3.5 h-3.5 text-emerald-700" />
                         <span>View Profile</span>
                       </button>
                       <button
                         type="button"
-                        className="p-1 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-lg border border-stone-200/80 transition-colors"
+                        className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-xl border border-stone-200 transition-colors"
                         title="Edit Customer Details"
                         onClick={() => setEditingCustomer(c)}
                       >
-                        <Edit className="w-3 h-3" />
+                        <Edit className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="button"
-                        className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-stone-200/80 hover:border-rose-200 transition-colors"
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl border border-stone-200 hover:border-rose-200 transition-colors"
                         title="Delete Customer Profile"
                         onClick={() => requestDeleteCustomer(c)}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

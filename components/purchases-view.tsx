@@ -63,6 +63,7 @@ interface PurchasesViewProps {
   db: AppDatabase
   onSaveDatabase: (updated: AppDatabase) => void
   onNavigate?: (module: string, subTab?: string) => void
+  onNavigateToSupplier?: (supplierId?: string) => void
 }
 
 export const PURCHASE_CATEGORY_COLORS = [
@@ -1181,6 +1182,8 @@ export default function PurchasesView({
               const newSup: SupplierItem = {
                 id: savedPurchase.supplierId || `sup-${Date.now()}`,
                 name: savedPurchase.supplierName,
+                contactPerson: savedPurchase.supplierName,
+                address: 'Main Market',
                 phone: savedPurchase.supplierPhone || '',
                 category: savedPurchase.category || 'Raw Material',
                 city: 'Lahore',
@@ -1648,7 +1651,7 @@ function PurchaseOrderModal({
   }, [items])
 
   const [paymentStatusType, setPaymentStatusType] = useState<'Paid' | 'Pending' | 'Partial'>(
-    editingPurchase?.status || 'Paid'
+    editingPurchase ? (editingPurchase.status === 'Unpaid' ? 'Pending' : (editingPurchase.status as 'Paid' | 'Partial')) : 'Paid'
   )
   const [amountPaid, setAmountPaid] = useState<number>(
     editingPurchase ? editingPurchase.amountPaid : grandTotal
