@@ -31,13 +31,18 @@ import {
   Sparkles,
   TrendingDown,
   ChevronDown,
+  FolderTree,
+  Tag,
+  Palette,
 } from 'lucide-react'
 import {
   formatPKR,
   formatDate,
+  defaultExpenseCategories,
   type AppDatabase,
   type ExpenseItem,
   type ExpenseCategory,
+  type CategoryItem,
   type EmployeeItem,
   type SalaryPaymentRecord,
   type LoanAdvanceRecord,
@@ -51,18 +56,81 @@ interface ExpensesViewProps {
   onNavigate?: (module: string, subTab?: string) => void
 }
 
+export const EXPENSE_CATEGORY_COLORS = [
+  { id: 'amber', label: 'Amber / Orange (Utilities & Electricity)', class: 'bg-amber-100 text-amber-800 border-amber-200', dot: 'bg-amber-500' },
+  { id: 'orange', label: 'Orange (Fuel & Transport)', class: 'bg-orange-100 text-orange-800 border-orange-200', dot: 'bg-orange-500' },
+  { id: 'rose', label: 'Rose / Red (Rent & Facility)', class: 'bg-rose-100 text-rose-800 border-rose-200', dot: 'bg-rose-500' },
+  { id: 'teal', label: 'Teal (Maintenance & Repairs)', class: 'bg-teal-100 text-teal-800 border-teal-200', dot: 'bg-teal-500' },
+  { id: 'sky', label: 'Sky / Cyan (Logistics & Freight)', class: 'bg-sky-100 text-sky-800 border-sky-200', dot: 'bg-sky-500' },
+  { id: 'stone', label: 'Stone / Gray (Admin & Misc)', class: 'bg-stone-100 text-stone-800 border-stone-200', dot: 'bg-stone-500' },
+  { id: 'emerald', label: 'Emerald / Green (Salaries & Payroll)', class: 'bg-emerald-100 text-emerald-800 border-emerald-200', dot: 'bg-emerald-500' },
+  { id: 'purple', label: 'Purple (Loans & Advances)', class: 'bg-purple-100 text-purple-800 border-purple-200', dot: 'bg-purple-500' },
+  { id: 'blue', label: 'Blue (Marketing & Promotion)', class: 'bg-blue-100 text-blue-800 border-blue-200', dot: 'bg-blue-500' },
+  { id: 'indigo', label: 'Indigo (Legal & Compliance)', class: 'bg-indigo-100 text-indigo-800 border-indigo-200', dot: 'bg-indigo-500' },
+]
+
+export function getExpenseCategoryBadgeClass(categoryName: string, expenseCategories?: CategoryItem[]) {
+  const cat = (categoryName || '').trim().toLowerCase()
+  const matched = expenseCategories?.find((c) => c.name.toLowerCase() === cat)
+  const color = matched?.color?.toLowerCase()
+
+  if (color === 'amber') return 'bg-amber-100 text-amber-800 border-amber-200'
+  if (color === 'orange') return 'bg-orange-100 text-orange-800 border-orange-200'
+  if (color === 'rose' || color === 'red') return 'bg-rose-100 text-rose-800 border-rose-200'
+  if (color === 'teal') return 'bg-teal-100 text-teal-800 border-teal-200'
+  if (color === 'sky' || color === 'cyan') return 'bg-sky-100 text-sky-800 border-sky-200'
+  if (color === 'stone' || color === 'gray') return 'bg-stone-100 text-stone-800 border-stone-200'
+  if (color === 'emerald' || color === 'green') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+  if (color === 'purple') return 'bg-purple-100 text-purple-800 border-purple-200'
+  if (color === 'blue') return 'bg-blue-100 text-blue-800 border-blue-200'
+  if (color === 'indigo') return 'bg-indigo-100 text-indigo-800 border-indigo-200'
+
+  // Default color fallbacks based on name
+  if (cat.includes('salar') || cat.includes('wage')) return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+  if (cat.includes('loan') || cat.includes('advance')) return 'bg-purple-100 text-purple-800 border-purple-200'
+  if (cat.includes('utilit') || cat.includes('elect') || cat.includes('wapda') || cat.includes('gas') || cat.includes('bill')) {
+    return 'bg-amber-100 text-amber-800 border-amber-200'
+  }
+  if (cat.includes('rent')) return 'bg-rose-100 text-rose-800 border-rose-200'
+  if (cat.includes('maint') || cat.includes('repair')) return 'bg-teal-100 text-teal-800 border-teal-200'
+  if (cat.includes('fuel') || cat.includes('petrol') || cat.includes('diesel') || cat.includes('transport') || cat.includes('freight')) {
+    return 'bg-orange-100 text-orange-800 border-orange-200'
+  }
+  if (cat.includes('market') || cat.includes('ad')) return 'bg-blue-100 text-blue-800 border-blue-200'
+
+  return 'bg-stone-100 text-stone-700 border-stone-200'
+}
+
+export function getExpenseCategoryDotClass(categoryName: string, expenseCategories?: CategoryItem[]) {
+  const cat = (categoryName || '').trim().toLowerCase()
+  const matched = expenseCategories?.find((c) => c.name.toLowerCase() === cat)
+  const color = matched?.color?.toLowerCase()
+
+  const found = EXPENSE_CATEGORY_COLORS.find((c) => c.id === color)
+  if (found) return found.dot
+
+  if (cat.includes('salar') || cat.includes('wage')) return 'bg-emerald-500'
+  if (cat.includes('loan') || cat.includes('advance')) return 'bg-purple-500'
+  if (cat.includes('utilit') || cat.includes('elect') || cat.includes('wapda') || cat.includes('gas') || cat.includes('bill')) return 'bg-amber-500'
+  if (cat.includes('rent')) return 'bg-rose-500'
+  if (cat.includes('maint') || cat.includes('repair')) return 'bg-teal-500'
+  if (cat.includes('fuel') || cat.includes('petrol') || cat.includes('diesel') || cat.includes('transport')) return 'bg-orange-500'
+  if (cat.includes('market') || cat.includes('ad')) return 'bg-blue-500'
+
+  return 'bg-stone-500'
+}
+
 const DEFAULT_CATEGORIES: ExpenseCategory[] = [
+  'Factory Utilities',
+  'Fuel/Diesel',
   'Rent',
-  'Bills/Utilities',
+  'Maintenance',
+  'Transport/Freight',
+  'Office Expenses',
   'Salaries',
-  'Daily/Misc',
   'Loan/Advance to employee',
-  'Machine Maintenance',
-  'Fuel & Transport',
-  'Packaging & Consumables',
-  'Office & Admin',
   'Marketing',
-  'Other',
+  'Daily/Misc',
 ]
 
 export default function ExpensesView({ db, onSaveDatabase, onNavigate }: ExpensesViewProps) {
@@ -75,6 +143,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
   const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null)
   const [deletingExpense, setDeletingExpense] = useState<ExpenseItem | null>(null)
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null)
@@ -104,14 +173,22 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
   const receiptInputRef = useRef<HTMLInputElement>(null)
   const screenshotInputRef = useRef<HTMLInputElement>(null)
 
+  // Active Category Items list
+  const currentCategories: CategoryItem[] = useMemo(() => {
+    return db.expenseCategories && db.expenseCategories.length > 0
+      ? db.expenseCategories
+      : defaultExpenseCategories
+  }, [db.expenseCategories])
+
   // Extract unique categories (defaults + existing in db)
   const allCategories = useMemo(() => {
-    const set = new Set<string>(DEFAULT_CATEGORIES)
+    const set = new Set<string>()
+    currentCategories.forEach((c) => set.add(c.name))
     db.expenses.forEach((e) => {
       if (e.category) set.add(e.category)
     })
     return Array.from(set)
-  }, [db.expenses])
+  }, [currentCategories, db.expenses])
 
   // Selected Employee object
   const selectedEmployee = useMemo(() => {
@@ -540,6 +617,14 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsManagingCategories(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
+            title="Manage expense category names and colors"
+          >
+            <FolderTree className="w-4 h-4 text-stone-500" />
+            Manage Categories
+          </button>
+          <button
             onClick={handleExportCSV}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
             title="Export filtered list to Excel/CSV"
@@ -764,17 +849,8 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
                     {/* Category */}
                     <td className="py-3 px-4">
-                      <span className={`inline-block px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
-                        exp.category === 'Salaries'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : exp.category.includes('Loan')
-                          ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                          : exp.category === 'Factory Electricity' || exp.category === 'Bills/Utilities'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : exp.category === 'Rent' || exp.category === 'Factory Rent'
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : 'bg-stone-100 text-stone-700'
-                      }`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${getExpenseCategoryBadgeClass(exp.category, currentCategories)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getExpenseCategoryDotClass(exp.category, currentCategories)}`} />
                         {exp.category}
                       </span>
                     </td>
@@ -923,9 +999,18 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
               {/* Category Dropdown */}
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Expense Category / Type <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-stone-700">
+                    Expense Category / Type <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsManagingCategories(true)}
+                    className="text-[11px] font-semibold text-lime-700 hover:text-lime-800 hover:underline inline-flex items-center gap-1"
+                  >
+                    <FolderTree className="w-3 h-3" /> Manage Categories
+                  </button>
+                </div>
                 <select
                   value={expenseCategory}
                   onChange={(e) => {
@@ -1295,6 +1380,412 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
           </div>
         </div>
       )}
+
+      {/* MANAGE EXPENSE CATEGORIES MODAL */}
+      {isManagingCategories && (
+        <ManageExpenseCategoriesModal
+          categories={currentCategories}
+          expenses={db.expenses}
+          onClose={() => setIsManagingCategories(false)}
+          onSave={(updatedCats) => {
+            onSaveDatabase({
+              ...db,
+              expenseCategories: updatedCats,
+            })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/* =========================================================================
+   MANAGE EXPENSE CATEGORIES MODAL COMPONENT
+========================================================================= */
+interface ManageExpenseCategoriesModalProps {
+  categories: CategoryItem[]
+  expenses: ExpenseItem[]
+  onClose: () => void
+  onSave: (updated: CategoryItem[]) => void
+}
+
+function ManageExpenseCategoriesModal({
+  categories,
+  expenses,
+  onClose,
+  onSave,
+}: ManageExpenseCategoriesModalProps) {
+  const [catList, setCatList] = useState<CategoryItem[]>(() =>
+    categories.length > 0 ? [...categories] : [...defaultExpenseCategories]
+  )
+
+  // New Category Form State
+  const [newName, setNewName] = useState('')
+  const [newColor, setNewColor] = useState('amber')
+  const [newDescription, setNewDescription] = useState('')
+  const [searchFilter, setSearchFilter] = useState('')
+
+  // Editing Category State
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editColor, setEditColor] = useState('amber')
+  const [editDescription, setEditDescription] = useState('')
+
+  // Count usage of each category in existing expense records
+  const categoryUsageCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    expenses.forEach((e) => {
+      if (e.category) {
+        counts[e.category.toLowerCase()] = (counts[e.category.toLowerCase()] || 0) + 1
+      }
+    })
+    return counts
+  }, [expenses])
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = newName.trim()
+    if (!trimmed) return
+
+    // Check duplicate
+    if (catList.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) {
+      alert(`A category named "${trimmed}" already exists.`)
+      return
+    }
+
+    const newCat: CategoryItem = {
+      id: `expcat-${Date.now()}`,
+      name: trimmed,
+      color: newColor,
+      description: newDescription.trim() || undefined,
+      createdAt: new Date().toISOString().slice(0, 10),
+    }
+
+    const updated = [...catList, newCat]
+    setCatList(updated)
+    onSave(updated)
+    setNewName('')
+    setNewDescription('')
+    setNewColor('amber')
+  }
+
+  const handleStartEdit = (cat: CategoryItem) => {
+    setEditingId(cat.id)
+    setEditName(cat.name)
+    setEditColor(cat.color || 'amber')
+    setEditDescription(cat.description || '')
+  }
+
+  const handleSaveEdit = (catId: string) => {
+    const trimmed = editName.trim()
+    if (!trimmed) return
+
+    if (
+      catList.some(
+        (c) => c.id !== catId && c.name.toLowerCase() === trimmed.toLowerCase()
+      )
+    ) {
+      alert(`Another category named "${trimmed}" already exists.`)
+      return
+    }
+
+    const updated = catList.map((c) => {
+      if (c.id === catId) {
+        return {
+          ...c,
+          name: trimmed,
+          color: editColor,
+          description: editDescription.trim() || undefined,
+        }
+      }
+      return c
+    })
+
+    setCatList(updated)
+    onSave(updated)
+    setEditingId(null)
+  }
+
+  const handleDeleteCategory = (catId: string, catName: string) => {
+    const usage = categoryUsageCounts[catName.toLowerCase()] || 0
+    let msg = `Are you sure you want to delete category "${catName}"?`
+    if (usage > 0) {
+      msg = `Category "${catName}" is currently used in ${usage} expense record(s).\n\nAre you sure you want to delete it from the categories list? Existing expense records will retain their text.`
+    }
+
+    if (confirm(msg)) {
+      const updated = catList.filter((c) => c.id !== catId)
+      setCatList(updated)
+      onSave(updated)
+    }
+  }
+
+  const handleResetDefaults = () => {
+    if (confirm('Reset all expense categories to factory defaults? Any custom added categories will be reset.')) {
+      setCatList([...defaultExpenseCategories])
+      onSave([...defaultExpenseCategories])
+    }
+  }
+
+  const filteredCategories = catList.filter((c) => {
+    if (!searchFilter.trim()) return true
+    const q = searchFilter.toLowerCase()
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.description && c.description.toLowerCase().includes(q))
+    )
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6">
+        {/* Header */}
+        <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-lime-500/20 text-lime-400 flex items-center justify-center">
+              <FolderTree className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base">Manage Expense Categories</h3>
+              <p className="text-xs text-stone-400">
+                Organize, color-code, and customize operational expense classifications
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-white p-1 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+          {/* Add New Category Box */}
+          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+            <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-lime-600" />
+              Add New Expense Category
+            </h4>
+            <form onSubmit={handleAddCategory} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Category Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. Generator Maintenance, Legal Fees"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Description (Optional)</label>
+                  <input
+                    type="text"
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    placeholder="Brief description of this expense type"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  />
+                </div>
+              </div>
+
+              {/* Color Selector */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1.5 flex items-center gap-1">
+                  <Palette className="w-3.5 h-3.5 text-stone-500" /> Badge Color Theme
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {EXPENSE_CATEGORY_COLORS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setNewColor(c.id)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
+                        newColor === c.id
+                          ? 'border-lime-600 bg-lime-50 text-lime-900 ring-2 ring-lime-500/20 shadow-xs'
+                          : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-100'
+                      }`}
+                    >
+                      <span className={`w-3 h-3 rounded-full ${c.dot}`} />
+                      <span className="capitalize">{c.id}</span>
+                      {newColor === c.id && <Check className="w-3 h-3 text-lime-700" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={!newName.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-lime-600 hover:bg-lime-700 disabled:opacity-50 text-white text-xs font-semibold shadow-xs transition"
+                >
+                  <Plus className="w-4 h-4" /> Save Category
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* List of Existing Categories */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider">
+                  Active Expense Categories ({catList.length})
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                  <input
+                    type="text"
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    placeholder="Search categories..."
+                    className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetDefaults}
+                  className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 hover:underline px-2 py-1"
+                >
+                  Reset Defaults
+                </button>
+              </div>
+            </div>
+
+            <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden bg-white">
+              {filteredCategories.length === 0 ? (
+                <div className="p-8 text-center text-stone-400 text-xs">No categories match your search.</div>
+              ) : (
+                filteredCategories.map((cat) => {
+                  const isEditing = editingId === cat.id
+                  const usage = categoryUsageCounts[cat.name.toLowerCase()] || 0
+
+                  if (isEditing) {
+                    return (
+                      <div key={cat.id} className="p-3.5 bg-lime-50/40 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-stone-700 mb-1">Category Name</label>
+                            <input
+                              type="text"
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-lime-300 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-stone-700 mb-1">Description</label>
+                            <input
+                              type="text"
+                              value={editDescription}
+                              onChange={(e) => setEditDescription(e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-lime-300 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-stone-700 mb-1">Badge Color</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {EXPENSE_CATEGORY_COLORS.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setEditColor(c.id)}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] border transition ${
+                                  editColor === c.id
+                                    ? 'border-lime-600 bg-lime-100 text-lime-900 font-bold'
+                                    : 'border-stone-200 bg-white text-stone-600'
+                                }`}
+                              >
+                                <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`} />
+                                <span className="capitalize">{c.id}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="px-3 py-1 text-xs rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEdit(cat.id)}
+                            className="px-3 py-1 text-xs rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-semibold shadow-xs"
+                          >
+                            Save Changes
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div key={cat.id} className="p-3 flex items-center justify-between gap-3 hover:bg-stone-50 transition">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 ${getExpenseCategoryBadgeClass(cat.name, catList)}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getExpenseCategoryDotClass(cat.name, catList)}`} />
+                          {cat.name}
+                        </span>
+                        <div className="min-w-0">
+                          {cat.description ? (
+                            <p className="text-xs text-stone-500 truncate">{cat.description}</p>
+                          ) : (
+                            <p className="text-xs text-stone-300 italic">No description</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded-md">
+                          {usage} voucher{usage === 1 ? '' : 's'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(cat)}
+                          className="p-1.5 rounded-lg text-stone-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                          title="Edit Category"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                          className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition"
+                          title="Delete Category"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-stone-50 p-4 border-t border-stone-200 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold rounded-xl bg-stone-900 hover:bg-stone-800 text-white shadow-xs transition"
+          >
+            Done & Close
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -37,7 +37,7 @@ interface NotificationsPopoverProps {
   onNavigate: (module: ModuleKey | string, subTab?: string) => void
 }
 
-export type AlertType = 'low_stock' | 'expiry' | 'payment_due' | 'salary'
+export type AlertType = 'low_stock' | 'expiry' | 'payment_due_sales' | 'payment_due_purchases' | 'salary'
 export type AlertSeverity = 'critical' | 'warning' | 'info'
 
 export interface SystemAlert {
@@ -201,19 +201,50 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
         }
       })
 
-    // 4. Invoices with Payments Due / Outstanding Customer Balances
+    // 4. Payments Due — Sales (Invoices with Outstanding Customer Balances & Due Dates)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
     db.invoices.forEach((inv) => {
       const due = inv.balanceDue ?? (inv.grandTotal - (inv.amountPaid || 0))
       if ((inv.status === 'Unpaid' || inv.status === 'Partial') && due > 0) {
+        let severity: AlertSeverity = 'warning'
+        let title = `Invoice Payment Due: #${inv.invoiceNumber}`
+        let subtitle = `${inv.customerName} has ${formatPKR(due)} unpaid balance`
+        let details = `Invoice Date: ${inv.date} | Total: ${formatPKR(inv.grandTotal)}`
+
+        if (inv.dueDate) {
+          const dueDateObj = new Date(inv.dueDate)
+          dueDateObj.setHours(0, 0, 0, 0)
+          const diffDays = Math.round((dueDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+          if (diffDays < 0) {
+            severity = 'critical'
+            title = `Overdue Invoice: #${inv.invoiceNumber}`
+            subtitle = `${inv.customerName} owes ${formatPKR(due)} (Overdue by ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'day' : 'days'})`
+            details = `Due Date: ${inv.dueDate} | Invoice Date: ${inv.date}`
+          } else if (diffDays <= 7) {
+            severity = 'warning'
+            title = `Payment Due Soon: #${inv.invoiceNumber}`
+            subtitle = `${inv.customerName} owes ${formatPKR(due)} (Due in ${diffDays === 0 ? 'Today' : `${diffDays} days`})`
+            details = `Due Date: ${inv.dueDate} | Total: ${formatPKR(inv.grandTotal)}`
+          } else {
+            severity = 'info'
+            title = `Upcoming Invoice Payment: #${inv.invoiceNumber}`
+            subtitle = `${inv.customerName} balance: ${formatPKR(due)}`
+            details = `Due Date: ${inv.dueDate} (in ${diffDays} days)`
+          }
+        }
+
         alerts.push({
           id: `inv-due-${inv.id}`,
-          type: 'payment_due',
-          severity: 'warning',
-          title: `Invoice Payment Due: ${inv.invoiceNumber}`,
-          subtitle: `${inv.customerName} has ${formatPKR(due)} unpaid balance`,
-          details: `Invoice Date: ${inv.date} | Grand Total: ${formatPKR(inv.grandTotal)}`,
+          type: 'payment_due_sales',
+          severity,
+          title,
+          subtitle,
+          details,
           value: formatPKR(due),
-          date: inv.date,
+          date: inv.dueDate || inv.date,
           targetModule: 'sales',
           targetSubTab: 'invoices',
           entityId: inv.id,
@@ -221,12 +252,12 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
       }
     })
 
-    // Customers exceeding credit limit
+    // Customers exceeding credit limit (Under Sales Due)
     db.customers.forEach((c) => {
       if (c.creditLimit > 0 && c.currentBalance > c.creditLimit) {
         alerts.push({
           id: `cust-limit-${c.id}`,
-          type: 'payment_due',
+          type: 'payment_due_sales',
           severity: 'critical',
           title: `Credit Limit Exceeded: ${c.name}`,
           subtitle: `Balance ${formatPKR(c.currentBalance)} exceeds credit limit of ${formatPKR(c.creditLimit)}`,
@@ -238,17 +269,45 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
       }
     })
 
-    // 5. Purchase Orders / Supplier Payables Due
+    // 5. Payments Due — Purchases (Supplier Payables & PO Due Dates)
     db.purchases.forEach((po) => {
       const due = po.balanceDue ?? (po.grandTotal - (po.amountPaid || 0))
       if ((po.status === 'Unpaid' || po.status === 'Partial') && due > 0) {
+        let severity: AlertSeverity = 'warning'
+        let title = `Supplier Bill Due: ${po.poNumber || po.purchaseNumber || 'Purchase Bill'}`
+        let subtitle = `Payable to ${po.supplierName}: ${formatPKR(due)}`
+        let details = `PO Date: ${po.date} | Grand Total: ${formatPKR(po.grandTotal)}`
+
+        if (po.dueDate) {
+          const dueDateObj = new Date(po.dueDate)
+          dueDateObj.setHours(0, 0, 0, 0)
+          const diffDays = Math.round((dueDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+          if (diffDays < 0) {
+            severity = 'critical'
+            title = `Supplier Bill Overdue: ${po.poNumber || 'PO'}`
+            subtitle = `Payable to ${po.supplierName}: ${formatPKR(due)} (Overdue by ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'day' : 'days'})`
+            details = `Due Date: ${po.dueDate} | PO Date: ${po.date}`
+          } else if (diffDays <= 7) {
+            severity = 'warning'
+            title = `Supplier Bill Due Soon: ${po.poNumber || 'PO'}`
+            subtitle = `Payable to ${po.supplierName}: ${formatPKR(due)} (Due in ${diffDays === 0 ? 'Today' : `${diffDays} days`})`
+            details = `Due Date: ${po.dueDate} | Total: ${formatPKR(po.grandTotal)}`
+          } else {
+            severity = 'info'
+            title = `Upcoming Supplier Bill: ${po.poNumber || 'PO'}`
+            subtitle = `Payable to ${po.supplierName}: ${formatPKR(due)}`
+            details = `Due Date: ${po.dueDate} (in ${diffDays} days)`
+          }
+        }
+
         alerts.push({
           id: `po-due-${po.id}`,
-          type: 'payment_due',
-          severity: 'warning',
-          title: `Supplier Bill Due: ${po.poNumber || po.purchaseNumber || 'Purchase Bill'}`,
-          subtitle: `Payable to ${po.supplierName}: ${formatPKR(due)}`,
-          details: `PO Date: ${po.date} ${po.dueDate ? `| Due Date: ${po.dueDate}` : ''}`,
+          type: 'payment_due_purchases',
+          severity,
+          title,
+          subtitle,
+          details,
           value: formatPKR(due),
           date: po.dueDate || po.date,
           targetModule: 'purchase',
@@ -294,14 +353,16 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
   const counts = useMemo(() => {
     const lowStock = activeAlerts.filter((a) => a.type === 'low_stock').length
     const expiry = activeAlerts.filter((a) => a.type === 'expiry').length
-    const payments = activeAlerts.filter((a) => a.type === 'payment_due').length
+    const salesDue = activeAlerts.filter((a) => a.type === 'payment_due_sales').length
+    const purchasesDue = activeAlerts.filter((a) => a.type === 'payment_due_purchases').length
     const salaries = activeAlerts.filter((a) => a.type === 'salary').length
     const critical = activeAlerts.filter((a) => a.severity === 'critical').length
     return {
       all: activeAlerts.length,
       lowStock,
       expiry,
-      payments,
+      salesDue,
+      purchasesDue,
       salaries,
       critical,
     }
@@ -428,15 +489,28 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
 
             <button
               type="button"
-              onClick={() => setActiveFilter('payment_due')}
+              onClick={() => setActiveFilter('payment_due_sales')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
-                activeFilter === 'payment_due'
+                activeFilter === 'payment_due_sales'
                   ? 'bg-blue-700 text-white shadow-2xs'
                   : 'bg-white text-blue-800 hover:bg-blue-50 border border-blue-200/80'
               }`}
             >
+              <FileText className="w-3 h-3" />
+              <span>Sales Due ({counts.salesDue})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveFilter('payment_due_purchases')}
+              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
+                activeFilter === 'payment_due_purchases'
+                  ? 'bg-purple-700 text-white shadow-2xs'
+                  : 'bg-white text-purple-800 hover:bg-purple-50 border border-purple-200/80'
+              }`}
+            >
               <DollarSign className="w-3 h-3" />
-              <span>Payments Due ({counts.payments})</span>
+              <span>Purchases Due ({counts.purchasesDue})</span>
             </button>
 
             <button
@@ -444,8 +518,8 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
               onClick={() => setActiveFilter('salary')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
                 activeFilter === 'salary'
-                  ? 'bg-purple-700 text-white shadow-2xs'
-                  : 'bg-white text-purple-800 hover:bg-purple-50 border border-purple-200/80'
+                  ? 'bg-emerald-700 text-white shadow-2xs'
+                  : 'bg-white text-emerald-800 hover:bg-emerald-50 border border-emerald-200/80'
               }`}
             >
               <Users className="w-3 h-3" />
@@ -477,7 +551,7 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
                 <p className="text-xs text-stone-500 max-w-[260px] mx-auto mt-1">
                   {activeFilter === 'all'
                     ? 'No pending critical alerts, low stock warnings, or overdue payments.'
-                    : `No active alerts under the "${activeFilter.replace('_', ' ')}" category.`}
+                    : `No active alerts under the "${activeFilter.replace(/_/g, ' ')}" category.`}
                 </p>
               </div>
             ) : (
@@ -491,14 +565,38 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
                   icon = alert.severity === 'critical' ? <AlertCircle className="w-4 h-4" /> : <Boxes className="w-4 h-4" />
                   avatarClass = alert.severity === 'critical' ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-amber-100 text-amber-800 border-amber-200'
                   badgeClass = alert.severity === 'critical' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                } else if (alert.type === 'payment_due') {
+                } else if (alert.type === 'payment_due_sales') {
+                  icon = <FileText className="w-4 h-4" />
+                  avatarClass =
+                    alert.severity === 'critical'
+                      ? 'bg-rose-100 text-rose-800 border-rose-200'
+                      : alert.severity === 'warning'
+                      ? 'bg-amber-100 text-amber-800 border-amber-200'
+                      : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                  badgeClass =
+                    alert.severity === 'critical'
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : alert.severity === 'warning'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                } else if (alert.type === 'payment_due_purchases') {
                   icon = <DollarSign className="w-4 h-4" />
-                  avatarClass = alert.severity === 'critical' ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-blue-100 text-blue-800 border-blue-200'
-                  badgeClass = alert.severity === 'critical' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                  avatarClass =
+                    alert.severity === 'critical'
+                      ? 'bg-rose-100 text-rose-800 border-rose-200'
+                      : alert.severity === 'warning'
+                      ? 'bg-purple-100 text-purple-800 border-purple-200'
+                      : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                  badgeClass =
+                    alert.severity === 'critical'
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : alert.severity === 'warning'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 } else if (alert.type === 'salary') {
                   icon = <Users className="w-4 h-4" />
-                  avatarClass = 'bg-purple-100 text-purple-800 border-purple-200'
-                  badgeClass = 'bg-purple-50 text-purple-700 border-purple-200'
+                  avatarClass = 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                  badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 } else if (alert.type === 'expiry') {
                   icon = <Clock className="w-4 h-4" />
                   avatarClass = 'bg-rose-100 text-rose-800 border-rose-200'
