@@ -3113,9 +3113,9 @@ export const moduleLabels: Record<ModuleKey, string> = {
   pos: 'Point of Sale (POS)',
   sales: 'Sales & Distribution',
   'customer-management': 'Customer Management',
-  purchase: 'Purchase & Procurement',
+  purchase: 'Purchases & Expenses',
   'suppliers-management': 'Suppliers',
-  expenses: 'Factory & Business Expenses',
+  expenses: 'Purchases & Expenses',
   products: 'Finished Products',
   'raw-materials': 'Raw Material Warehouse',
   employees: 'Employees & Payroll',
@@ -3137,7 +3137,7 @@ export const moduleLabels: Record<ModuleKey, string> = {
   'monthly-summary': 'Monthly Financial Statement',
   'yearly-summary': 'Yearly Financial Review',
   'profit-loss': 'Profit & Loss Statement',
-  phonebook: 'Phone Book',
+  phonebook: 'Phone Book Directory',
 }
 
 // Currency formatting helper (Pakistani Rupee PKR)

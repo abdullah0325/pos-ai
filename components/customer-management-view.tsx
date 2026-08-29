@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Users,
   Search,
@@ -58,18 +58,31 @@ import {
   exportToCSV,
 } from '@/lib/pdf-export'
 import { CreditLimitBadge } from '@/components/status-badges'
+import PhonebookView from './phonebook-view'
 
 interface CustomerManagementViewProps {
   db: AppDatabase
+  initialTab?: 'customers' | 'phonebook'
   onSaveDatabase: (updated: AppDatabase) => void
   onNavigate?: (module: string, subTab?: string) => void
 }
 
 export default function CustomerManagementView({
   db,
+  initialTab = 'customers',
   onSaveDatabase,
   onNavigate,
 }: CustomerManagementViewProps) {
+  // Main Tab State (Customers & Accounts vs Phone Book Directory)
+  const [mainTab, setMainTab] = useState<'customers' | 'phonebook'>(initialTab)
+
+  // Sync if initialTab prop changes
+  useEffect(() => {
+    if (initialTab) {
+      setMainTab(initialTab)
+    }
+  }, [initialTab])
+
   // Navigation / Selected Customer
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'ledger' | 'invoices' | 'products' | 'payments'>('ledger')
@@ -495,11 +508,76 @@ export default function CustomerManagementView({
   }
 
   return (
-    <div className="space-y-6">
-      {/* ========================================================================= */}
-      {/* 1. LIST VIEW (When no customer profile is open) */}
-      {/* ========================================================================= */}
-      {!selectedCustomer && (
+    <div className="space-y-6" id="customer-management-root">
+      {/* Top Module Navigation Tabs: Customer Management vs Phone Book */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-stone-200 shadow-xs mb-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+              <Users className="w-3.5 h-3.5" /> Customer & Directory Hub
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
+            {mainTab === 'phonebook' ? 'Phone Book Directory' : 'Customer Management'}
+          </h1>
+          <p className="text-xs text-stone-500 mt-0.5">
+            {mainTab === 'phonebook'
+              ? 'Unified contact directory for customers, suppliers, staff, and partners with quick dialing and WhatsApp messaging.'
+              : 'Maintain directory of Retailers, Wholesalers, Distributors, Sales Men, and Walk-in customers with live ledgers & dues.'}
+          </p>
+        </div>
+
+        {/* Top-Level Tabs Switcher */}
+        <div className="flex items-center gap-1 p-1 bg-stone-100/90 rounded-xl border border-stone-200 self-start sm:self-center shadow-2xs">
+          <button
+            onClick={() => {
+              setMainTab('customers')
+            }}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+              mainTab === 'customers'
+                ? 'bg-white text-stone-900 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+            id="tab-customer-accounts"
+          >
+            <Users className={`w-4 h-4 ${mainTab === 'customers' ? 'text-emerald-600' : 'text-stone-400'}`} />
+            <span>Customers & Accounts</span>
+            <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">
+              {db.customers.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => {
+              setMainTab('phonebook')
+              setSelectedCustomerId(null)
+            }}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+              mainTab === 'phonebook'
+                ? 'bg-white text-stone-900 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+            id="tab-phonebook-directory"
+          >
+            <Phone className={`w-4 h-4 ${mainTab === 'phonebook' ? 'text-purple-600' : 'text-stone-400'}`} />
+            <span>Phone Book</span>
+            <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-purple-100 text-purple-800">
+              {db.phonebookContacts?.length || (db.customers.length + db.suppliers.length)}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {mainTab === 'phonebook' ? (
+        <div id="customer-phonebook-tab-wrapper">
+          <PhonebookView db={db} onSaveDatabase={onSaveDatabase} />
+        </div>
+      ) : (
+        <>
+          {/* ========================================================================= */}
+          {/* 1. LIST VIEW (When no customer profile is open) */}
+          {/* ========================================================================= */}
+          {!selectedCustomer && (
         <>
           {/* Header Row */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
@@ -1502,6 +1580,8 @@ export default function CustomerManagementView({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
 
       {/* ========================================================================= */}

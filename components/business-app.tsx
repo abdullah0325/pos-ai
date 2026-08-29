@@ -39,11 +39,9 @@ import {
 import DashboardView from './dashboard-view'
 import PosView from './pos-view'
 import SalesView, { type SalesSubTab } from './sales-view'
-import PhonebookView from './phonebook-view'
 import CustomerManagementView from './customer-management-view'
-import PurchasesView from './purchases-view'
+import PurchasesExpensesView, { type PurchasesExpensesSubTab } from './purchases-expenses-view'
 import SuppliersManagementView from './suppliers-management-view'
-import ExpensesView from './expenses-view'
 import ProductsView, { type ProductsSubTab } from './products-view'
 import RawMaterialsView from './raw-materials-view'
 import AccountsView, { type AccountsSubTab } from './accounts-view'
@@ -57,7 +55,8 @@ export default function BusinessApp() {
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
   const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard')
   const [salesTab, setSalesTab] = useState<SalesSubTab>('invoices')
-  const [purchaseTab, setPurchaseTab] = useState<PurchaseSubTab>('purchases')
+  const [customerTab, setCustomerTab] = useState<'customers' | 'phonebook'>('customers')
+  const [purchaseTab, setPurchaseTab] = useState<PurchasesExpensesSubTab>('purchases')
   const [productsTab, setProductsTab] = useState<ProductsSubTab>('catalog')
   const [reportsCategory, setReportsCategory] = useState<ReportCategoryKey>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -83,17 +82,22 @@ export default function BusinessApp() {
     // Check if key is a legacy/sub-route and route appropriately
     if (key === 'customer-management' || key === 'customers') {
       setActiveModule('customer-management')
+      setCustomerTab(subTab === 'phonebook' ? 'phonebook' : 'customers')
+    } else if (key === 'phonebook') {
+      setActiveModule('customer-management')
+      setCustomerTab('phonebook')
     } else if (key === 'suppliers-management' || key === 'suppliers') {
       setActiveModule('suppliers-management')
-    } else if (key === 'phonebook') {
-      setActiveModule('phonebook')
     } else if (['invoices', 'counter-sales', 'wholesalers'].includes(key)) {
       setActiveModule('sales')
       const mapped = key === 'counter-sales' ? 'pos' : (key as SalesSubTab)
       setSalesTab(mapped)
-    } else if (['purchases', 'expenses', 'returns'].includes(key)) {
+    } else if (key === 'expenses') {
       setActiveModule('purchase')
-      setPurchaseTab(key as PurchaseSubTab)
+      setPurchaseTab('expenses')
+    } else if (key === 'purchases' || key === 'purchase') {
+      setActiveModule('purchase')
+      setPurchaseTab(subTab === 'expenses' ? 'expenses' : 'purchases')
     } else if (['production', 'stock'].includes(key)) {
       setActiveModule('products')
       setProductsTab(key === 'stock' ? 'stock' : 'production')
@@ -108,10 +112,11 @@ export default function BusinessApp() {
       else if (key === 'inventory-report') setReportsCategory('inventory')
       else setReportsCategory('overview')
     } else {
-      setActiveModule(key)
+      setActiveModule(key as ModuleKey)
       if (subTab) {
         if (key === 'sales') setSalesTab(subTab as SalesSubTab)
-        if (key === 'purchase') setPurchaseTab(subTab as PurchaseSubTab)
+        if (key === 'purchase') setPurchaseTab(subTab as PurchasesExpensesSubTab)
+        if (key === 'customer-management') setCustomerTab(subTab === 'phonebook' ? 'phonebook' : 'customers')
         if (key === 'products') setProductsTab(subTab as ProductsSubTab)
         if (key === 'reports') setReportsCategory(subTab as ReportCategoryKey)
       }
@@ -180,21 +185,10 @@ export default function BusinessApp() {
             <span className="nav-count">{db.invoices.length}</span>
           </button>
 
-          {/* 4. Phone Book (Standalone Company Directory) */}
+          {/* 4. Customer Management (Includes Phone Book Directory) */}
           <button
-            className={`nav-item ${activeModule === 'phonebook' ? 'nav-item-active' : ''}`}
-            onClick={() => handleNavigate('phonebook')}
-            id="nav-phonebook"
-          >
-            <Phone />
-            <span>Phone Book</span>
-            <span className="nav-count">{db.customers.length + db.suppliers.length}</span>
-          </button>
-
-          {/* 5. Customer Management (Unified Hub) */}
-          <button
-            className={`nav-item ${activeModule === 'customer-management' ? 'nav-item-active' : ''}`}
-            onClick={() => handleNavigate('customer-management')}
+            className={`nav-item ${activeModule === 'customer-management' || activeModule === 'phonebook' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('customer-management', 'customers')}
             id="nav-customer-management"
           >
             <UserCheck />
@@ -202,15 +196,15 @@ export default function BusinessApp() {
             <span className="nav-count">{db.customers.length}</span>
           </button>
 
-          {/* 5. Purchase */}
+          {/* 5. Purchases & Expenses (Unified Module) */}
           <button
-            className={`nav-item ${activeModule === 'purchase' ? 'nav-item-active' : ''}`}
-            onClick={() => handleNavigate('purchase')}
-            id="nav-purchase"
+            className={`nav-item ${activeModule === 'purchase' || activeModule === 'expenses' ? 'nav-item-active' : ''}`}
+            onClick={() => handleNavigate('purchase', 'purchases')}
+            id="nav-purchases-expenses"
           >
             <Truck />
-            <span>Purchase</span>
-            <span className="nav-count">{db.purchases.length}</span>
+            <span>Purchases & Expenses</span>
+            <span className="nav-count">{db.purchases.length + db.expenses.length}</span>
           </button>
 
           {/* 6. Suppliers (Vendor Hub) */}
@@ -224,18 +218,7 @@ export default function BusinessApp() {
             <span className="nav-count">{db.suppliers.length}</span>
           </button>
 
-          {/* 7. Expenses (Standalone Module) */}
-          <button
-            className={`nav-item ${activeModule === 'expenses' ? 'nav-item-active' : ''}`}
-            onClick={() => handleNavigate('expenses')}
-            id="nav-expenses"
-          >
-            <Receipt />
-            <span>Expenses</span>
-            <span className="nav-count">{db.expenses.length}</span>
-          </button>
-
-          {/* 8. Products */}
+          {/* 7. Products */}
           <button
             className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('products')}
@@ -382,24 +365,19 @@ export default function BusinessApp() {
             />
           )}
 
-          {activeModule === 'phonebook' && (
-            <PhonebookView
-              db={db}
-              onSaveDatabase={handleSaveDatabase}
-            />
-          )}
-
-          {activeModule === 'customer-management' && (
+          {(activeModule === 'customer-management' || activeModule === 'phonebook') && (
             <CustomerManagementView
               db={db}
+              initialTab={customerTab}
               onSaveDatabase={handleSaveDatabase}
               onNavigate={handleNavigate}
             />
           )}
 
-          {activeModule === 'purchase' && (
-            <PurchasesView
+          {(activeModule === 'purchase' || activeModule === 'expenses') && (
+            <PurchasesExpensesView
               db={db}
+              initialTab={purchaseTab}
               onSaveDatabase={handleSaveDatabase}
               onNavigate={handleNavigate}
             />
@@ -407,14 +385,6 @@ export default function BusinessApp() {
 
           {activeModule === 'suppliers-management' && (
             <SuppliersManagementView
-              db={db}
-              onSaveDatabase={handleSaveDatabase}
-              onNavigate={handleNavigate}
-            />
-          )}
-
-          {activeModule === 'expenses' && (
-            <ExpensesView
               db={db}
               onSaveDatabase={handleSaveDatabase}
               onNavigate={handleNavigate}
