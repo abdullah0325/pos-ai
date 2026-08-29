@@ -194,6 +194,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Online' | 'Bank Transfer' | 'Cheque'>('Cash')
   const [paymentAccount, setPaymentAccount] = useState<'cash-in-hand' | 'meezan-bank' | 'hbl-bank'>('cash-in-hand')
   const [amountPaid, setAmountPaid] = useState<number>(0)
+  const [invoiceDueDate, setInvoiceDueDate] = useState<string>('')
   const [paymentScreenshot, setPaymentScreenshot] = useState<string>('')
   const [orderNotes, setOrderNotes] = useState('')
 
@@ -733,6 +734,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       grandTotal,
       amountPaid: effectiveAmountPaid,
       balanceDue,
+      dueDate: balanceDue > 0 && invoiceDueDate ? invoiceDueDate : undefined,
       paymentMethod,
       paymentScreenshot: paymentScreenshot || undefined,
       paymentAccount,
@@ -1823,6 +1825,71 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   </div>
                 </div>
               </div>
+
+              {/* Payment Due Date (Optional for pending/partial balance) */}
+              {(paymentStatus !== 'Paid' || (Number(amountPaid) || 0) < grandTotal) && (
+                <div className="bg-amber-50/60 p-2.5 rounded-lg border border-amber-200/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      Payment Due Date (Optional)
+                    </label>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date()
+                          d.setDate(d.getDate() + 7)
+                          setInvoiceDueDate(d.toISOString().slice(0, 10))
+                        }}
+                        className="px-1.5 py-0.5 text-[10px] font-semibold bg-white text-stone-700 rounded border border-stone-200 hover:bg-stone-100"
+                      >
+                        +7d
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date()
+                          d.setDate(d.getDate() + 15)
+                          setInvoiceDueDate(d.toISOString().slice(0, 10))
+                        }}
+                        className="px-1.5 py-0.5 text-[10px] font-semibold bg-white text-stone-700 rounded border border-stone-200 hover:bg-stone-100"
+                      >
+                        +15d
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date()
+                          d.setDate(d.getDate() + 30)
+                          setInvoiceDueDate(d.toISOString().slice(0, 10))
+                        }}
+                        className="px-1.5 py-0.5 text-[10px] font-semibold bg-white text-stone-700 rounded border border-stone-200 hover:bg-stone-100"
+                      >
+                        +30d
+                      </button>
+                      {invoiceDueDate && (
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceDueDate('')}
+                          className="px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 hover:underline"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="date"
+                    value={invoiceDueDate}
+                    onChange={(e) => setInvoiceDueDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-md border border-stone-300 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                  <p className="text-[10px] text-amber-700/80 leading-tight">
+                    Set a target payment date for reminder alerts in the notification bell.
+                  </p>
+                </div>
+              )}
 
               {/* Screenshot Attachment */}
               {(paymentMethod === 'Online' || paymentMethod === 'Bank Transfer') && (

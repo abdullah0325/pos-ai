@@ -44,6 +44,7 @@ import {
   type CustomerType,
 } from '@/lib/db'
 import { generateInvoicePDF, exportToCSV } from '@/lib/pdf-export'
+import { DueDateBadge } from '@/components/status-badges'
 
 export type SalesSubTab =
   | 'invoices'
@@ -1047,6 +1048,11 @@ export default function SalesView({
                       >
                         {inv.balanceDue > 0 ? formatPKR(inv.balanceDue) : 'Rs. 0'}
                       </span>
+                      {inv.dueDate && inv.balanceDue > 0 && (
+                        <div className="mt-1">
+                          <DueDateBadge dueDate={inv.dueDate} balanceDue={inv.balanceDue} />
+                        </div>
+                      )}
                     </td>
 
                     {/* 9. Status */}
@@ -1491,6 +1497,12 @@ function InvoiceDetailModal({
               <span>Balance Due:</span>
               <span>{formatPKR(invoice.balanceDue)}</span>
             </div>
+            {invoice.dueDate && invoice.balanceDue > 0 && (
+              <div className="pt-2 border-t border-stone-200 flex items-center justify-between">
+                <span className="text-stone-500 font-medium">Due Date:</span>
+                <DueDateBadge dueDate={invoice.dueDate} balanceDue={invoice.balanceDue} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -1541,6 +1553,7 @@ function EditSaleModal({
   const [paymentMethod, setPaymentMethod] = useState(invoice.paymentMethod)
   const [paymentAccount, setPaymentAccount] = useState(invoice.paymentAccount)
   const [deliveryStatus, setDeliveryStatus] = useState(invoice.deliveryStatus || 'Delivered')
+  const [dueDate, setDueDate] = useState(invoice.dueDate || '')
   const [notes, setNotes] = useState(invoice.notes || '')
 
   // Recalculate balance
@@ -1571,6 +1584,7 @@ function EditSaleModal({
       ...invoice,
       date,
       time: time || undefined,
+      dueDate: finalBalance > 0 && dueDate ? dueDate : undefined,
       customerName: customerName.trim() || invoice.customerName,
       phone: phone.trim(),
       address: address.trim(),
@@ -1722,6 +1736,21 @@ function EditSaleModal({
                 {formatPKR(balanceDue)}
               </strong>
             </div>
+
+            {(balanceDue > 0 || paymentMethod === 'Credit') && (
+              <div className="pt-2 border-t border-amber-200 flex items-center justify-between gap-2 bg-amber-50/60 p-2 rounded-lg">
+                <label className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Payment Due Date:</span>
+                </label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="border border-amber-300 rounded px-2 py-1 text-xs bg-white text-stone-800 font-medium focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2.5 pt-1">
               <div>

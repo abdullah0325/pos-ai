@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, FileText, Download, Trash2, Printer, CheckCircle, Clock, AlertCircle, ShoppingCart, X } from 'lucide-react'
+import { Plus, Search, FileText, Download, Trash2, Printer, CheckCircle, Clock, AlertCircle, ShoppingCart, X, Calendar } from 'lucide-react'
 import { formatPKR, formatDate, type AppDatabase, type InvoiceItem, type InvoiceLineItem, type CustomerItem, type Status, type LedgerEntry } from '@/lib/db'
 import { generateInvoicePDF, exportToCSV } from '@/lib/pdf-export'
+import { DueDateBadge } from '@/components/status-badges'
 
 interface InvoicesViewProps {
   db: AppDatabase
@@ -196,6 +197,11 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
                     <span className={inv.balanceDue > 0 ? 'text-amber-700 font-semibold text-xs' : 'text-stone-400 text-xs'}>
                       {inv.balanceDue > 0 ? formatPKR(inv.balanceDue) : 'Rs. 0'}
                     </span>
+                    {inv.dueDate && inv.balanceDue > 0 && (
+                      <div className="mt-1">
+                        <DueDateBadge dueDate={inv.dueDate} balanceDue={inv.balanceDue} />
+                      </div>
+                    )}
                   </td>
                   <td className="py-2.5 px-3 text-center">
                     <span
@@ -312,6 +318,11 @@ function InvoiceDetailModal({
             >
               {invoice.status}
             </span>
+            {invoice.dueDate && invoice.balanceDue > 0 && (
+              <div className="mt-1.5">
+                <DueDateBadge dueDate={invoice.dueDate} balanceDue={invoice.balanceDue} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -398,6 +409,7 @@ function CreateInvoiceModal({
   const [notes, setNotes] = useState('')
   const [discount, setDiscount] = useState(0)
   const [amountPaid, setAmountPaid] = useState(0)
+  const [dueDate, setDueDate] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Bank Transfer' | 'Cheque' | 'Credit'>('Cash')
   const [paymentAccount, setPaymentAccount] = useState<'cash-in-hand' | 'meezan-bank' | 'hbl-bank'>('cash-in-hand')
 
@@ -495,6 +507,7 @@ function CreateInvoiceModal({
       id: `inv-${Date.now()}`,
       invoiceNumber: nextInvNum,
       date: invoiceDate,
+      dueDate: balanceDue > 0 && dueDate ? dueDate : undefined,
       customerId: selectedCustomer.id,
       customerName: selectedCustomer.businessName || selectedCustomer.name,
       customerType: selectedCustomer.type,
@@ -794,6 +807,26 @@ function CreateInvoiceModal({
                 {formatPKR(balanceDue)}
               </span>
             </div>
+
+            {(balanceDue > 0 || paymentMethod === 'Credit') && (
+              <div className="pt-2 border-t border-amber-200 mt-2 bg-amber-50/70 p-2.5 rounded-md">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Payment Due Date (Optional):</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="border border-amber-300 rounded px-2 py-1 text-xs bg-white text-stone-800 font-medium focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <p className="text-[10px] text-amber-700 mt-1">
+                  Triggers alerts in the notification bell when due or overdue.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
