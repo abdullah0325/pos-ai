@@ -40,6 +40,7 @@ import {
   TrendingUp,
   ExternalLink,
   BookOpen,
+  Palette,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -64,31 +65,72 @@ interface PurchasesViewProps {
   onNavigate?: (module: string, subTab?: string) => void
 }
 
+export const PURCHASE_CATEGORY_COLORS = [
+  { id: 'emerald', label: 'Emerald (Raw Materials)', class: 'bg-emerald-600 text-white', dot: 'bg-emerald-600' },
+  { id: 'blue', label: 'Blue (Packaging)', class: 'bg-blue-600 text-white', dot: 'bg-blue-600' },
+  { id: 'purple', label: 'Purple (Machinery / Equipment)', class: 'bg-purple-600 text-white', dot: 'bg-purple-600' },
+  { id: 'amber', label: 'Amber (Supplies & Spares)', class: 'bg-amber-600 text-white', dot: 'bg-amber-600' },
+  { id: 'teal', label: 'Teal (Maintenance & Tools)', class: 'bg-teal-600 text-white', dot: 'bg-teal-600' },
+  { id: 'indigo', label: 'Indigo (Finished Goods)', class: 'bg-indigo-600 text-white', dot: 'bg-indigo-600' },
+  { id: 'rose', label: 'Rose (Chemicals & Flavors)', class: 'bg-rose-600 text-white', dot: 'bg-rose-600' },
+  { id: 'sky', label: 'Sky / Cyan (Transport & Logistics)', class: 'bg-sky-600 text-white', dot: 'bg-sky-600' },
+  { id: 'stone', label: 'Stone / Gray (General / Other)', class: 'bg-stone-700 text-white', dot: 'bg-stone-700' },
+]
+
+export function getPurchaseCategoryBadgeClass(categoryName?: string, categories?: PurchaseCategoryItem[]) {
+  const cat = (categoryName || '').trim()
+  const matched = categories?.find((c) => c.name.toLowerCase() === cat.toLowerCase())
+  const color = matched?.color?.toLowerCase()
+
+  if (color === 'emerald' || color === 'green') return 'bg-emerald-600 text-white'
+  if (color === 'blue') return 'bg-blue-600 text-white'
+  if (color === 'purple') return 'bg-purple-600 text-white'
+  if (color === 'amber' || color === 'orange') return 'bg-amber-600 text-white'
+  if (color === 'teal') return 'bg-teal-600 text-white'
+  if (color === 'indigo') return 'bg-indigo-600 text-white'
+  if (color === 'rose' || color === 'red') return 'bg-rose-600 text-white'
+  if (color === 'sky' || color === 'cyan') return 'bg-sky-600 text-white'
+  if (color === 'stone' || color === 'gray') return 'bg-stone-700 text-white'
+
+  // Keyword fallbacks
+  const lower = cat.toLowerCase()
+  if (lower.includes('raw') || lower.includes('sugar') || lower.includes('ingredient')) return 'bg-emerald-600 text-white'
+  if (lower.includes('packag') || lower.includes('carton') || lower.includes('label') || lower.includes('bottle') || lower.includes('preform')) return 'bg-blue-600 text-white'
+  if (lower.includes('machin') || lower.includes('equip')) return 'bg-purple-600 text-white'
+  if (lower.includes('spare') || lower.includes('maint')) return 'bg-teal-600 text-white'
+  if (lower.includes('finish') || lower.includes('product')) return 'bg-indigo-600 text-white'
+  if (lower.includes('chem') || lower.includes('flavor')) return 'bg-rose-600 text-white'
+  if (lower.includes('transp') || lower.includes('freight')) return 'bg-sky-600 text-white'
+  return 'bg-stone-700 text-white'
+}
+
 // Category color mappings and icons
-const getCategoryStyle = (categoryName?: string) => {
+const getCategoryStyle = (categoryName?: string, categories?: PurchaseCategoryItem[]) => {
   const cat = (categoryName || '').toLowerCase()
+  const badgeClass = getPurchaseCategoryBadgeClass(categoryName, categories)
+
   if (cat.includes('raw') || cat.includes('ingredient')) {
-    return { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', icon: Boxes }
+    return { bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', icon: Boxes, badgeClass }
   }
   if (cat.includes('packag') || cat.includes('carton') || cat.includes('label')) {
-    return { bg: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500', icon: Package }
+    return { bg: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500', icon: Package, badgeClass }
   }
   if (cat.includes('equip') || cat.includes('machin')) {
-    return { bg: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500', icon: Layers }
+    return { bg: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500', icon: Layers, badgeClass }
   }
   if (cat.includes('chem') || cat.includes('flavor')) {
-    return { bg: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500', icon: Sparkles }
+    return { bg: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500', icon: Sparkles, badgeClass }
   }
   if (cat.includes('maint') || cat.includes('spare')) {
-    return { bg: 'bg-teal-50 text-teal-700 border-teal-200', dot: 'bg-teal-500', icon: RotateCcw }
+    return { bg: 'bg-teal-50 text-teal-700 border-teal-200', dot: 'bg-teal-500', icon: RotateCcw, badgeClass }
   }
   if (cat.includes('transp') || cat.includes('logist')) {
-    return { bg: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500', icon: Truck }
+    return { bg: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500', icon: Truck, badgeClass }
   }
   if (cat.includes('finish') || cat.includes('product')) {
-    return { bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500', icon: Package }
+    return { bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500', icon: Package, badgeClass }
   }
-  return { bg: 'bg-stone-100 text-stone-700 border-stone-200', dot: 'bg-stone-500', icon: Tag }
+  return { bg: 'bg-stone-100 text-stone-700 border-stone-200', dot: 'bg-stone-500', icon: Tag, badgeClass }
 }
 
 export default function PurchasesView({

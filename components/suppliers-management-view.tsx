@@ -27,10 +27,14 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   Upload,
   ChevronRight,
   Layers,
   Sparkles,
+  Tag,
+  Palette,
+  Check,
 } from 'lucide-react'
 import {
   formatPKR,
@@ -43,12 +47,51 @@ import {
   type LedgerEntry,
   type RawMaterialItem,
   type ProductItem,
+  type CategoryItem,
+  defaultSupplierCategories,
 } from '@/lib/db'
 import {
   generateLedgerPDF,
   generateSupplierDealReceiptPDF,
   exportToCSV,
 } from '@/lib/pdf-export'
+
+export const SUPPLIER_CATEGORY_COLORS = [
+  { id: 'emerald', label: 'Emerald (Raw Material)', class: 'bg-emerald-600 text-white', dot: 'bg-emerald-600' },
+  { id: 'blue', label: 'Blue (Packaging)', class: 'bg-blue-600 text-white', dot: 'bg-blue-600' },
+  { id: 'indigo', label: 'Indigo (Finished Goods)', class: 'bg-indigo-600 text-white', dot: 'bg-indigo-600' },
+  { id: 'purple', label: 'Purple (Machinery)', class: 'bg-purple-600 text-white', dot: 'bg-purple-600' },
+  { id: 'teal', label: 'Teal (Services)', class: 'bg-teal-600 text-white', dot: 'bg-teal-600' },
+  { id: 'amber', label: 'Amber / Orange', class: 'bg-amber-600 text-white', dot: 'bg-amber-600' },
+  { id: 'rose', label: 'Rose / Red', class: 'bg-rose-600 text-white', dot: 'bg-rose-600' },
+  { id: 'sky', label: 'Sky / Cyan', class: 'bg-sky-600 text-white', dot: 'bg-sky-600' },
+  { id: 'stone', label: 'Stone / Gray', class: 'bg-stone-700 text-white', dot: 'bg-stone-700' },
+]
+
+export function getSupplierCategoryBadgeClass(categoryName?: string, categories?: CategoryItem[]) {
+  const cat = (categoryName || '').trim()
+  const matched = categories?.find((c) => c.name.toLowerCase() === cat.toLowerCase())
+  const color = matched?.color?.toLowerCase()
+
+  if (color === 'emerald' || color === 'green') return 'bg-emerald-600 text-white'
+  if (color === 'blue') return 'bg-blue-600 text-white'
+  if (color === 'indigo') return 'bg-indigo-600 text-white'
+  if (color === 'purple') return 'bg-purple-600 text-white'
+  if (color === 'teal') return 'bg-teal-600 text-white'
+  if (color === 'amber' || color === 'orange') return 'bg-amber-600 text-white'
+  if (color === 'rose' || color === 'red') return 'bg-rose-600 text-white'
+  if (color === 'sky' || color === 'cyan') return 'bg-sky-600 text-white'
+  if (color === 'stone' || color === 'gray') return 'bg-stone-700 text-white'
+
+  // Fallbacks based on category naming keywords
+  const lower = cat.toLowerCase()
+  if (lower.includes('raw') || lower.includes('sugar') || lower.includes('ingredient')) return 'bg-emerald-600 text-white'
+  if (lower.includes('packag') || lower.includes('preform') || lower.includes('bottle') || lower.includes('carton') || lower.includes('label')) return 'bg-blue-600 text-white'
+  if (lower.includes('finish') || lower.includes('trade') || lower.includes('product')) return 'bg-indigo-600 text-white'
+  if (lower.includes('machin') || lower.includes('equipment') || lower.includes('compressor')) return 'bg-purple-600 text-white'
+  if (lower.includes('service') || lower.includes('maint') || lower.includes('transport')) return 'bg-teal-600 text-white'
+  return 'bg-stone-700 text-white'
+}
 
 interface SuppliersManagementViewProps {
   db: AppDatabase
@@ -65,9 +108,16 @@ export default function SuppliersManagementView({
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'deals' | 'ledger' | 'payments' | 'materials'>('deals')
 
+  // Dynamic Supplier Categories
+  const supplierCategories: CategoryItem[] = useMemo(() => {
+    return db.supplierCategories && db.supplierCategories.length > 0
+      ? db.supplierCategories
+      : defaultSupplierCategories
+  }, [db.supplierCategories])
+
   // Search & Filters in List View
   const [searchQuery, setSearchQuery] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'Raw Material' | 'Product' | 'Both'>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'outstanding' | 'settled'>('all')
 
   // Modals
@@ -76,6 +126,7 @@ export default function SuppliersManagementView({
   const [isRecordingPayment, setIsRecordingPayment] = useState<SupplierItem | null>(null)
   const [isCreatingDeal, setIsCreatingDeal] = useState<SupplierItem | null>(null)
   const [viewingDeal, setViewingDeal] = useState<PurchaseItem | null>(null)
+  const [isManagingCategories, setIsManagingCategories] = useState(false)
   const [previewImage, setPreviewImage] = useState<{ src: string; title: string } | null>(null)
 
   // Current Selected Supplier Profile
@@ -95,15 +146,12 @@ export default function SuppliersManagementView({
   // Filtered Suppliers List
   const filteredSuppliers = useMemo(() => {
     return db.suppliers.filter((s) => {
-      const normCat = normalizeCategory(s.category, s.supplyCategory)
-
-      // Category Filter
+      // Category Filter (by dynamic supplier category name or legacy category)
       if (categoryFilter !== 'all') {
-        if (categoryFilter === 'Both') {
-          if (normCat !== 'Both') return false
-        } else {
-          if (normCat !== categoryFilter && normCat !== 'Both') return false
-        }
+        const sCat = (s.category || '').toLowerCase()
+        const target = categoryFilter.toLowerCase()
+        const normCat = normalizeCategory(s.category, s.supplyCategory).toLowerCase()
+        if (sCat !== target && normCat !== target) return false
       }
 
       // Balance Filter
@@ -532,6 +580,13 @@ export default function SuppliersManagementView({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                className="button secondary"
+                onClick={() => setIsManagingCategories(true)}
+                title="Manage Supplier Type Categories"
+              >
+                <Tag className="w-4 h-4" /> Manage Categories
+              </button>
               <button className="button secondary" onClick={handleExportCSV} title="Export CSV">
                 <Download className="w-4 h-4" /> Export CSV
               </button>
@@ -585,19 +640,25 @@ export default function SuppliersManagementView({
 
             <div className="flex flex-wrap items-center gap-2">
               {/* Category Filter */}
-              <div className="inline-flex rounded-lg border border-stone-200 p-1 bg-stone-50">
-                {(['all', 'Raw Material', 'Product', 'Both'] as const).map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategoryFilter(cat)}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
-                      categoryFilter === cat ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
-                    }`}
-                  >
-                    {cat === 'all' ? 'All Categories' : cat}
-                  </button>
-                ))}
-              </div>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 focus:outline-none"
+              >
+                <option value="all">All Vendor Categories ({db.suppliers.length})</option>
+                {supplierCategories.map((c) => {
+                  const count = db.suppliers.filter(
+                    (s) =>
+                      (s.category || '').toLowerCase() === c.name.toLowerCase() ||
+                      normalizeCategory(s.category, s.supplyCategory).toLowerCase() === c.name.toLowerCase()
+                  ).length
+                  return (
+                    <option key={c.id} value={c.name}>
+                      {c.name} ({count})
+                    </option>
+                  )
+                })}
+              </select>
 
               {/* Balance Filter */}
               <select
@@ -620,7 +681,7 @@ export default function SuppliersManagementView({
                   <tr>
                     <th>Supplier / Company</th>
                     <th>Contact Person</th>
-                    <th>Supply Category</th>
+                    <th>Vendor Category</th>
                     <th>Phone / WhatsApp</th>
                     <th>Address & City</th>
                     <th>Opening Bal.</th>
@@ -630,7 +691,7 @@ export default function SuppliersManagementView({
                 </thead>
                 <tbody>
                   {filteredSuppliers.map((s) => {
-                    const normCat = normalizeCategory(s.category, s.supplyCategory)
+                    const badgeClass = getSupplierCategoryBadgeClass(s.category, supplierCategories)
 
                     return (
                       <tr key={s.id} className="hover:bg-stone-50/70 transition-colors">
@@ -651,25 +712,17 @@ export default function SuppliersManagementView({
                                   </span>
                                 )}
                               </div>
-                              <div className="text-[11px] text-stone-500 font-medium">{s.category || 'Supplies'}</div>
+                              <div className="text-[11px] text-stone-500 font-medium">{s.city || 'Supplier'}</div>
                             </div>
                           </div>
                         </td>
                         <td className="font-semibold text-stone-800 text-xs">{s.contactPerson || '—'}</td>
                         <td>
                           <span
-                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                              normCat === 'Raw Material'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : normCat === 'Product'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-purple-50 text-purple-700 border border-purple-200'
-                            }`}
+                            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md shadow-2xs ${badgeClass}`}
                           >
-                            {normCat === 'Raw Material' && <Boxes className="w-3 h-3" />}
-                            {normCat === 'Product' && <Package className="w-3 h-3" />}
-                            {normCat === 'Both' && <Layers className="w-3 h-3" />}
-                            {normCat}
+                            <Tag className="w-3 h-3 opacity-80" />
+                            {s.category || 'Raw Material Supplier'}
                           </span>
                         </td>
                         <td>
@@ -805,8 +858,14 @@ export default function SuppliersManagementView({
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-2xl font-black text-stone-900">{selectedSupplier.name}</h1>
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-800">
-                      {normalizeCategory(selectedSupplier.category, selectedSupplier.supplyCategory)}
+                    <span
+                      className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md shadow-2xs ${getSupplierCategoryBadgeClass(
+                        selectedSupplier.category,
+                        supplierCategories
+                      )}`}
+                    >
+                      <Tag className="w-3 h-3 opacity-80" />
+                      {selectedSupplier.category || 'Raw Material Supplier'}
                     </span>
                     {selectedSupplier.supplierCode && (
                       <span className="text-xs bg-stone-100 text-stone-700 font-mono px-2 py-0.5 rounded-md font-semibold">
@@ -1267,6 +1326,8 @@ export default function SuppliersManagementView({
       {(isCreatingSupplier || editingSupplier) && (
         <SupplierProfileModal
           supplier={editingSupplier}
+          categories={supplierCategories}
+          onOpenCategoryManager={() => setIsManagingCategories(true)}
           onClose={() => {
             setIsCreatingSupplier(false)
             setEditingSupplier(null)
@@ -1308,6 +1369,24 @@ export default function SuppliersManagementView({
             }
             setIsCreatingSupplier(false)
             setEditingSupplier(null)
+          }}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: SUPPLIER CATEGORIES MANAGER */}
+      {/* ========================================================================= */}
+      {isManagingCategories && (
+        <SupplierCategoryManagerModal
+          categories={supplierCategories}
+          suppliers={db.suppliers}
+          onClose={() => setIsManagingCategories(false)}
+          onSaveCategories={(updatedCats, updatedSuppliers) => {
+            onSaveDatabase({
+              ...db,
+              supplierCategories: updatedCats,
+              suppliers: updatedSuppliers || db.suppliers,
+            })
           }}
         />
       )}
@@ -1381,10 +1460,14 @@ export default function SuppliersManagementView({
 // -----------------------------------------------------------------------------
 function SupplierProfileModal({
   supplier,
+  categories,
+  onOpenCategoryManager,
   onClose,
   onSave,
 }: {
   supplier: SupplierItem | null
+  categories: CategoryItem[]
+  onOpenCategoryManager?: () => void
   onClose: () => void
   onSave: (data: {
     supplierCode?: string
@@ -1406,7 +1489,9 @@ function SupplierProfileModal({
   const [supplyCategory, setSupplyCategory] = useState<SupplierSupplyCategory>(
     supplier?.supplyCategory || 'Raw Material'
   )
-  const [category, setCategory] = useState(supplier?.category || 'Sugar & Sweeteners')
+  const [category, setCategory] = useState(
+    supplier?.category || (categories.length > 0 ? categories[0].name : 'Raw Material Supplier')
+  )
   const [supplierCode, setSupplierCode] = useState(supplier?.supplierCode || '')
   const [phone, setPhone] = useState(supplier?.phone || '')
   const [altPhone, setAltPhone] = useState(supplier?.altPhone || '')
@@ -1470,23 +1555,43 @@ function SupplierProfileModal({
             />
           </label>
 
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-stone-700 mb-0">
+                Supplier Type Category *
+              </label>
+              {onOpenCategoryManager && (
+                <button
+                  type="button"
+                  onClick={onOpenCategoryManager}
+                  className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1"
+                >
+                  <Tag className="w-3 h-3" /> Manage Categories
+                </button>
+              )}
+            </div>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              required
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+              {categories.length === 0 && <option value="Raw Material Supplier">Raw Material Supplier</option>}
+            </select>
+          </div>
+
           <label>
-            Category of Supply (Selectable) *
+            Supply Scope Type
             <select value={supplyCategory} onChange={(e) => setSupplyCategory(e.target.value as any)} required>
               <option value="Raw Material">Raw Material (Ingredients / Chemicals / Sugar / Pulp)</option>
               <option value="Product">Product (Bottles / Preforms / Packaging / Cartons)</option>
               <option value="Both">Both (Raw Material & Packaging Products)</option>
             </select>
-          </label>
-
-          <label>
-            Category Specifics / Description
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="e.g. Sugar & Sweeteners / PET Preforms"
-              required
-            />
           </label>
 
           <label>
@@ -2212,6 +2317,335 @@ function DealReceiptModal({
           </button>
           <button className="button primary" onClick={onClose}>
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* =========================================================================
+   SUPPLIER CATEGORIES MANAGEMENT MODAL
+========================================================================= */
+function SupplierCategoryManagerModal({
+  categories,
+  suppliers,
+  onClose,
+  onSaveCategories,
+}: {
+  categories: CategoryItem[]
+  suppliers: SupplierItem[]
+  onClose: () => void
+  onSaveCategories: (
+    updatedCategories: CategoryItem[],
+    updatedSuppliers?: SupplierItem[]
+  ) => void
+}) {
+  const [isAddingNew, setIsAddingNew] = useState(false)
+  const [editingCatId, setEditingCatId] = useState<string | null>(null)
+  const [catName, setCatName] = useState('')
+  const [catColor, setCatColor] = useState('blue')
+  const [catDesc, setCatDesc] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  // Count suppliers using each category
+  const counts = useMemo(() => {
+    const acc: Record<string, number> = {}
+    suppliers.forEach((s) => {
+      if (s.category) {
+        acc[s.category] = (acc[s.category] || 0) + 1
+      }
+    })
+    return acc
+  }, [suppliers])
+
+  const handleStartEdit = (cat: CategoryItem) => {
+    setEditingCatId(cat.id)
+    setIsAddingNew(false)
+    setCatName(cat.name)
+    setCatColor(cat.color || 'blue')
+    setCatDesc(cat.description || '')
+    setError(null)
+  }
+
+  const handleDeleteCategory = (cat: CategoryItem) => {
+    const inUseCount = counts[cat.name] || 0
+    if (inUseCount > 0) {
+      if (
+        !confirm(
+          `"${cat.name}" is currently assigned to ${inUseCount} supplier(s). Are you sure you want to delete this category?`
+        )
+      ) {
+        return
+      }
+    }
+    const updated = categories.filter((c) => c.id !== cat.id)
+    onSaveCategories(updated)
+    if (editingCatId === cat.id) {
+      setEditingCatId(null)
+      setCatName('')
+      setCatDesc('')
+    }
+  }
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    const trimmed = catName.trim()
+    if (!trimmed) {
+      setError('Category name cannot be empty.')
+      return
+    }
+
+    // Duplicate check
+    const isDuplicate = categories.some(
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase() && c.id !== editingCatId
+    )
+    if (isDuplicate) {
+      setError(`A supplier category named "${trimmed}" already exists.`)
+      return
+    }
+
+    if (editingCatId) {
+      const oldCat = categories.find((c) => c.id === editingCatId)
+      const oldName = oldCat?.name
+
+      const updatedCats = categories.map((c) =>
+        c.id === editingCatId
+          ? {
+              ...c,
+              name: trimmed,
+              color: catColor,
+              description: catDesc.trim() || undefined,
+            }
+          : c
+      )
+
+      let updatedSuppliers: SupplierItem[] | undefined
+      if (oldName && oldName !== trimmed) {
+        updatedSuppliers = suppliers.map((s) =>
+          s.category === oldName ? { ...s, category: trimmed } : s
+        )
+      }
+
+      onSaveCategories(updatedCats, updatedSuppliers)
+      setEditingCatId(null)
+    } else {
+      const newCat: CategoryItem = {
+        id: `supcat-${Date.now()}`,
+        name: trimmed,
+        color: catColor,
+        description: catDesc.trim() || undefined,
+        createdAt: new Date().toISOString().slice(0, 10),
+      }
+
+      onSaveCategories([...categories, newCat])
+      setIsAddingNew(false)
+    }
+
+    setCatName('')
+    setCatColor('blue')
+    setCatDesc('')
+  }
+
+  const activeColorObj = SUPPLIER_CATEGORY_COLORS.find((c) => c.id === catColor) || SUPPLIER_CATEGORY_COLORS[0]
+
+  return (
+    <div className="editor-overlay">
+      <div className="editor-modal max-w-lg w-full" id="supplier-category-manager-modal">
+        <div className="editor-header">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
+              <Tag className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="eyebrow">Procurement Settings</p>
+              <h2>Manage Supplier Type Categories</h2>
+            </div>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2 rounded-lg text-xs flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Add / Edit Form */}
+        {isAddingNew || editingCatId ? (
+          <form
+            onSubmit={handleFormSubmit}
+            className="mb-4 bg-stone-50/90 p-4 rounded-xl border border-stone-200 space-y-3.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-primary" />
+                {isAddingNew ? 'Add New Supplier Category' : 'Edit Supplier Category'}
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold shadow-xs ${activeColorObj.class}`}>
+                {catName.trim() || 'Badge Preview'}
+              </span>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                Category Name *
+              </label>
+              <input
+                value={catName}
+                onChange={(e) => setCatName(e.target.value)}
+                placeholder="e.g. Raw Material Supplier, Machinery/Equipment Vendor"
+                required
+                autoFocus
+                className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                id="input-supplier-cat-name"
+              />
+            </div>
+
+            {/* Color Palette Selector */}
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1.5 block">
+                Badge Color Theme *
+              </label>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
+                {SUPPLIER_CATEGORY_COLORS.map((col) => {
+                  const isSelected = catColor === col.id
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => setCatColor(col.id)}
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-left text-xs transition-all ${
+                        isSelected
+                          ? 'border-stone-900 bg-white ring-2 ring-stone-900/10 font-bold shadow-xs'
+                          : 'border-stone-200 bg-white hover:bg-stone-50 text-stone-700 font-medium'
+                      }`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded-full ${col.dot} flex-shrink-0 flex items-center justify-center`}>
+                        {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                      </span>
+                      <span className="truncate text-[11px]">{col.label.split(' ')[0]}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-stone-700 mb-1 block">
+                Description / Notes <span className="text-stone-400 font-normal">(Optional)</span>
+              </label>
+              <input
+                value={catDesc}
+                onChange={(e) => setCatDesc(e.target.value)}
+                placeholder="Brief notes about this type of vendor"
+                className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="button secondary text-xs py-1.5 px-3"
+                onClick={() => {
+                  setIsAddingNew(false)
+                  setEditingCatId(null)
+                  setError(null)
+                }}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="button primary text-xs py-1.5 px-4" id="btn-save-supplier-category">
+                {isAddingNew ? 'Create Category' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="mb-4 flex justify-between items-center bg-stone-50 px-4 py-3 rounded-xl border border-stone-200">
+            <div>
+              <span className="text-xs font-bold text-stone-800">
+                {categories.length} Categories Registered
+              </span>
+              <p className="text-[11px] text-stone-500">Classify suppliers by vendor type & capabilities</p>
+            </div>
+            <button
+              type="button"
+              className="button primary text-xs py-1.5 px-3"
+              onClick={() => {
+                setIsAddingNew(true)
+                setCatName('')
+                setCatColor('blue')
+                setCatDesc('')
+                setError(null)
+              }}
+              id="btn-add-supplier-category-start"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Category
+            </button>
+          </div>
+        )}
+
+        {/* Categories List */}
+        <div className="divide-y divide-stone-100 max-h-72 overflow-y-auto border border-stone-200 rounded-xl bg-white">
+          {categories.length === 0 ? (
+            <div className="p-6 text-center text-xs text-stone-400">
+              No categories found. Click "+ Add Category" above.
+            </div>
+          ) : (
+            categories.map((c) => {
+              const count = counts[c.name] || 0
+              const badgeClass = getSupplierCategoryBadgeClass(c.name, categories)
+              return (
+                <div
+                  key={c.id}
+                  className="p-3.5 flex items-center justify-between hover:bg-stone-50/80 transition-colors"
+                >
+                  <div className="pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md shadow-2xs ${badgeClass}`}>
+                        {c.name}
+                      </span>
+                      <span className="text-[10px] bg-stone-100 text-stone-700 font-semibold px-2 py-0.5 rounded-md">
+                        {count} {count === 1 ? 'supplier' : 'suppliers'}
+                      </span>
+                    </div>
+                    {c.description && (
+                      <p className="text-[11px] text-stone-500 mt-1">{c.description}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="p-1.5 text-stone-500 hover:text-blue-600 rounded-md hover:bg-stone-100 transition-colors"
+                      title="Edit Category"
+                      onClick={() => handleStartEdit(c)}
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className="p-1.5 text-stone-500 hover:text-rose-600 rounded-md hover:bg-stone-100 transition-colors"
+                      title="Delete Category"
+                      onClick={() => handleDeleteCategory(c)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <div className="editor-actions mt-4">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Done
           </button>
         </div>
       </div>

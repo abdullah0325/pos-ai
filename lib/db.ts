@@ -510,6 +510,8 @@ export interface AppDatabase {
   categories: CategoryItem[]
   rawMaterialCategories?: CategoryItem[]
   customerCategories?: CustomerCategoryItem[]
+  supplierCategories?: CategoryItem[]
+  expenseCategories?: CategoryItem[]
   products: ProductItem[]
   rawMaterials: RawMaterialItem[]
   productionRuns: ProductionRun[]
@@ -540,14 +542,31 @@ export interface PurchaseCategoryItem {
 }
 
 export const defaultPurchaseCategories: PurchaseCategoryItem[] = [
-  { id: 'pcat-1', name: 'Raw Material', description: 'Grains, sugar, fruit pulp, preforms, chemicals', color: 'emerald' },
-  { id: 'pcat-2', name: 'Packaging', description: 'Cartons, wrappers, labels, caps, shrink films', color: 'blue' },
-  { id: 'pcat-3', name: 'Equipment & Machinery', description: 'Production lines, motors, pumps, tooling', color: 'purple' },
-  { id: 'pcat-4', name: 'Chemicals & Flavors', description: 'Food grade flavors, food color, citric acid, sanitizers', color: 'amber' },
-  { id: 'pcat-5', name: 'Maintenance & Spares', description: 'Bearings, belts, electrical spares, filters', color: 'teal' },
-  { id: 'pcat-6', name: 'Transport & Logistics', description: 'Freight, vehicle maintenance, delivery fuel', color: 'orange' },
-  { id: 'pcat-7', name: 'Office & Factory Supplies', description: 'Stationery, cleaning items, uniforms, safety gear', color: 'stone' },
-  { id: 'pcat-8', name: 'Finished Product', description: 'Outsourced trade goods and third-party stock', color: 'indigo' },
+  { id: 'pcat-1', name: 'Raw Material Purchase', description: 'Grains, sugar, fruit pulp, concentrates & raw ingredients', color: 'emerald' },
+  { id: 'pcat-2', name: 'Packaging Purchase', description: 'Bottles, preforms, caps, wrappers, cartons & shrink film', color: 'blue' },
+  { id: 'pcat-3', name: 'Machinery Purchase', description: 'Production lines, motors, pumps, tooling & plant equipment', color: 'purple' },
+  { id: 'pcat-4', name: 'Other Procurement', description: 'Consumables, plant spares, sanitizers & factory supplies', color: 'amber' },
+]
+
+export const defaultSupplierCategories: CategoryItem[] = [
+  { id: 'supcat-1', name: 'Raw Material Supplier', color: 'emerald', description: 'Grains, sugar, fruit pulp, concentrates & raw ingredients', createdAt: '2026-08-01' },
+  { id: 'supcat-2', name: 'Packaging Supplier', color: 'blue', description: 'PET preforms, caps, bottles, wrappers, cartons & labels', createdAt: '2026-08-01' },
+  { id: 'supcat-3', name: 'Finished Product Supplier', color: 'indigo', description: 'Finished stock, trade goods & wholesale products', createdAt: '2026-08-01' },
+  { id: 'supcat-4', name: 'Machinery/Equipment Vendor', color: 'purple', description: 'Plant machines, conveyor motors, compressors & tooling', createdAt: '2026-08-01' },
+  { id: 'supcat-5', name: 'Service Provider', color: 'teal', description: 'Maintenance, technical services, transport & utilities', createdAt: '2026-08-01' },
+]
+
+export const defaultExpenseCategories: CategoryItem[] = [
+  { id: 'expcat-1', name: 'Factory Utilities', color: 'amber', description: 'Electricity (WAPDA), gas, factory water & utility bills', createdAt: '2026-08-01' },
+  { id: 'expcat-2', name: 'Fuel/Diesel', color: 'orange', description: 'Generator diesel, boiler fuel & delivery vehicle petrol', createdAt: '2026-08-01' },
+  { id: 'expcat-3', name: 'Rent', color: 'rose', description: 'Factory building, warehouse & commercial space rent', createdAt: '2026-08-01' },
+  { id: 'expcat-4', name: 'Maintenance', color: 'teal', description: 'Plant repairs, machine spare parts, boiler servicing', createdAt: '2026-08-01' },
+  { id: 'expcat-5', name: 'Transport/Freight', color: 'sky', description: 'Raw material freight, dispatch delivery & loader charges', createdAt: '2026-08-01' },
+  { id: 'expcat-6', name: 'Office Expenses', color: 'stone', description: 'Stationery, tea, kitchen supplies & office maintenance', createdAt: '2026-08-01' },
+  { id: 'expcat-7', name: 'Salaries', color: 'emerald', description: 'Staff salaries, wages & production worker payroll', createdAt: '2026-08-01' },
+  { id: 'expcat-8', name: 'Loan/Advance to employee', color: 'purple', description: 'Staff loan advances and salary advance deductions', createdAt: '2026-08-01' },
+  { id: 'expcat-9', name: 'Marketing', color: 'blue', description: 'Brand promotion, posters, banners & digital ads', createdAt: '2026-08-01' },
+  { id: 'expcat-10', name: 'Daily/Misc', color: 'stone', description: 'Daily miscellaneous petty cash expenditures', createdAt: '2026-08-01' },
 ]
 
 export const defaultRawMaterialCategories: CategoryItem[] = [
@@ -595,6 +614,8 @@ export const initialDatabase: AppDatabase = {
   categories: defaultProductCategories,
   rawMaterialCategories: defaultRawMaterialCategories,
   customerCategories: defaultCustomerCategories,
+  supplierCategories: defaultSupplierCategories,
+  expenseCategories: defaultExpenseCategories,
   purchaseCategories: defaultPurchaseCategories,
   accounts: [
     { id: 'cash-in-hand', name: 'Cash in Hand (Factory Register)', type: 'Cash', balance: 345200, updatedAt: '2026-08-25' },
@@ -3008,6 +3029,21 @@ export function loadDatabase(): AppDatabase {
       })
     } else {
       parsed.purchases = initialDatabase.purchases || []
+      updated = true
+    }
+
+    if (!parsed.rawMaterialCategories || !Array.isArray(parsed.rawMaterialCategories) || parsed.rawMaterialCategories.length === 0) {
+      parsed.rawMaterialCategories = defaultRawMaterialCategories
+      updated = true
+    }
+
+    if (!parsed.supplierCategories || !Array.isArray(parsed.supplierCategories) || parsed.supplierCategories.length === 0) {
+      parsed.supplierCategories = defaultSupplierCategories
+      updated = true
+    }
+
+    if (!parsed.expenseCategories || !Array.isArray(parsed.expenseCategories) || parsed.expenseCategories.length === 0) {
+      parsed.expenseCategories = defaultExpenseCategories
       updated = true
     }
 
