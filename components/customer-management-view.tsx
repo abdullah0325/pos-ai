@@ -508,62 +508,26 @@ export default function CustomerManagementView({
   }
 
   return (
-    <div className="space-y-6" id="customer-management-root">
+    <div className="space-y-5" id="customer-management-root">
       {/* Single Clean Header Section */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs" id="customer-management-header">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-              <Users className="w-3.5 h-3.5" /> Customer Management
-            </span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
-            {mainTab === 'phonebook' ? 'Phone Book Directory' : 'Customer Accounts'}
-          </h1>
-          <p className="text-xs text-stone-500 mt-0.5">
-            {mainTab === 'phonebook'
-              ? 'Unified contact directory for customers, suppliers, staff, and partners with quick dialing and WhatsApp messaging.'
-              : 'Maintain directory of Retailers, Wholesalers, Distributors, Sales Men, and Walk-in customers with live ledgers & dues.'}
-          </p>
-        </div>
-
-        {/* Top-Level Tabs Switcher & Action Buttons in One Unified Row */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1 p-1 bg-stone-100/90 rounded-xl border border-stone-200 shadow-2xs">
-            <button
-              onClick={() => setMainTab('customers')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                mainTab === 'customers'
-                  ? 'bg-white text-stone-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-              id="tab-customer-accounts"
-            >
-              <Users className={`w-3.5 h-3.5 ${mainTab === 'customers' ? 'text-emerald-600' : 'text-stone-400'}`} />
-              <span>Customers & Accounts</span>
-              <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800">
-                {db.customers.length}
+      <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4" id="customer-management-header">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                <Users className="w-3.5 h-3.5" /> Customer Management
               </span>
-            </button>
-
-            <button
-              onClick={() => {
-                setMainTab('phonebook')
-                setSelectedCustomerId(null)
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                mainTab === 'phonebook'
-                  ? 'bg-white text-stone-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-              id="tab-phonebook-directory"
-            >
-              <Phone className={`w-3.5 h-3.5 ${mainTab === 'phonebook' ? 'text-purple-600' : 'text-stone-400'}`} />
-              <span>Phone Book</span>
-              <span className="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-purple-100 text-purple-800">
-                {db.phonebookContacts?.length || (db.customers.length + db.suppliers.length)}
-              </span>
-            </button>
+              <span className="text-xs text-stone-400">·</span>
+              <span className="text-xs text-stone-500 font-medium">AL FAROOQ FOODS</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
+              {mainTab === 'phonebook' ? 'Phone Book & Directory' : 'Customer Accounts'}
+            </h1>
+            <p className="text-xs text-stone-500 mt-0.5">
+              {mainTab === 'phonebook'
+                ? 'Centralized communications directory with 1-click WhatsApp messaging, direct calling, and contact management.'
+                : 'Maintain directory of Retailers, Wholesalers, Distributors, Sales Men, and Walk-in customers with live ledgers & dues.'}
+            </p>
           </div>
 
           {mainTab === 'customers' && !selectedCustomer && (
@@ -583,6 +547,48 @@ export default function CustomerManagementView({
               </button>
             </div>
           )}
+        </div>
+
+        {/* Two-Tab Switcher directly under header */}
+        <div className="flex items-center gap-2 border-t border-stone-100 pt-3">
+          <button
+            onClick={() => setMainTab('customers')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              mainTab === 'customers'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+            }`}
+            id="tab-customer-accounts"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Customers & Accounts</span>
+            <span className={`ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full ${
+              mainTab === 'customers' ? 'bg-emerald-700/80 text-white' : 'bg-stone-200 text-stone-700'
+            }`}>
+              {db.customers.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => {
+              setMainTab('phonebook')
+              setSelectedCustomerId(null)
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              mainTab === 'phonebook'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+            }`}
+            id="tab-phonebook-directory"
+          >
+            <Phone className="w-3.5 h-3.5" />
+            <span>Phone Book</span>
+            <span className={`ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full ${
+              mainTab === 'phonebook' ? 'bg-purple-700/80 text-white' : 'bg-stone-200 text-stone-700'
+            }`}>
+              {db.phonebookContacts?.length || (db.customers.length + db.suppliers.length)}
+            </span>
+          </button>
         </div>
       </div>
 
