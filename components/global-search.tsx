@@ -37,6 +37,7 @@ import {
 interface GlobalSearchProps {
   db: AppDatabase
   onNavigate: (module: ModuleKey | string, subTab?: string) => void
+  openRequest?: number
 }
 
 type SearchCategory = 'all' | 'customers' | 'products' | 'suppliers' | 'employees' | 'invoices' | 'raw_materials'
@@ -55,7 +56,7 @@ interface SearchResultItem {
   entityId?: string
 }
 
-export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
+export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: GlobalSearchProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all')
@@ -64,6 +65,13 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!openRequest) return
+    setIsOpen(true)
+    const frame = requestAnimationFrame(() => inputRef.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [openRequest])
 
   // Hotkey listener: Cmd+K or Ctrl+K or '/'
   useEffect(() => {
@@ -346,7 +354,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
   }
 
   return (
-    <div className="global-search relative w-full max-w-[360px] mx-2 sm:mx-4" ref={containerRef}>
+    <div className={`global-search relative w-full max-w-[360px] mx-2 sm:mx-4 ${isOpen ? 'mobile-search-visible' : ''}`} ref={containerRef}>
       {/* Search Bar Input in Topbar */}
       <div
         className={`flex items-center h-11 rounded-xl border bg-white transition-all ${
@@ -386,6 +394,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
       </div>
 
       {/* Dropdown Results Modal / Popover */}
+      {isOpen && <button type="button" className="mobile-search-close" aria-label="Close workspace search" onClick={() => { setIsOpen(false); document.querySelector<HTMLButtonElement>('.profile-trigger')?.focus() }}><X size={18} /></button>}
       {isOpen && (
         <div
           className="gradient-card absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-stone-200/90 z-50 overflow-hidden flex flex-col max-h-[520px] animate-in fade-in slide-in-from-top-2 duration-150"

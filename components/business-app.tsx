@@ -65,6 +65,7 @@ export default function BusinessApp() {
   const [productsTab, setProductsTab] = useState<ProductsSubTab>('catalog')
   const [reportsCategory, setReportsCategory] = useState<ReportCategoryKey>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mobileSearchRequest, setMobileSearchRequest] = useState(0)
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [isOwner, setIsOwner] = useState(true)
   const [isClientLoaded, setIsClientLoaded] = useState(false)
@@ -74,7 +75,7 @@ export default function BusinessApp() {
     const dismissOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setSidebarOpen(false)
-        document.querySelector<HTMLButtonElement>('.mobile-menu')?.focus()
+        document.querySelector<HTMLButtonElement>(window.matchMedia('(max-width: 900px)').matches ? '.profile-trigger' : '.mobile-menu')?.focus()
       }
     }
     window.addEventListener('keydown', dismissOnEscape)
@@ -314,7 +315,7 @@ export default function BusinessApp() {
           </div>
 
           {/* Quick Universal Admin Search */}
-          <GlobalSearch db={db} onNavigate={handleNavigate} />
+          <GlobalSearch db={db} onNavigate={handleNavigate} openRequest={mobileSearchRequest} />
 
           <div className="top-actions">
             <button data-ui="button" type="button" className="role-pill" onClick={() => handleRoleChange(!isOwner)} aria-pressed={isOwner} title="Click to toggle role">
@@ -341,7 +342,9 @@ export default function BusinessApp() {
               <Settings />
             </button>
 
-            <ProfileMenu db={db} isOwner={isOwner} onSave={handleSaveDatabase} onSettings={() => handleNavigate('settings')} onLock={lockApp} />
+            <ProfileMenu db={db} isOwner={isOwner} onSave={handleSaveDatabase} onSettings={() => handleNavigate('settings')} onLock={lockApp}
+              onNavigation={() => setSidebarOpen(true)} onSearch={() => setMobileSearchRequest(value => value + 1)}
+              onBackup={() => exportDatabaseJSON(db)} onRoleChange={() => handleRoleChange(!isOwner)} />
           </div>
         </header>
 

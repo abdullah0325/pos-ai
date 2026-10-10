@@ -1,5 +1,6 @@
 /* Keep this layer last in the cascade: all visible changes are mobile-only. */
 .mobile-bottom-nav, .mobile-nav-backdrop { display: none; }
+.mobile-profile-actions, .mobile-search-close { display: none; }
 
 @media screen and (max-width: 900px) {
   html { scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
@@ -82,6 +83,27 @@
 }
 
 @keyframes mobile-module-enter { from { opacity: .7; } to { opacity: 1; } }
+
+@media screen and (max-width: 900px) {
+  .app-frame .topbar > .mobile-menu,
+  .app-frame .topbar > .global-search,
+  .app-frame .top-actions > button { display: none; }
+  .app-frame .topbar { min-height: 64px; padding: 10px 16px; }
+  .app-frame .top-actions { flex: 1; gap: 10px; }
+  .app-frame .top-actions .icon-button,
+  .app-frame .header-profile .profile-trigger { width: 44px; min-width: 44px; height: 44px; }
+  .app-frame .profile-dropdown { position: fixed; top: 70px; right: 12px; left: 12px; width: auto; max-width: none; max-height: calc(100dvh - 158px - env(safe-area-inset-bottom)); overflow-y: auto; }
+  .mobile-profile-actions { display: block; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .mobile-profile-actions > button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 10px; background: transparent; border: 0; border-radius: 8px; text-align: left; color: #40594a; font-size: 12px; }
+  .mobile-profile-actions > button:hover { background: #f0f6f2; }
+  .mobile-profile-actions > button svg { flex-shrink: 0; }
+  .mobile-profile-actions button small { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 10px; }
+  .profile-dropdown > button { min-height: 48px; }
+  .profile-dropdown button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+  .app-frame .topbar > .global-search.mobile-search-visible { display: block; position: fixed; top: 76px; left: 12px; right: 12px; width: auto; max-width: none; margin: 0; padding-right: 50px; z-index: 50; }
+  .mobile-search-close { display: grid; place-items: center; position: absolute; top: 0; right: 0; width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 12px; background: #fff; color: var(--text-secondary); }
+  .app-frame #global-search-results-modal { min-width: 0 !important; max-height: calc(100dvh - 210px - env(safe-area-inset-bottom)); }
+}
 
 /* Compact, lighter mobile typography; retain modest emphasis for hierarchy. */
 @layer utilities {
