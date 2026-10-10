@@ -69,6 +69,18 @@ export default function BusinessApp() {
   const [isOwner, setIsOwner] = useState(true)
   const [isClientLoaded, setIsClientLoaded] = useState(false)
 
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false)
+        document.querySelector<HTMLButtonElement>('.mobile-menu')?.focus()
+      }
+    }
+    window.addEventListener('keydown', dismissOnEscape)
+    return () => window.removeEventListener('keydown', dismissOnEscape)
+  }, [sidebarOpen])
+
   // Load from offline persistent storage on mount
   useEffect(() => {
     const loaded = loadDatabase()
@@ -285,6 +297,8 @@ export default function BusinessApp() {
         </div>
       </aside>
 
+      {sidebarOpen && <button type="button" className="mobile-nav-backdrop" aria-label="Dismiss navigation" onClick={() => setSidebarOpen(false)} />}
+
       {/* MAIN VIEW AREA */}
       <main className="main-area">
         {/* Top Navbar */}
@@ -332,7 +346,7 @@ export default function BusinessApp() {
         </header>
 
         {/* Body Content Router */}
-        <div className="content">
+        <div className="content" data-mobile-module={activeModule}>
           {activeModule === 'dashboard' && (
             <DashboardView
               db={db}
@@ -425,6 +439,22 @@ export default function BusinessApp() {
           )}
         </div>
       </main>
+
+      <nav className="mobile-bottom-nav" aria-label="Main mobile navigation">
+        {([
+          { key: 'dashboard', label: 'Home', icon: LayoutDashboard },
+          { key: 'pos', label: 'POS', icon: Store },
+          { key: 'sales', label: 'Sales', icon: ShoppingBag },
+          { key: 'products', label: 'Products', icon: Package },
+          { key: 'reports', label: 'Reports', icon: TrendingUp },
+        ] as const).map(({ key, label, icon: Icon }) => (
+          <button key={key} type="button" aria-current={activeModule === key ? 'page' : undefined}
+            onClick={() => { if (activeModule !== key) handleNavigate(key) }}>
+            <span className="mobile-bottom-icon"><Icon aria-hidden="true" /></span>
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
 
       {/* Payment receipt uses the same record as the dashboard collection card. */}
       {showReceiptModal && <CollectionReceipt db={db} onClose={() => setShowReceiptModal(false)} onViewCustomer={() => { setShowReceiptModal(false); handleNavigate('customer-management') }} />}

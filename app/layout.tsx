@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import './mobile.css'
 
 export const metadata: Metadata = {
   title: 'AL FAROOQ FOODS - Business Management System',
@@ -19,6 +20,7 @@ export const viewport: Viewport = {
   themeColor: '#7CB518',
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   userScalable: true,
 }
 
