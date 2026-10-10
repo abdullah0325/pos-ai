@@ -1,5 +1,7 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import React, { useState, useMemo } from 'react'
 import {
   Truck,
@@ -289,8 +291,8 @@ export default function SuppliersManagementView({
   }, [selectedSupplier, db.ledgers, supplierDeals])
 
   // Delete Supplier
-  const handleDeleteSupplier = (supplierId: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete supplier "${name}"? All associated local records will be deleted.`)) return
+  const handleDeleteSupplier = async (supplierId: string, name: string) => {
+    if (!await confirmAction(`Are you sure you want to delete supplier "${name}"? All associated local records will be deleted.`)) return
 
     const updatedSuppliers = db.suppliers.filter((s) => s.id !== supplierId)
     const updatedLedgers = db.ledgers.filter((l) => l.partyId !== supplierId)
@@ -567,7 +569,7 @@ export default function SuppliersManagementView({
       {!selectedSupplier && (
         <>
           {/* Header Card */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
+          <div data-ui="toolbar" className="page-title-banner gradient-card flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
             <div>
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold tracking-wider uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-md">
@@ -580,17 +582,17 @@ export default function SuppliersManagementView({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <button data-ui="button"
                 className="button secondary"
                 onClick={() => setIsManagingCategories(true)}
                 title="Manage Supplier Type Categories"
               >
                 <Tag className="w-4 h-4" /> Manage Categories
               </button>
-              <button className="button secondary" onClick={handleExportCSV} title="Export CSV">
+              <button data-ui="button" className="button secondary" onClick={handleExportCSV} title="Export CSV">
                 <Download className="w-4 h-4" /> Export CSV
               </button>
-              <button className="button primary" onClick={() => setIsCreatingSupplier(true)}>
+              <button data-ui="button" className="button primary" onClick={() => setIsCreatingSupplier(true)}>
                 <Plus className="w-4 h-4 stroke-[3]" /> Add New Supplier
               </button>
             </div>
@@ -624,7 +626,7 @@ export default function SuppliersManagementView({
           <div className="panel p-4 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
             <div className="search-box max-w-md w-full">
               <Search className="w-4 h-4 text-stone-400" />
-              <input
+              <input data-ui="input"
                 type="text"
                 placeholder="Search by company name, contact, category, city..."
                 value={searchQuery}
@@ -632,7 +634,7 @@ export default function SuppliersManagementView({
                 className="w-full bg-transparent text-xs font-medium focus:outline-none"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-stone-400 hover:text-stone-600">
+                <button data-ui="button" onClick={() => setSearchQuery('')} className="text-stone-400 hover:text-stone-600">
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -640,7 +642,7 @@ export default function SuppliersManagementView({
 
             <div className="flex flex-wrap items-center gap-2">
               {/* Category Filter */}
-              <select
+              <select data-ui="select"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 focus:outline-none"
@@ -661,7 +663,7 @@ export default function SuppliersManagementView({
               </select>
 
               {/* Balance Filter */}
-              <select
+              <select data-ui="select"
                 value={balanceFilter}
                 onChange={(e) => setBalanceFilter(e.target.value as any)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 focus:outline-none"
@@ -676,7 +678,7 @@ export default function SuppliersManagementView({
           {/* Suppliers Table */}
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Supplier / Company</th>
@@ -749,28 +751,28 @@ export default function SuppliersManagementView({
                         </td>
                         <td>
                           <div className="row-actions justify-end">
-                            <button
+                            <button data-ui="button"
                               className="row-action text-primary"
                               title="View Profile & Deals"
                               onClick={() => setSelectedSupplierId(s.id)}
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="row-action text-emerald-700"
                               title="Record Payment Voucher"
                               onClick={() => setIsRecordingPayment(s)}
                             >
                               <CreditCard className="w-4 h-4" />
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="row-action"
                               title="Edit Supplier"
                               onClick={() => setEditingSupplier(s)}
                             >
                               <Edit className="w-4 h-4" />
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="row-action danger"
                               title="Delete Supplier"
                               onClick={() => handleDeleteSupplier(s.id, s.name)}
@@ -805,7 +807,7 @@ export default function SuppliersManagementView({
         <div className="space-y-6">
           {/* Top Bar Navigation */}
           <div className="flex items-center justify-between gap-3">
-            <button
+            <button data-ui="button"
               onClick={() => setSelectedSupplierId(null)}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 bg-white border border-stone-200 px-3 py-2 rounded-xl transition-all shadow-xs"
             >
@@ -813,32 +815,32 @@ export default function SuppliersManagementView({
             </button>
 
             <div className="flex items-center gap-2">
-              <button
+              <button data-ui="button"
                 className="button secondary"
                 onClick={() => generateLedgerPDF(selectedSupplier, supplierLedgers, false)}
               >
                 <Download className="w-4 h-4" /> Supplier Ledger PDF
               </button>
-              <button
+              <button data-ui="button"
                 className="button secondary"
                 onClick={() => setIsCreatingDeal(selectedSupplier)}
               >
                 <Plus className="w-4 h-4" /> Record New Deal / Order
               </button>
-              <button
+              <button data-ui="button"
                 className="button primary"
                 onClick={() => setIsRecordingPayment(selectedSupplier)}
               >
                 <CreditCard className="w-4 h-4 stroke-[2.5]" /> Record Payment to Supplier
               </button>
-              <button
+              <button data-ui="button"
                 className="icon-button"
                 title="Edit Supplier"
                 onClick={() => setEditingSupplier(selectedSupplier)}
               >
                 <Edit className="w-4 h-4" />
               </button>
-              <button
+              <button data-ui="button"
                 className="icon-button danger"
                 title="Delete Supplier"
                 onClick={() => handleDeleteSupplier(selectedSupplier.id, selectedSupplier.name)}
@@ -849,7 +851,7 @@ export default function SuppliersManagementView({
           </div>
 
           {/* Supplier Master Card */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 p-6 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-stone-100">
               <div className="flex items-start gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xl shadow-xs">
@@ -896,12 +898,12 @@ export default function SuppliersManagementView({
 
               {/* Financial Status Summary Pills */}
               <div className="flex items-center gap-3">
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 text-right min-w-[130px]">
+                <div data-ui="surface" className="gradient-card bg-stone-50 p-3.5 rounded-xl border border-stone-200 text-right min-w-[130px]">
                   <span className="text-[11px] font-bold text-stone-500 block uppercase tracking-wider">Opening Bal</span>
                   <strong className="text-sm font-black text-stone-800">{formatPKR(selectedSupplier.openingBalance)}</strong>
                 </div>
-                <div
-                  className={`p-3.5 rounded-xl border text-right min-w-[160px] ${
+                <div data-ui="surface"
+                  className={`gradient-card p-3.5 rounded-xl border text-right min-w-[160px] ${
                     selectedSupplier.currentBalance > 0
                       ? 'bg-amber-50 border-amber-200 text-amber-900'
                       : 'bg-emerald-50 border-emerald-200 text-emerald-900'
@@ -933,8 +935,8 @@ export default function SuppliersManagementView({
           </div>
 
           {/* Sub-Navigation Tabs */}
-          <div className="bg-white rounded-xl border border-stone-200 p-1.5 shadow-xs flex items-center gap-2 overflow-x-auto">
-            <button
+          <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 p-1.5 shadow-xs flex items-center gap-2 overflow-x-auto">
+            <button data-ui="tab"
               onClick={() => setActiveTab('deals')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'deals' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
@@ -942,7 +944,7 @@ export default function SuppliersManagementView({
             >
               <FileText className="w-4 h-4" /> Deals & Purchases History ({supplierDeals.length})
             </button>
-            <button
+            <button data-ui="tab"
               onClick={() => setActiveTab('ledger')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'ledger' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
@@ -950,7 +952,7 @@ export default function SuppliersManagementView({
             >
               <TrendingUp className="w-4 h-4" /> Running Account Ledger ({supplierLedgers.length})
             </button>
-            <button
+            <button data-ui="tab"
               onClick={() => setActiveTab('payments')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'payments' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
@@ -958,7 +960,7 @@ export default function SuppliersManagementView({
             >
               <CreditCard className="w-4 h-4" /> Disbursements & Receipts ({selectedSupplier.paymentRecords?.length || 0})
             </button>
-            <button
+            <button data-ui="tab"
               onClick={() => setActiveTab('materials')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'materials' ? 'bg-primary text-white shadow-xs' : 'text-stone-600 hover:bg-stone-100'
@@ -978,7 +980,7 @@ export default function SuppliersManagementView({
                   <h3 className="font-bold text-stone-900 text-sm">Deals, Purchase Orders & Deliveries</h3>
                   <p className="text-xs text-stone-500">Every raw material or product batch purchased from {selectedSupplier.name}</p>
                 </div>
-                <button
+                <button data-ui="button"
                   className="button primary text-xs"
                   onClick={() => setIsCreatingDeal(selectedSupplier)}
                 >
@@ -986,7 +988,7 @@ export default function SuppliersManagementView({
                 </button>
               </div>
               <div className="table-scroll">
-                <table>
+                <table data-ui="table">
                   <thead>
                     <tr>
                       <th>PO # / Deal ID</th>
@@ -1045,7 +1047,7 @@ export default function SuppliersManagementView({
                           </td>
                           <td>
                             {deal.invoiceImage || deal.paymentScreenshot ? (
-                              <button
+                              <button data-ui="button"
                                 onClick={() =>
                                   setPreviewImage({
                                     src: (deal.invoiceImage || deal.paymentScreenshot)!,
@@ -1062,14 +1064,14 @@ export default function SuppliersManagementView({
                           </td>
                           <td>
                             <div className="row-actions justify-end">
-                              <button
+                              <button data-ui="button"
                                 className="row-action text-primary"
                                 title="View Deal Voucher & Receipt"
                                 onClick={() => setViewingDeal(deal)}
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              <button
+                              <button data-ui="button"
                                 className="row-action"
                                 title="Download Voucher PDF"
                                 onClick={() =>
@@ -1124,7 +1126,7 @@ export default function SuppliersManagementView({
                   <p className="text-xs text-stone-500">Live payable balance statement for {selectedSupplier.name}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
+                  <button data-ui="button"
                     className="button secondary text-xs"
                     onClick={() => generateLedgerPDF(selectedSupplier, supplierLedgers, false)}
                   >
@@ -1133,7 +1135,7 @@ export default function SuppliersManagementView({
                 </div>
               </div>
               <div className="table-scroll">
-                <table>
+                <table data-ui="table">
                   <thead>
                     <tr>
                       <th>#</th>
@@ -1195,7 +1197,7 @@ export default function SuppliersManagementView({
                   <h3 className="font-bold text-stone-900 text-sm">Disbursement Vouchers & Proof Attachments</h3>
                   <p className="text-xs text-stone-500">Payments made to {selectedSupplier.name} via Cash, Card, Bank Transfer, or Online</p>
                 </div>
-                <button
+                <button data-ui="button"
                   className="button primary text-xs"
                   onClick={() => setIsRecordingPayment(selectedSupplier)}
                 >
@@ -1203,7 +1205,7 @@ export default function SuppliersManagementView({
                 </button>
               </div>
               <div className="table-scroll">
-                <table>
+                <table data-ui="table">
                   <thead>
                     <tr>
                       <th>Voucher #</th>
@@ -1239,7 +1241,7 @@ export default function SuppliersManagementView({
                         <td className="font-mono text-xs text-stone-800">{pay.transactionRef || '—'}</td>
                         <td>
                           {pay.receiptImage ? (
-                            <button
+                            <button data-ui="button"
                               onClick={() =>
                                 setPreviewImage({
                                   src: pay.receiptImage!,
@@ -1286,7 +1288,7 @@ export default function SuppliersManagementView({
                   {db.rawMaterials
                     .filter((r) => r.supplier?.toLowerCase() === selectedSupplier.name.toLowerCase() || (r.description || '').toLowerCase().includes(selectedSupplier.name.toLowerCase()))
                     .map((rm) => (
-                      <div key={rm.id} className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
+                      <div data-ui="surface" key={rm.id} className="gradient-card p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
                         <div>
                           <strong className="text-xs text-stone-900 block">{rm.name}</strong>
                           <span className="text-[11px] text-stone-500">Rate: {formatPKR(rm.unitPrice)} / {rm.unit}</span>
@@ -1303,7 +1305,7 @@ export default function SuppliersManagementView({
                   {db.products
                     .filter((p) => (p.description || '').toLowerCase().includes(selectedSupplier.name.toLowerCase()))
                     .map((prod) => (
-                      <div key={prod.id} className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
+                      <div data-ui="surface" key={prod.id} className="gradient-card p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
                         <div>
                           <strong className="text-xs text-stone-900 block">{prod.name}</strong>
                           <span className="text-[11px] text-stone-500">Cost: {formatPKR(prod.costPrice)} / {prod.unit}</span>
@@ -1433,10 +1435,10 @@ export default function SuppliersManagementView({
       {/* ========================================================================= */}
       {previewImage && (
         <div className="editor-overlay z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl relative">
+          <div data-ui="surface" className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl relative">
             <div className="flex items-center justify-between pb-3 border-b border-stone-200">
               <h3 className="font-bold text-stone-900 text-sm">{previewImage.title}</h3>
-              <button onClick={() => setPreviewImage(null)} className="icon-button">
+              <button data-ui="button" onClick={() => setPreviewImage(null)} className="icon-button">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1444,7 +1446,7 @@ export default function SuppliersManagementView({
               <img src={previewImage.src} alt={previewImage.title} className="max-h-[70vh] rounded object-contain" />
             </div>
             <div className="mt-4 flex justify-end">
-              <button className="button primary text-xs" onClick={() => setPreviewImage(null)}>
+              <button data-ui="button" className="button primary text-xs" onClick={() => setPreviewImage(null)}>
                 Close Preview
               </button>
             </div>
@@ -1501,10 +1503,11 @@ function SupplierProfileModal({
   const [openingBalance, setOpeningBalance] = useState(supplier?.openingBalance || 0)
   const [notes, setNotes] = useState(supplier?.notes || '')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !phone.trim()) return
 
+    if (supplier && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave({
       supplierCode: supplierCode.trim() || undefined,
       name: name.trim(),
@@ -1529,7 +1532,7 @@ function SupplierProfileModal({
             <p className="eyebrow">Supplier Directory</p>
             <h2>{supplier ? `Edit ${supplier.name}` : 'Add New Supplier Profile'}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -1537,7 +1540,7 @@ function SupplierProfileModal({
         <div className="form-grid">
           <label>
             Company / Supplier Name *
-            <input
+            <input data-ui="input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. National Sugar Mills Ltd"
@@ -1547,7 +1550,7 @@ function SupplierProfileModal({
 
           <label>
             Contact Person Name *
-            <input
+            <input data-ui="input"
               value={contactPerson}
               onChange={(e) => setContactPerson(e.target.value)}
               placeholder="e.g. Tariq Mehmood"
@@ -1561,7 +1564,7 @@ function SupplierProfileModal({
                 Supplier Type Category *
               </label>
               {onOpenCategoryManager && (
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={onOpenCategoryManager}
                   className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1"
@@ -1570,7 +1573,7 @@ function SupplierProfileModal({
                 </button>
               )}
             </div>
-            <select
+            <select data-ui="select"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -1587,7 +1590,7 @@ function SupplierProfileModal({
 
           <label>
             Supply Scope Type
-            <select value={supplyCategory} onChange={(e) => setSupplyCategory(e.target.value as any)} required>
+            <select data-ui="select" value={supplyCategory} onChange={(e) => setSupplyCategory(e.target.value as any)} required>
               <option value="Raw Material">Raw Material (Ingredients / Chemicals / Sugar / Pulp)</option>
               <option value="Product">Product (Bottles / Preforms / Packaging / Cartons)</option>
               <option value="Both">Both (Raw Material & Packaging Products)</option>
@@ -1596,7 +1599,7 @@ function SupplierProfileModal({
 
           <label>
             Supplier Code / ID (Auto / Manual)
-            <input
+            <input data-ui="input"
               value={supplierCode}
               onChange={(e) => setSupplierCode(e.target.value)}
               placeholder="e.g. SUP-1001 or leave blank for auto"
@@ -1605,7 +1608,7 @@ function SupplierProfileModal({
 
           <label>
             Phone / Mobile *
-            <input
+            <input data-ui="input"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="0300 XXXXXXX"
@@ -1615,7 +1618,7 @@ function SupplierProfileModal({
 
           <label>
             City *
-            <input
+            <input data-ui="input"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="e.g. Faisalabad, Lahore, Karachi"
@@ -1625,7 +1628,7 @@ function SupplierProfileModal({
 
           <label>
             Office / Mill Address *
-            <input
+            <input data-ui="input"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Industrial Estate, Mill Complex, Street"
@@ -1636,7 +1639,7 @@ function SupplierProfileModal({
           {!supplier && (
             <label>
               Opening Balance (Rs)
-              <input
+              <input data-ui="input"
                 type="number"
                 min="0"
                 value={openingBalance}
@@ -1648,7 +1651,7 @@ function SupplierProfileModal({
 
           <label>
             Email Address (Optional)
-            <input
+            <input data-ui="input"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -1658,7 +1661,7 @@ function SupplierProfileModal({
 
           <label className="col-span-2">
             Notes / Quality Terms
-            <input
+            <input data-ui="input"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. 50kg food-grade packaging in truckload batches"
@@ -1667,10 +1670,10 @@ function SupplierProfileModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             {supplier ? 'Update Supplier Profile' : 'Save Supplier Profile'}
           </button>
         </div>
@@ -1719,10 +1722,11 @@ function RecordSupplierPaymentModal({
     reader.readAsDataURL(file)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (amount <= 0) return
 
+    if (!(await confirmAction({"title":"Record this transaction?","message":"Save this transaction and update the associated account balances?","confirmLabel":"Record transaction","destructive":false}))) return
     onSave({
       amount: Number(amount),
       date,
@@ -1742,12 +1746,12 @@ function RecordSupplierPaymentModal({
             <p className="eyebrow">Disbursement Voucher</p>
             <h2>Record Payment to {supplier.name}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
 
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 mb-4 grid grid-cols-2 gap-3 text-xs">
+        <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-3.5 mb-4 grid grid-cols-2 gap-3 text-xs">
           <div>
             <span className="text-stone-500 block">Total Balance Due to Supplier:</span>
             <strong className="text-base text-amber-800">{formatPKR(supplier.currentBalance)}</strong>
@@ -1761,7 +1765,7 @@ function RecordSupplierPaymentModal({
         <div className="form-grid">
           <label>
             Disbursement Amount (Rs) *
-            <input
+            <input data-ui="input"
               type="number"
               min="1"
               value={amount}
@@ -1772,12 +1776,12 @@ function RecordSupplierPaymentModal({
 
           <label>
             Payment Date *
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <input data-ui="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </label>
 
           <label>
             Payment Mode *
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)}>
+            <select data-ui="select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)}>
               <option value="Bank Transfer">Bank Transfer (IBFT / RTGS)</option>
               <option value="Online">Online Banking (Raast / App)</option>
               <option value="Cash">Cash in Hand</option>
@@ -1788,7 +1792,7 @@ function RecordSupplierPaymentModal({
 
           <label>
             Deduct From Account *
-            <select value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)}>
+            <select data-ui="select" value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)}>
               {accounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
                   {acc.name} (Bal: {formatPKR(acc.balance)})
@@ -1799,7 +1803,7 @@ function RecordSupplierPaymentModal({
 
           <label className="col-span-2">
             Transaction Reference / Cheque #
-            <input
+            <input data-ui="input"
               value={transactionRef}
               onChange={(e) => setTransactionRef(e.target.value)}
               placeholder="e.g. IBFT-984210 or Cheque # 001928"
@@ -1814,7 +1818,7 @@ function RecordSupplierPaymentModal({
             <div className="flex items-center gap-4">
               <label className="button secondary cursor-pointer text-xs">
                 <Upload className="w-3.5 h-3.5" /> Upload Screenshot / Slip
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                <input data-ui="file" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
               </label>
               {receiptImage && (
                 <div className="flex items-center gap-2">
@@ -1822,7 +1826,7 @@ function RecordSupplierPaymentModal({
                   <span className="text-xs text-emerald-700 font-bold flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5" /> Screenshot Attached
                   </span>
-                  <button type="button" onClick={() => setReceiptImage(undefined)} className="text-rose-600 text-xs hover:underline">
+                  <button data-ui="button" type="button" onClick={() => setReceiptImage(undefined)} className="text-rose-600 text-xs hover:underline">
                     Remove
                   </button>
                 </div>
@@ -1832,7 +1836,7 @@ function RecordSupplierPaymentModal({
 
           <label className="col-span-2">
             Notes / Description
-            <input
+            <input data-ui="input"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Cleared 50% bill against sugar consignment"
@@ -1841,10 +1845,10 @@ function RecordSupplierPaymentModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Confirm & Deduct Account
           </button>
         </div>
@@ -1942,7 +1946,7 @@ function CreateSupplierDealModal({
     reader.readAsDataURL(file)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     let itemName = 'Supplied Item'
     if (dealType === 'Raw Material') {
@@ -1953,6 +1957,7 @@ function CreateSupplierDealModal({
       if (p) itemName = p.name
     }
 
+    if (!(await confirmAction({"title":"Record this transaction?","message":"Save this transaction and update the associated account balances?","confirmLabel":"Record transaction","destructive":false}))) return
     onSave({
       dealType,
       itemId: selectedItemId,
@@ -1981,7 +1986,7 @@ function CreateSupplierDealModal({
             <p className="eyebrow">Purchase Deal</p>
             <h2>Record Deal with {supplier.name}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -1991,7 +1996,7 @@ function CreateSupplierDealModal({
             <div className="form-grid">
               <label>
                 Procurement Type *
-                <select
+                <select data-ui="select"
                   value={dealType}
                   onChange={(e) => {
                     const newType = e.target.value as any
@@ -2010,7 +2015,7 @@ function CreateSupplierDealModal({
 
               <label>
                 Select Item *
-                <select value={selectedItemId} onChange={(e) => handleItemChange(e.target.value)}>
+                <select data-ui="select" value={selectedItemId} onChange={(e) => handleItemChange(e.target.value)}>
                   {dealType === 'Raw Material'
                     ? rawMaterials.map((r) => (
                         <option key={r.id} value={r.id}>
@@ -2027,7 +2032,7 @@ function CreateSupplierDealModal({
 
               <label>
                 Quantity *
-                <input
+                <input data-ui="input"
                   type="number"
                   min="1"
                   value={quantity}
@@ -2038,7 +2043,7 @@ function CreateSupplierDealModal({
 
               <label>
                 Unit *
-                <select value={unit} onChange={(e) => setUnit(e.target.value)}>
+                <select data-ui="select" value={unit} onChange={(e) => setUnit(e.target.value)}>
                   <option value="kg">kg</option>
                   <option value="L">L (Liters)</option>
                   <option value="g">g (Grams)</option>
@@ -2052,7 +2057,7 @@ function CreateSupplierDealModal({
 
               <label>
                 Unit Price / Rate (Rs) *
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={unitPrice}
@@ -2063,7 +2068,7 @@ function CreateSupplierDealModal({
 
               <label>
                 Transport / Other Cost (Rs)
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={otherCost}
@@ -2073,13 +2078,13 @@ function CreateSupplierDealModal({
 
               <label>
                 Deal Date *
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                <input data-ui="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
               </label>
 
               <label>
                 Total Value Calculation
                 <div className="flex items-center gap-2 mt-1">
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={grandTotal}
                     onChange={(e) => {
@@ -2089,7 +2094,7 @@ function CreateSupplierDealModal({
                     className="font-bold text-stone-900"
                   />
                   {isManualTotal && (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       onClick={() => setIsManualTotal(false)}
                       className="text-[11px] text-primary hover:underline"
@@ -2102,14 +2107,14 @@ function CreateSupplierDealModal({
             </div>
 
             {/* Attachments Section */}
-            <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2 text-xs">
+            <div data-ui="surface" className="gradient-card p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-2 text-xs">
               <span className="font-bold text-stone-800 block">Offline Image Attachments (OPFS)</span>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-stone-600 mb-1">Purchase Invoice / Bill Photo</label>
                   <label className="button secondary text-xs cursor-pointer inline-flex items-center gap-1">
                     <Upload className="w-3.5 h-3.5" /> Attach Bill
-                    <input type="file" accept="image/*" className="hidden" onChange={handleInvoiceUpload} />
+                    <input data-ui="file" type="file" accept="image/*" className="hidden" onChange={handleInvoiceUpload} />
                   </label>
                   {invoiceImage && <span className="text-[11px] text-emerald-700 font-bold block mt-1">✓ Bill Attached</span>}
                 </div>
@@ -2117,7 +2122,7 @@ function CreateSupplierDealModal({
                   <label className="block text-stone-600 mb-1">Payment Slip / Raast Screenshot</label>
                   <label className="button secondary text-xs cursor-pointer inline-flex items-center gap-1">
                     <Upload className="w-3.5 h-3.5" /> Attach Proof
-                    <input type="file" accept="image/*" className="hidden" onChange={handleScreenshotUpload} />
+                    <input data-ui="file" type="file" accept="image/*" className="hidden" onChange={handleScreenshotUpload} />
                   </label>
                   {paymentScreenshot && (
                     <span className="text-[11px] text-emerald-700 font-bold block mt-1">✓ Screenshot Attached</span>
@@ -2128,7 +2133,7 @@ function CreateSupplierDealModal({
           </div>
 
           {/* Payment & Settlement Summary */}
-          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-3">
+          <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-3">
             <h4 className="font-bold text-stone-900 text-xs uppercase tracking-wider">Payment & Settlement</h4>
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-stone-600">
@@ -2139,7 +2144,7 @@ function CreateSupplierDealModal({
 
             <label className="text-xs">
               Amount Paid Now (Rs)
-              <input
+              <input data-ui="input"
                 type="number"
                 min="0"
                 max={grandTotal}
@@ -2150,7 +2155,7 @@ function CreateSupplierDealModal({
 
             <label className="text-xs">
               Payment Method
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+              <select data-ui="select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
                 <option value="Bank Transfer">Bank Transfer (IBFT / RTGS)</option>
                 <option value="Online">Online / Raast</option>
                 <option value="Cash">Cash in Hand</option>
@@ -2161,7 +2166,7 @@ function CreateSupplierDealModal({
 
             <label className="text-xs">
               Deduct Account
-              <select value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value)}>
+              <select data-ui="select" value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value)}>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name}
@@ -2177,16 +2182,16 @@ function CreateSupplierDealModal({
 
             <label className="text-xs">
               Notes
-              <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Batch notes, vehicle #" />
+              <input data-ui="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Batch notes, vehicle #" />
             </label>
           </div>
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Record Deal & Update Inventory
           </button>
         </div>
@@ -2215,12 +2220,12 @@ function DealReceiptModal({
             <p className="eyebrow">Procurement Voucher</p>
             <h2>Deal #{deal.poNumber}</h2>
           </div>
-          <button className="icon-button" onClick={onClose}>
+          <button data-ui="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
 
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+        <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
           <div>
             <span className="text-stone-500 block">Supplier Name</span>
             <strong className="text-sm text-stone-900">{deal.supplierName}</strong>
@@ -2246,7 +2251,7 @@ function DealReceiptModal({
         </div>
 
         <div className="table-scroll border border-stone-200 rounded-xl mb-4">
-          <table className="text-xs">
+          <table data-ui="table" className="text-xs">
             <thead>
               <tr>
                 <th>#</th>
@@ -2290,7 +2295,7 @@ function DealReceiptModal({
         </div>
 
         <div className="editor-actions flex justify-between items-center mt-4">
-          <button
+          <button data-ui="button"
             className="button secondary"
             onClick={() =>
               supplier &&
@@ -2315,7 +2320,7 @@ function DealReceiptModal({
           >
             <Download className="w-4 h-4" /> Download Deal Voucher PDF
           </button>
-          <button className="button primary" onClick={onClose}>
+          <button data-ui="button" className="button primary" onClick={onClose}>
             Close
           </button>
         </div>
@@ -2368,17 +2373,9 @@ function SupplierCategoryManagerModal({
     setError(null)
   }
 
-  const handleDeleteCategory = (cat: CategoryItem) => {
+  const handleDeleteCategory = async (cat: CategoryItem) => {
     const inUseCount = counts[cat.name] || 0
-    if (inUseCount > 0) {
-      if (
-        !confirm(
-          `"${cat.name}" is currently assigned to ${inUseCount} supplier(s). Are you sure you want to delete this category?`
-        )
-      ) {
-        return
-      }
-    }
+    if (!(await confirmAction({ title: 'Delete supplier category?', message: `Delete "${cat.name}"? It is assigned to ${inUseCount} supplier(s). Existing supplier records will keep their category text.`, confirmLabel: 'Delete category', destructive: true }))) return
     const updated = categories.filter((c) => c.id !== cat.id)
     onSaveCategories(updated)
     if (editingCatId === cat.id) {
@@ -2388,7 +2385,7 @@ function SupplierCategoryManagerModal({
     }
   }
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -2407,6 +2404,7 @@ function SupplierCategoryManagerModal({
       return
     }
 
+    if (editingCatId && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     if (editingCatId) {
       const oldCat = categories.find((c) => c.id === editingCatId)
       const oldName = oldCat?.name
@@ -2464,7 +2462,7 @@ function SupplierCategoryManagerModal({
               <h2>Manage Supplier Type Categories</h2>
             </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2496,7 +2494,7 @@ function SupplierCategoryManagerModal({
               <label className="text-xs font-semibold text-stone-700 mb-1 block">
                 Category Name *
               </label>
-              <input
+              <input data-ui="input"
                 value={catName}
                 onChange={(e) => setCatName(e.target.value)}
                 placeholder="e.g. Raw Material Supplier, Machinery/Equipment Vendor"
@@ -2516,7 +2514,7 @@ function SupplierCategoryManagerModal({
                 {SUPPLIER_CATEGORY_COLORS.map((col) => {
                   const isSelected = catColor === col.id
                   return (
-                    <button
+                    <button data-ui="button"
                       key={col.id}
                       type="button"
                       onClick={() => setCatColor(col.id)}
@@ -2540,7 +2538,7 @@ function SupplierCategoryManagerModal({
               <label className="text-xs font-semibold text-stone-700 mb-1 block">
                 Description / Notes <span className="text-stone-400 font-normal">(Optional)</span>
               </label>
-              <input
+              <input data-ui="input"
                 value={catDesc}
                 onChange={(e) => setCatDesc(e.target.value)}
                 placeholder="Brief notes about this type of vendor"
@@ -2549,7 +2547,7 @@ function SupplierCategoryManagerModal({
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary text-xs py-1.5 px-3"
                 onClick={() => {
@@ -2560,7 +2558,7 @@ function SupplierCategoryManagerModal({
               >
                 Cancel
               </button>
-              <button type="submit" className="button primary text-xs py-1.5 px-4" id="btn-save-supplier-category">
+              <button data-ui="button" type="submit" className="button primary text-xs py-1.5 px-4" id="btn-save-supplier-category">
                 {isAddingNew ? 'Create Category' : 'Save Changes'}
               </button>
             </div>
@@ -2573,7 +2571,7 @@ function SupplierCategoryManagerModal({
               </span>
               <p className="text-[11px] text-stone-500">Classify suppliers by vendor type & capabilities</p>
             </div>
-            <button
+            <button data-ui="button"
               type="button"
               className="button primary text-xs py-1.5 px-3"
               onClick={() => {
@@ -2620,7 +2618,7 @@ function SupplierCategoryManagerModal({
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="p-1.5 text-stone-500 hover:text-blue-600 rounded-md hover:bg-stone-100 transition-colors"
                       title="Edit Category"
@@ -2628,7 +2626,7 @@ function SupplierCategoryManagerModal({
                     >
                       <Edit className="w-3.5 h-3.5" />
                     </button>
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="p-1.5 text-stone-500 hover:text-rose-600 rounded-md hover:bg-stone-100 transition-colors"
                       title="Delete Category"
@@ -2644,7 +2642,7 @@ function SupplierCategoryManagerModal({
         </div>
 
         <div className="editor-actions mt-4">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Done
           </button>
         </div>

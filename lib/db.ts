@@ -513,7 +513,43 @@ export interface PhonebookContactItem {
   updatedAt?: string
 }
 
+export interface CompanyProfile {
+  name: string
+  tagline: string
+  phone1: string
+  phone2: string
+  email: string
+  address: string
+  taxNumber: string
+}
+
+export const defaultCompanyProfile: CompanyProfile = {
+  name: 'AL FAROOQ FOODS',
+  tagline: 'Mineral Water, Fruit Juices, Confectionery & Snacks',
+  phone1: '0344 9549051',
+  phone2: '0346 9829900',
+  email: 'umarfarooq4847@gmail.com',
+  address: 'Industrial Estate, Food & Beverage Zone, Punjab, Pakistan',
+  taxNumber: '',
+}
+
+export interface AdminProfile {
+  name: string
+  email: string
+  phone: string
+  title: string
+}
+
+export const defaultAdminProfile: AdminProfile = {
+  name: 'Umar Farooq',
+  email: 'umarfarooq4847@gmail.com',
+  phone: '0344 9549051',
+  title: 'Super Admin',
+}
+
 export interface AppDatabase {
+  adminProfile?: AdminProfile
+  companyProfile?: CompanyProfile
   categories: CategoryItem[]
   rawMaterialCategories?: CategoryItem[]
   customerCategories?: CustomerCategoryItem[]
@@ -3088,6 +3124,7 @@ export function saveDatabase(db: AppDatabase): void {
     window.dispatchEvent(new Event('al_farooq_db_updated'))
   } catch (err) {
     console.error('Failed to save database to localStorage:', err)
+    throw new Error('Could not save data. Browser storage may be full or unavailable.')
   }
 }
 
@@ -3111,12 +3148,59 @@ export function exportDatabaseJSON(db: AppDatabase): void {
 // Import database from single JSON file
 export async function importDatabaseJSON(file: File): Promise<AppDatabase> {
   const text = await file.text()
-  const data = JSON.parse(text) as AppDatabase
-  if (!data.products || !data.rawMaterials || !data.customers || !data.invoices) {
-    throw new Error('Invalid AL FAROOQ FOODS backup file.')
+  return validateDatabaseBackup(JSON.parse(text))
+}
+
+// Validation is read-only: a preview must never overwrite the live database.
+export function validateDatabaseBackup(value: unknown): AppDatabase {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected a database object.')
+  const data = value as Record<string, unknown>
+  if (!Number.isInteger(data.version) || (data.version as number) < 1 || (data.version as number) > initialDatabase.version) throw new Error('Unsupported backup version.')
+  const requiredFields: Record<string, string[]> = {
+    products: ['name', 'quantity', 'costPrice', 'wholesalePrice', 'retailPrice'],
+    rawMaterials: ['name', 'quantity', 'unitCost'],
+    customers: ['name', 'currentBalance'], suppliers: ['name', 'currentBalance'],
+    invoices: ['customerName', 'date', 'items', 'grandTotal'],
+    purchases: ['supplierName', 'date', 'grandTotal', 'amountPaid', 'balanceDue'],
+    expenses: ['date', 'amount'], accounts: ['name', 'balance'],
   }
-  saveDatabase(data)
-  return data
+  for (const [key, sample] of Object.entries(initialDatabase)) {
+    if (!Array.isArray(sample)) continue
+    const records = data[key]
+    if (!Array.isArray(records)) throw new Error(`Missing or invalid ${key} records.`)
+    const ids = new Set<string>()
+    for (const record of records) {
+      if (!record || typeof record !== 'object' || Array.isArray(record) || typeof record.id !== 'string' || !record.id || ids.has(record.id)) throw new Error(`Invalid or duplicate record in ${key}.`)
+      ids.add(record.id)
+      for (const field of requiredFields[key] || []) {
+        if (!(field in record)) throw new Error(`Missing ${key}.${field}.`)
+      }
+      if (sample.length > 0) {
+        for (const [field, example] of Object.entries(sample[0])) {
+          if (!(field in record)) continue
+          if (typeof example === 'number' && (typeof record[field] !== 'number' || !Number.isFinite(record[field]))) throw new Error(`Invalid ${key}.${field}.`)
+          if (typeof example === 'string' && typeof record[field] !== 'string') throw new Error(`Invalid ${key}.${field}.`)
+          if (Array.isArray(example) && !Array.isArray(record[field])) throw new Error(`Invalid ${key}.${field}.`)
+        }
+      }
+      if (key === 'invoices' || key === 'purchases') {
+        if (record.items !== undefined && (!Array.isArray(record.items) || record.items.some((item: Record<string, unknown>) => !item || typeof item.name !== 'string' || !Number.isFinite(item.quantity) || !Number.isFinite(item.unitPrice)))) throw new Error(`Invalid line items in ${key}.`)
+      }
+    }
+  }
+  if (data.companyProfile !== undefined) {
+    if (!data.companyProfile || typeof data.companyProfile !== 'object' || Array.isArray(data.companyProfile)) throw new Error('Invalid company profile.')
+    for (const key of Object.keys(defaultCompanyProfile)) {
+      if (typeof (data.companyProfile as Record<string, unknown>)[key] !== 'string') throw new Error('Invalid company profile fields.')
+    }
+  }
+  if (data.adminProfile !== undefined) {
+    if (!data.adminProfile || typeof data.adminProfile !== 'object' || Array.isArray(data.adminProfile)) throw new Error('Invalid admin profile.')
+    for (const key of Object.keys(defaultAdminProfile)) {
+      if (typeof (data.adminProfile as Record<string, unknown>)[key] !== 'string') throw new Error('Invalid admin profile fields.')
+    }
+  }
+  return data as unknown as AppDatabase
 }
 
 // Convert image file to offline Base64 string for OPFS / Local database

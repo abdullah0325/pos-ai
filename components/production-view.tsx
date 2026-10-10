@@ -1,5 +1,9 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
+import ModuleHeading from './module-heading'
+
 import { useState } from 'react'
 import { Plus, Factory, CheckCircle2, Clock, AlertCircle, ArrowRight, Boxes, Package, Trash2, X, Download } from 'lucide-react'
 import { formatPKR, formatDate, type AppDatabase, type ProductionRun, type ProductionConsumedItem, type Status } from '@/lib/db'
@@ -77,15 +81,15 @@ export default function ProductionView({ db, onSaveDatabase }: ProductionViewPro
     exportToCSV(`Production_Batches_AL_FAROOQ_FOODS_${new Date().toISOString().slice(0, 10)}`, headers, rows)
   }
 
-  const handleDeleteRun = (id: string) => {
-    if (!window.confirm('Delete this production run record? Note: This will not automatically reverse stock.')) return
+  const handleDeleteRun = async (id: string) => {
+    if (!await confirmAction('Delete this production run record? Note: This will not automatically reverse stock.')) return
     const updatedRuns = db.productionRuns.filter((r) => r.id !== id)
     onSaveDatabase({ ...db, productionRuns: updatedRuns })
   }
 
   return (
     <div className="page-stack">
-      <div className="page-heading">
+      <ModuleHeading icon="production">
         <div>
           <p className="eyebrow">Manufacturing Core / Factory Runs</p>
           <h1>Production Management</h1>
@@ -94,36 +98,40 @@ export default function ProductionView({ db, onSaveDatabase }: ProductionViewPro
           </p>
         </div>
         <div className="heading-actions">
-          <button className="button secondary" onClick={handleExportCSV}>
+          <button data-ui="button" className="button secondary" onClick={handleExportCSV}>
             <Download /> Export CSV
           </button>
-          <button className="button primary" onClick={() => setShowRunModal(true)}>
+          <button data-ui="button" className="button primary" onClick={() => setShowRunModal(true)}>
             <Plus /> Launch Production Run
           </button>
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* Production KPIs */}
       <div className="stat-grid">
         <div className="stat-card">
+          <div className="stat-icon olive"><Package aria-hidden="true" /></div>
           <div className="stat-label">Finished Goods Produced</div>
           <strong>{totalProducedUnits.toLocaleString()} Cartons/Units</strong>
           <span className="stat-change text-emerald-700">From {completedRuns.length} completed plant batches</span>
         </div>
 
         <div className="stat-card">
+          <div className="stat-icon blue"><Factory aria-hidden="true" /></div>
           <div className="stat-label">Total Manufacturing Spend</div>
           <strong>{formatPKR(totalProductionSpend)}</strong>
           <span className="stat-change">Includes raw materials, labor & power</span>
         </div>
 
         <div className="stat-card">
+          <div className="stat-icon orange"><Clock aria-hidden="true" /></div>
           <div className="stat-label">Active / In-Progress Batches</div>
           <strong>{db.productionRuns.filter((r) => r.status === 'In production').length} Line Runs</strong>
           <span className="stat-change text-purple-700">Currently on bottling/frying floor</span>
         </div>
 
         <div className="stat-card">
+          <div className="stat-icon purple"><Boxes aria-hidden="true" /></div>
           <div className="stat-label">Raw Material Consumption Sync</div>
           <strong className="text-emerald-700">100% Automated</strong>
           <span className="stat-change">Real-time inventory deduction</span>
@@ -133,7 +141,7 @@ export default function ProductionView({ db, onSaveDatabase }: ProductionViewPro
       {/* Production Run Table */}
       <div className="panel table-panel">
         <div className="table-scroll">
-          <table>
+          <table data-ui="table">
             <thead>
               <tr>
                 <th>Batch #</th>
@@ -187,10 +195,10 @@ export default function ProductionView({ db, onSaveDatabase }: ProductionViewPro
                   <td className="text-gray-500 text-xs">{run.supervisor}</td>
                   <td>
                     <div className="row-actions">
-                      <button className="row-action" title="View Bill of Materials" onClick={() => setSelectedRun(run)}>
+                      <button data-ui="button" className="row-action" title="View Bill of Materials" onClick={() => setSelectedRun(run)}>
                         <Boxes />
                       </button>
-                      <button className="row-action danger" title="Delete run" onClick={() => handleDeleteRun(run.id)}>
+                      <button data-ui="button" className="row-action danger" title="Delete run" onClick={() => handleDeleteRun(run.id)}>
                         <Trash2 />
                       </button>
                     </div>
@@ -211,12 +219,12 @@ export default function ProductionView({ db, onSaveDatabase }: ProductionViewPro
                 <p className="eyebrow">Production Batch Details</p>
                 <h2>{selectedRun.batchNumber}</h2>
               </div>
-              <button className="icon-button" onClick={() => setSelectedRun(null)}>
+              <button data-ui="button" className="icon-button" onClick={() => setSelectedRun(null)}>
                 <X />
               </button>
             </div>
 
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-xs">
+            <div data-ui="surface" className="gradient-card bg-gray-50 p-4 rounded-xl border border-gray-200 grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-xs">
               <div>
                 <span className="text-gray-500 block">Finished Product</span>
                 <strong className="text-sm text-gray-900">{selectedRun.productName}</strong>
@@ -239,7 +247,7 @@ export default function ProductionView({ db, onSaveDatabase }: ProductionViewPro
 
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Consumed Raw Materials (BOM)</h3>
             <div className="table-scroll border border-gray-200 rounded-lg mb-4">
-              <table className="w-full text-xs">
+              <table data-ui="table" className="w-full text-xs">
                 <thead className="bg-gray-100">
                   <tr>
                     <th>#</th>
@@ -293,7 +301,7 @@ export default function ProductionView({ db, onSaveDatabase }: ProductionViewPro
             )}
 
             <div className="editor-actions">
-              <button className="button primary" onClick={() => setSelectedRun(null)}>
+              <button data-ui="button" className="button primary" onClick={() => setSelectedRun(null)}>
                 Close Details
               </button>
             </div>
@@ -398,12 +406,12 @@ function LaunchProductionModal({
   })
   const hasShortage = stockWarnings.some((w) => w.isShort)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProduct) return
 
     if (hasShortage) {
-      if (!window.confirm('Warning: Some raw material stocks are lower than required for this batch. Proceed anyway?')) {
+      if (!await confirmAction('Warning: Some raw material stocks are lower than required for this batch. Proceed anyway?')) {
         return
       }
     }
@@ -477,7 +485,7 @@ function LaunchProductionModal({
             <p className="eyebrow">Factory Execution</p>
             <h2>Launch New Production Batch</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -486,7 +494,7 @@ function LaunchProductionModal({
         <div className="form-grid three mb-4">
           <label>
             Finished Product to Manufacture *
-            <select value={productId} onChange={(e) => handleProductSelect(e.target.value)} required>
+            <select data-ui="select" value={productId} onChange={(e) => handleProductSelect(e.target.value)} required>
               {db.products.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} (Current Stock: {p.quantity} {p.unit})
@@ -497,7 +505,7 @@ function LaunchProductionModal({
 
           <label>
             Batch Target Quantity ({selectedProduct?.unit || 'Cartons'}) *
-            <input
+            <input data-ui="input"
               type="number"
               min="1"
               value={targetQuantity}
@@ -508,7 +516,7 @@ function LaunchProductionModal({
 
           <label>
             Production Date
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <input data-ui="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </label>
         </div>
 
@@ -522,7 +530,7 @@ function LaunchProductionModal({
           </div>
 
           <div className="table-scroll border border-gray-200 rounded-lg">
-            <table className="w-full text-xs">
+            <table data-ui="table" className="w-full text-xs">
               <thead className="bg-gray-50">
                 <tr>
                   <th>Raw Material</th>
@@ -541,7 +549,7 @@ function LaunchProductionModal({
                       <td className="font-semibold text-gray-900">{mat.name}</td>
                       <td>
                         <div className="flex items-center gap-1">
-                          <input
+                          <input data-ui="input"
                             type="number"
                             min="0"
                             step="0.1"
@@ -574,11 +582,11 @@ function LaunchProductionModal({
         </div>
 
         {/* Cost and Overheads Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4 text-xs">
+        <div data-ui="surface" className="gradient-card grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4 text-xs">
           <div className="space-y-3">
             <label className="block font-bold text-gray-700">
               Shift Supervisor & Line QA
-              <input
+              <input data-ui="input"
                 value={supervisor}
                 onChange={(e) => setSupervisor(e.target.value)}
                 className="w-full mt-1 border border-gray-300 rounded-md p-2 bg-white text-xs"
@@ -588,7 +596,7 @@ function LaunchProductionModal({
 
             <label className="block font-bold text-gray-700">
               Direct Labor & Bottling Line Wages (Rs)
-              <input
+              <input data-ui="input"
                 type="number"
                 min="0"
                 value={laborCost}
@@ -599,7 +607,7 @@ function LaunchProductionModal({
 
             <label className="block font-bold text-gray-700">
               Electricity & Factory Overheads (Rs)
-              <input
+              <input data-ui="input"
                 type="number"
                 min="0"
                 value={overheadCost}
@@ -633,10 +641,10 @@ function LaunchProductionModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Execute Run & Inflow Finished Goods Stock
           </button>
         </div>

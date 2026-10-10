@@ -27,7 +27,6 @@ import {
   Percent,
   Wallet,
   ChevronRight,
-  RotateCcw,
   Sparkles,
   Printer,
   ChevronDown,
@@ -63,7 +62,8 @@ import {
   type ProductItem,
   type RawMaterialItem,
 } from '@/lib/db'
-import { exportToCSV, generateBusinessReportPDF } from '@/lib/pdf-export'
+import { exportToCSV as downloadCSV, generateBusinessReportPDF as downloadPDF } from '@/lib/pdf-export'
+import { createReportSample, buildReportTimeline, pakistanDate, type ReportSource } from '@/lib/report-data'
 
 export type ReportCategoryKey =
   | 'overview'
@@ -84,6 +84,15 @@ export type DatePreset =
   | 'all-time'
   | 'custom'
 
+function ReportMetricHeading({ label }: { label: string }) {
+  const Icon = /stock|inventory|goods|materials|reorder/i.test(label) ? Boxes
+    : /supplier|vendor|procurement|purchase/i.test(label) ? Truck
+    : /staff|employee|customer/i.test(label) ? Users
+    : /expense|payroll|salary|disbursed/i.test(label) ? Receipt
+    : /sales|order/i.test(label) ? ShoppingBag : Wallet
+  return <div className="report-metric-heading"><span>{label}</span><div aria-hidden="true"><Icon /></div></div>
+}
+
 interface ReportsViewProps {
   db: AppDatabase
   initialCategory?: ReportCategoryKey
@@ -96,11 +105,21 @@ const PIE_COLORS = ['#059669', '#2563eb', '#d97706', '#7c3aed', '#ec4899', '#06b
 const EXPENSE_COLORS = ['#d97706', '#2563eb', '#7c3aed', '#059669', '#dc2626', '#0891b2']
 
 export default function ReportsView({
-  db,
+  db: liveDatabase,
   initialCategory = 'overview',
   onSaveDatabase,
   isOwner = true,
 }: ReportsViewProps) {
+  const sampleMode = true
+  const sampleSeed = 2026
+  const [traceDate, setTraceDate] = useState('')
+  const [traceOpen, setTraceOpen] = useState(false)
+  const today = pakistanDate()
+  const sampleDatabase = useMemo(() => createReportSample(today, sampleSeed), [today, sampleSeed])
+  const db = sampleMode ? sampleDatabase : liveDatabase
+  const exportToCSV = (...args: Parameters<typeof downloadCSV>) => downloadCSV(sampleMode ? 'SAMPLE_' + args[0] : args[0], args[1], args[2])
+  const generateBusinessReportPDF = (options: Parameters<typeof downloadPDF>[0]) => downloadPDF({ ...options, title: (sampleMode ? 'SAMPLE - ' : '') + options.title, filename: (sampleMode ? 'SAMPLE_' : '') + options.filename })
+
   // Navigation & Filter States
   const [activeCategory, setActiveCategory] = useState<ReportCategoryKey>(initialCategory)
   const [datePreset, setDatePreset] = useState<DatePreset>('this-month')
@@ -122,8 +141,8 @@ export default function ReportsView({
 
   // Date Range Calculations
   const dateRange = useMemo(() => {
-    const now = new Date()
-    const todayStr = now.toISOString().slice(0, 10)
+    const todayStr = today
+    const now = new Date(todayStr + 'T12:00:00Z')
 
     let start = ''
     let end = todayStr
@@ -135,7 +154,7 @@ export default function ReportsView({
       label = `Today (${formatDate(todayStr)})`
     } else if (datePreset === 'this-week') {
       const weekStart = new Date(now)
-      weekStart.setDate(now.getDate() - 7)
+      weekStart.setDate(now.getDate() - 6)
       start = weekStart.toISOString().slice(0, 10)
       end = todayStr
       label = 'Past 7 Days'
@@ -168,7 +187,7 @@ export default function ReportsView({
     }
 
     return { start, end, label }
-  }, [datePreset, customStartDate, customEndDate])
+  }, [datePreset, customStartDate, customEndDate, today])
 
   // Helper: check if date is in selected range
   const isDateInRange = (d?: string) => {
@@ -258,6 +277,11 @@ export default function ReportsView({
     })
   }, [allSalaryPayments, db.employees, dateRange, payrollDeptFilter, searchQuery])
 
+  // Salary vouchers also exist in payroll history; count those payments once.
+  const operatingExpenses = useMemo(() => filteredExpenses.filter(expense =>
+    !allSalaryPayments.some(payment => payment.receiptNumber === `SAL-${expense.expenseNumber}`)
+  ), [filteredExpenses, allSalaryPayments])
+
   // Overview Core Calculations
   const overviewMetrics = useMemo(() => {
     const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0)
@@ -267,7 +291,7 @@ export default function ReportsView({
     const totalPurchases = filteredPurchases.reduce((sum, p) => sum + (p.grandTotal || 0), 0)
     const purchasesPaid = filteredPurchases.reduce((sum, p) => sum + (p.amountPaid || 0), 0)
 
-    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
+    const totalExpenses = operatingExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
     const totalSalaries = filteredSalaryPayments.reduce((sum, sp) => sum + (sp.amountPaid || 0), 0)
 
     // COGS estimation based on line items costPrice
@@ -321,6 +345,7 @@ export default function ReportsView({
     filteredInvoices,
     filteredPurchases,
     filteredExpenses,
+    operatingExpenses,
     filteredSalaryPayments,
     db.customers,
     db.suppliers,
@@ -328,73 +353,20 @@ export default function ReportsView({
     db.rawMaterials,
   ])
 
-  // Time-Series Trend Data for Area / Line Chart
-  const timeSeriesTrendData = useMemo(() => {
-    // Collect all dates from invoices, purchases, expenses
-    const dateMap = new Map<string, { date: string; label: string; revenue: number; outflow: number; purchases: number; expenses: number; salaries: number; net: number }>()
-
-    const registerDate = (d?: string) => {
-      if (!d) return null
-      const clean = d.slice(0, 10)
-      if (!isDateInRange(clean)) return null
-      if (!dateMap.has(clean)) {
-        dateMap.set(clean, {
-          date: clean,
-          label: clean.slice(5), // MM-DD
-          revenue: 0,
-          outflow: 0,
-          purchases: 0,
-          expenses: 0,
-          salaries: 0,
-          net: 0,
-        })
-      }
-      return dateMap.get(clean)!
-    }
-
-    filteredInvoices.forEach((inv) => {
-      const entry = registerDate(inv.date)
-      if (entry) entry.revenue += inv.grandTotal || 0
-    })
-
-    filteredPurchases.forEach((p) => {
-      const entry = registerDate(p.date)
-      if (entry) {
-        entry.purchases += p.grandTotal || 0
-        entry.outflow += p.grandTotal || 0
-      }
-    })
-
-    filteredExpenses.forEach((e) => {
-      const entry = registerDate(e.date)
-      if (entry) {
-        entry.expenses += e.amount || 0
-        entry.outflow += e.amount || 0
-      }
-    })
-
-    filteredSalaryPayments.forEach((sp) => {
-      const entry = registerDate(sp.paymentDate || sp.month)
-      if (entry) {
-        entry.salaries += sp.amountPaid || 0
-        entry.outflow += sp.amountPaid || 0
-      }
-    })
-
-    // If empty or single point, generate standard fallback timeline for current range
-    if (dateMap.size === 0) {
-      return [
-        { date: 'Day 1', label: 'Day 1', revenue: 0, outflow: 0, purchases: 0, expenses: 0, salaries: 0, net: 0 },
-        { date: 'Day 2', label: 'Day 2', revenue: 0, outflow: 0, purchases: 0, expenses: 0, salaries: 0, net: 0 },
-      ]
-    }
-
-    const sorted = Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date))
-    sorted.forEach((item) => {
-      item.net = item.revenue - item.outflow
-    })
-    return sorted
-  }, [filteredInvoices, filteredPurchases, filteredExpenses, filteredSalaryPayments, dateRange])
+  // Every graph value comes from these filtered, identifiable source records.
+  const reportSources = useMemo<ReportSource[]>(() => [
+    ...filteredInvoices.map(record => ({ id: record.invoiceNumber, date: record.date.slice(0, 10), kind: 'Invoice', party: record.customerName, amount: record.grandTotal || 0, direction: 'revenue' as const })),
+    ...filteredPurchases.map(record => ({ id: record.poNumber || record.purchaseNumber || record.id, date: record.date.slice(0, 10), kind: 'Purchase', party: record.supplierName, amount: record.grandTotal || 0, direction: 'purchases' as const })),
+    ...operatingExpenses.map(record => ({ id: record.voucherNumber || record.expenseNumber, date: record.date.slice(0, 10), kind: 'Expense', party: record.description || record.category, amount: record.amount || 0, direction: 'expenses' as const })),
+    ...filteredSalaryPayments.map(record => ({ id: record.receiptNumber, date: (record.paymentDate || record.month).slice(0, 10), kind: 'Payroll', party: record.employeeName, amount: record.amountPaid || 0, direction: 'salaries' as const })),
+  ], [filteredInvoices, filteredPurchases, operatingExpenses, filteredSalaryPayments])
+  const timeSeriesTrendData = useMemo(() => buildReportTimeline(reportSources, dateRange.start, dateRange.end), [reportSources, dateRange])
+  const selectedPoint = timeSeriesTrendData.find(point => point.date === traceDate) || timeSeriesTrendData.at(-1)
+  const tracedSources = reportSources.filter(source => source.date.startsWith(selectedPoint?.date || 'none') && (activeCategory !== 'sales' || source.direction === 'revenue'))
+  const selectChartPoint = (state: any) => {
+    const point = timeSeriesTrendData.find(item => item.label === String(state?.activeLabel))
+    if (point) { setTraceDate(point.date); setTraceOpen(true) }
+  }
 
   // Channel Distribution Donut Data
   const channelBreakdown = useMemo(() => {
@@ -908,7 +880,7 @@ export default function ReportsView({
   return (
     <div className="space-y-4">
       {/* 1. TOP HEADER & DATE RANGE FILTER BAR */}
-      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div data-ui="toolbar" className="page-title-banner gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-black text-stone-900 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-emerald-600" />
@@ -920,7 +892,7 @@ export default function ReportsView({
         </div>
 
         {/* Date Selector Pills & Compact Export Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="reports-header-actions flex flex-wrap items-center gap-2">
           {/* Date Selector Pills */}
           <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200/80">
             {[
@@ -934,7 +906,7 @@ export default function ReportsView({
             ].map((p) => {
               const isSelected = datePreset === p.id
               return (
-                <button
+                <button data-ui="button"
                   key={p.id}
                   onClick={() => setDatePreset(p.id as DatePreset)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -950,8 +922,8 @@ export default function ReportsView({
           </div>
 
           {/* Export Actions */}
-          <div className="flex items-center gap-1.5 pl-1 border-l border-stone-200">
-            <button
+          <div className="reports-export-actions flex items-center gap-1.5">
+            <button data-ui="button"
               onClick={handleExportCurrentReportCSV}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 transition-all cursor-pointer"
               title="Export CSV spreadsheet"
@@ -960,7 +932,7 @@ export default function ReportsView({
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
               <span>CSV</span>
             </button>
-            <button
+            <button data-ui="button"
               onClick={handleExportCurrentReportPDF}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all cursor-pointer shadow-2xs"
               title="Export formatted PDF"
@@ -973,18 +945,29 @@ export default function ReportsView({
         </div>
       </div>
 
+      {(activeCategory === 'overview' || activeCategory === 'sales') && <details className="report-trace-panel" open={traceOpen} onToggle={event => setTraceOpen(event.currentTarget.open)}>
+        <summary>Trace graph values to source records</summary>
+        <div className="report-trace-body">
+          <div className="report-trace-toolbar"><label>Chart period<select data-ui="select" value={selectedPoint?.date || ''} onChange={event => setTraceDate(event.target.value)} aria-label="Select chart period">{timeSeriesTrendData.map(point => <option key={point.date} value={point.date}>{point.date}</option>)}</select></label><button type="button" className="button secondary" disabled={!tracedSources.length} onClick={() => exportToCSV('Chart_Source_Records_' + selectedPoint?.date, ['Date', 'Record ID', 'Type', 'Party / Description', 'Amount PKR'], tracedSources.map(source => [source.date, source.id, source.kind, source.party, source.amount]))}><Download size={14} /> Export sources</button></div>
+          <p className="report-trace-formula">{activeCategory === 'sales' ? 'Revenue = sum of invoice grand totals.' : 'Revenue = invoice grand totals. Recorded costs = purchase grand totals + operating expense amounts + payroll paid.'} Credit transactions are included; this is not a bank cash-flow reconciliation. Zero-activity days remain visible.</p>
+          {selectedPoint && <div className="report-trace-totals"><span>Revenue <strong>{formatPKR(selectedPoint.revenue)}</strong></span>{activeCategory !== 'sales' && <span>Recorded costs <strong>{formatPKR(selectedPoint.outflow)}</strong></span>}<span>Source records <strong>{tracedSources.length}</strong></span></div>}
+          <div className="table-scroll"><table data-ui="table" className="data-table"><thead><tr><th>Record / Date</th><th>Type</th><th>Party / Description</th><th>Amount</th></tr></thead><tbody>{tracedSources.map((source, index) => <tr key={source.kind + source.id + index}><td><strong>{source.id}</strong><br /><small>{source.date}</small></td><td>{source.kind}</td><td>{source.party}</td><td>{formatPKR(source.amount)}</td></tr>)}{!tracedSources.length && <tr><td colSpan={4}>No source records for this period.</td></tr>}</tbody></table></div>
+          {sampleMode && <p className="report-trace-formula">Sample seed: {sampleSeed}. Window ends {today}. Reusing this seed and date reproduces the same records.</p>}
+        </div>
+      </details>}
+
       {/* Custom Date Inputs Row if custom is selected */}
       {datePreset === 'custom' && (
-        <div className="flex items-center gap-3 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/60 text-xs">
+        <div data-ui="surface" className="gradient-card flex items-center gap-3 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/60 text-xs">
           <span className="font-bold text-stone-700">Start Date:</span>
-          <input
+          <input data-ui="input"
             type="date"
             value={customStartDate}
             onChange={(e) => setCustomStartDate(e.target.value)}
             className="bg-white border border-stone-300 rounded-lg px-2.5 py-1 text-xs font-medium"
           />
           <span className="font-bold text-stone-700">End Date:</span>
-          <input
+          <input data-ui="input"
             type="date"
             value={customEndDate}
             onChange={(e) => setCustomEndDate(e.target.value)}
@@ -994,13 +977,12 @@ export default function ReportsView({
       )}
 
       {/* 2. REPORT TYPE SELECTOR (MODERN HORIZONTAL ICON TABS) */}
-      <div className="bg-white p-1.5 rounded-2xl border border-stone-200 shadow-xs">
+      <div data-ui="surface" className="gradient-card bg-white p-1.5 rounded-2xl border border-stone-200 shadow-xs">
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth">
           {reportCategories.map((cat) => {
-            const Icon = cat.icon
             const isActive = activeCategory === cat.id
             return (
-              <button
+              <button data-ui="tab"
                 key={cat.id}
                 onClick={() => {
                   setActiveCategory(cat.id)
@@ -1013,7 +995,6 @@ export default function ReportsView({
                     : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-stone-500'}`} />
                 <span>{cat.label}</span>
                 {cat.count !== undefined && (
                   <span
@@ -1036,11 +1017,11 @@ export default function ReportsView({
       {/* 3.1 BUSINESS OVERVIEW (DEFAULT DASHBOARD VIEW)            */}
       {/* ========================================================= */}
       {activeCategory === 'overview' && (
-        <div className="space-y-4">
+        <div className="report-category-panel space-y-4">
           {/* KPI Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+          <div className="reports-summary-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
             {/* Total Revenue */}
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold text-stone-500">
                 <span>Total Revenue</span>
                 <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
@@ -1057,7 +1038,7 @@ export default function ReportsView({
             </div>
 
             {/* Total Purchases */}
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold text-stone-500">
                 <span>Total Purchases</span>
                 <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
@@ -1073,7 +1054,7 @@ export default function ReportsView({
             </div>
 
             {/* Factory Expenses */}
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold text-stone-500">
                 <span>Factory Expenses</span>
                 <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
@@ -1089,8 +1070,9 @@ export default function ReportsView({
             </div>
 
             {/* Net Estimated Profit / Loss */}
-            <div
-              className={`p-4 rounded-2xl border shadow-xs flex flex-col justify-between ${
+            <div data-ui="surface"
+              data-profit={overviewMetrics.netProfit >= 0 ? 'positive' : 'negative'}
+              className={`gradient-card p-4 rounded-2xl border shadow-xs flex flex-col justify-between ${
                 overviewMetrics.netProfit >= 0
                   ? 'bg-emerald-50/70 border-emerald-200'
                   : 'bg-rose-50/70 border-rose-200'
@@ -1129,7 +1111,7 @@ export default function ReportsView({
             </div>
 
             {/* Book Balances */}
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="report-book-balances gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold text-stone-500">
                 <span>Book Balances</span>
                 <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
@@ -1156,15 +1138,15 @@ export default function ReportsView({
           {/* Main Visual Grid: Left Big Charts + Right Stat/Donut Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Left 2 Columns: Revenue vs Expense Trend Chart */}
-            <div className="lg:col-span-2 bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-3">
+            <div data-ui="surface" className="gradient-card lg:col-span-2 bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-black text-stone-900 flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-emerald-600" />
-                    Revenue Inflow vs Total Outflow Trend
+                    Revenue vs Recorded Costs
                   </h2>
                   <p className="text-[11px] text-stone-500">
-                    Daily financial trajectory across selected period ({dateRange.label})
+                    Invoice totals vs purchases, operating expenses, and payroll. Click a point to inspect its records.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold">
@@ -1180,7 +1162,7 @@ export default function ReportsView({
               {/* Area Chart Container */}
               <div className="w-full h-72 pt-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={timeSeriesTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart onClick={selectChartPoint} data={timeSeriesTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
@@ -1200,7 +1182,7 @@ export default function ReportsView({
                       tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
                     />
                     <Tooltip
-                      formatter={(val: any) => [formatPKR(Number(val)), '']}
+                      formatter={(val: any, name: any) => [formatPKR(Number(val)), name]}
                       contentStyle={{
                         backgroundColor: '#ffffff',
                         borderRadius: '12px',
@@ -1211,19 +1193,19 @@ export default function ReportsView({
                       }}
                     />
                     <Area
-                      type="monotone"
+                      type="linear"
                       dataKey="revenue"
                       name="Revenue"
-                      stroke="#059669"
+                      stroke="var(--success)"
                       strokeWidth={2.5}
                       fillOpacity={1}
                       fill="url(#colorRev)"
                     />
                     <Area
-                      type="monotone"
+                      type="linear"
                       dataKey="outflow"
                       name="Total Outflow"
-                      stroke="#d97706"
+                      stroke="var(--warning)"
                       strokeWidth={2.5}
                       fillOpacity={1}
                       fill="url(#colorOutflow)"
@@ -1258,7 +1240,7 @@ export default function ReportsView({
             {/* Right Column: Visual Donut Cards (Sales Channel & Outflow Split) */}
             <div className="space-y-4">
               {/* Sales by Channel Donut Chart */}
-              <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+              <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
                     <PieChartIcon className="w-3.5 h-3.5 text-emerald-600" />
@@ -1288,7 +1270,7 @@ export default function ReportsView({
                               <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(val: any) => [formatPKR(Number(val)), '']} />
+                          <Tooltip formatter={(val: any, name: any) => [formatPKR(Number(val)), name]} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -1311,7 +1293,7 @@ export default function ReportsView({
               </div>
 
               {/* Expense & Outflow Split Donut */}
-              <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+              <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
                     <Receipt className="w-3.5 h-3.5 text-amber-600" />
@@ -1338,7 +1320,7 @@ export default function ReportsView({
                             <Cell key={`cell-outflow-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(val: any) => [formatPKR(Number(val)), '']} />
+                        <Tooltip formatter={(val: any, name: any) => [formatPKR(Number(val)), name]} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -1357,7 +1339,7 @@ export default function ReportsView({
               </div>
 
               {/* Inventory Valuation Compact Bar */}
-              <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+              <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
                     <Boxes className="w-3.5 h-3.5 text-purple-600" />
@@ -1389,8 +1371,8 @@ export default function ReportsView({
           </div>
 
           {/* Secondary Collapsible P&L Summary Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
-            <button
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+            <button data-ui="button"
               onClick={() => setShowPLDetails(!showPLDetails)}
               className="w-full p-4 flex items-center justify-between bg-stone-50/60 hover:bg-stone-100/80 transition-colors cursor-pointer text-left"
             >
@@ -1408,7 +1390,7 @@ export default function ReportsView({
 
             {showPLDetails && (
               <div className="p-4 border-t border-stone-200 overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table data-ui="table" className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-stone-50 text-stone-600 font-bold border-y border-stone-200">
                       <th className="py-2.5 px-3.5">Financial Accounting Head</th>
@@ -1498,16 +1480,16 @@ export default function ReportsView({
       {/* 3.2 SALES REPORT DASHBOARD                                */}
       {/* ========================================================= */}
       {activeCategory === 'sales' && (
-        <div className="space-y-4">
+        <div className="report-category-panel space-y-4">
           {/* Sales KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Total Sales</span>
+          <div className="reports-category-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Total Sales" />
               <div className="text-2xl font-black text-stone-900 mt-1">{formatPKR(overviewMetrics.totalRevenue)}</div>
               <span className="text-[11px] text-emerald-700 font-bold">{filteredInvoices.length} invoices</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Cash Collected</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Cash Collected" />
               <div className="text-2xl font-black text-emerald-700 mt-1">{formatPKR(overviewMetrics.cashCollected)}</div>
               <span className="text-[11px] text-stone-500">
                 {overviewMetrics.totalRevenue > 0
@@ -1515,13 +1497,13 @@ export default function ReportsView({
                   : '0%'}
               </span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Pending Customer Dues</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Pending Customer Dues" />
               <div className="text-2xl font-black text-amber-800 mt-1">{formatPKR(overviewMetrics.newReceivables)}</div>
               <span className="text-[11px] text-amber-700 font-bold">Unsettled credit</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Average Order Value</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Average Order Value" />
               <div className="text-2xl font-black text-stone-900 mt-1">
                 {formatPKR(filteredInvoices.length ? Math.round(overviewMetrics.totalRevenue / filteredInvoices.length) : 0)}
               </div>
@@ -1531,14 +1513,14 @@ export default function ReportsView({
 
           {/* Visual Sales Charts: Daily Revenue Trend & Channel Donut */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+            <div data-ui="surface" className="gradient-card lg:col-span-2 bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
               <h3 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
                 Daily Sales Revenue Velocity
               </h3>
               <div className="w-full h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={timeSeriesTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <BarChart onClick={selectChartPoint} data={timeSeriesTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} />
                     <YAxis
@@ -1548,14 +1530,14 @@ export default function ReportsView({
                       tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
                     />
                     <Tooltip formatter={(val: any) => [formatPKR(Number(val)), 'Sales Revenue']} />
-                    <Bar dataKey="revenue" name="Sales Revenue" fill="#059669" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="revenue" name="Sales Revenue" fill="var(--success)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Top Products Volume */}
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
               <h3 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
                 <ShoppingBag className="w-4 h-4 text-emerald-600" />
                 Top Selling Products
@@ -1581,11 +1563,11 @@ export default function ReportsView({
           </div>
 
           {/* Searchable Invoices Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
             <div className="p-3 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-stone-50/60">
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                <input
+                <input data-ui="input"
                   type="text"
                   placeholder="Search invoice #, customer name..."
                   value={searchQuery}
@@ -1595,7 +1577,7 @@ export default function ReportsView({
               </div>
 
               <div className="flex items-center gap-2">
-                <select
+                <select data-ui="select"
                   value={salesChannelFilter}
                   onChange={(e) => setSalesChannelFilter(e.target.value)}
                   className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -1608,7 +1590,7 @@ export default function ReportsView({
                   <option value="Walk-in">Walk-in</option>
                 </select>
 
-                <select
+                <select data-ui="select"
                   value={salesStatusFilter}
                   onChange={(e) => setSalesStatusFilter(e.target.value)}
                   className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -1622,7 +1604,7 @@ export default function ReportsView({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table data-ui="table" className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-stone-100/70 text-stone-700 font-bold border-b border-stone-200">
                     <th className="py-2 px-3">Invoice #</th>
@@ -1679,27 +1661,27 @@ export default function ReportsView({
       {/* 3.3 PURCHASE REPORT DASHBOARD                             */}
       {/* ========================================================= */}
       {activeCategory === 'purchases' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Total Procurement</span>
+        <div className="report-category-panel space-y-4">
+          <div className="reports-category-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Total Procurement" />
               <div className="text-2xl font-black text-stone-900 mt-1">{formatPKR(overviewMetrics.totalPurchases)}</div>
               <span className="text-[11px] text-blue-700 font-bold">{filteredPurchases.length} Purchase Orders</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Paid to Vendors</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Paid to Vendors" />
               <div className="text-2xl font-black text-emerald-700 mt-1">{formatPKR(overviewMetrics.purchasesPaid)}</div>
               <span className="text-[11px] text-stone-500">Settled inward payments</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Pending Payables</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Pending Payables" />
               <div className="text-2xl font-black text-amber-800 mt-1">
                 {formatPKR(overviewMetrics.totalPurchases - overviewMetrics.purchasesPaid)}
               </div>
               <span className="text-[11px] text-amber-700 font-bold">Vendor balance due</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Raw Material Share</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Raw Material Share" />
               <div className="text-2xl font-black text-purple-800 mt-1">
                 {formatPKR(
                   filteredPurchases
@@ -1712,11 +1694,11 @@ export default function ReportsView({
           </div>
 
           {/* Detailed Purchases Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
             <div className="p-3 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-stone-50/60">
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                <input
+                <input data-ui="input"
                   type="text"
                   placeholder="Search PO #, supplier name..."
                   value={searchQuery}
@@ -1726,7 +1708,7 @@ export default function ReportsView({
               </div>
 
               <div className="flex items-center gap-2">
-                <select
+                <select data-ui="select"
                   value={purchaseTypeFilter}
                   onChange={(e) => setPurchaseTypeFilter(e.target.value)}
                   className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -1737,7 +1719,7 @@ export default function ReportsView({
                   <option value="Equipment">Equipment / Spares</option>
                 </select>
 
-                <select
+                <select data-ui="select"
                   value={purchaseSupplierFilter}
                   onChange={(e) => setPurchaseSupplierFilter(e.target.value)}
                   className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold max-w-xs truncate"
@@ -1753,7 +1735,7 @@ export default function ReportsView({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table data-ui="table" className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-stone-100/70 text-stone-700 font-bold border-b border-stone-200">
                     <th className="py-2 px-3">PO #</th>
@@ -1816,15 +1798,15 @@ export default function ReportsView({
       {/* 3.4 EXPENSES REPORT DASHBOARD                             */}
       {/* ========================================================= */}
       {activeCategory === 'expenses' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Total Factory Expenses</span>
+        <div className="report-category-panel space-y-4">
+          <div className="reports-category-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Total Factory Expenses" />
               <div className="text-2xl font-black text-amber-800 mt-1">{formatPKR(overviewMetrics.totalExpenses)}</div>
               <span className="text-[11px] text-stone-500">{filteredExpenses.length} vouchers logged</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Top Category</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Top Category" />
               <div className="text-lg font-black text-stone-900 mt-1 truncate">
                 {expenseCategoryBreakdown[0]?.name || 'General'}
               </div>
@@ -1832,15 +1814,15 @@ export default function ReportsView({
                 {expenseCategoryBreakdown[0] ? `${formatPKR(expenseCategoryBreakdown[0].value)} (${expenseCategoryBreakdown[0].percentage}%)` : '—'}
               </span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Avg Voucher Size</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Avg Voucher Size" />
               <div className="text-2xl font-black text-stone-900 mt-1">
                 {formatPKR(filteredExpenses.length ? Math.round(overviewMetrics.totalExpenses / filteredExpenses.length) : 0)}
               </div>
               <span className="text-[11px] text-stone-500">Per voucher average</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Cash vs Bank</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Cash vs Bank" />
               <div className="text-xs font-bold text-stone-800 mt-1.5 space-y-0.5">
                 <div className="flex justify-between">
                   <span>Cash:</span>
@@ -1868,7 +1850,7 @@ export default function ReportsView({
 
           {/* Expenses Chart & Detailed Table */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2">
               <h3 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
                 <PieChartIcon className="w-3.5 h-3.5 text-amber-600" />
                 Spending by Category
@@ -1888,7 +1870,7 @@ export default function ReportsView({
                         <Cell key={`cell-exp-${index}`} fill={EXPENSE_COLORS[index % EXPENSE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(val: any) => [formatPKR(Number(val)), '']} />
+                    <Tooltip formatter={(val: any, name: any) => [formatPKR(Number(val)), name]} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -1905,11 +1887,11 @@ export default function ReportsView({
               </div>
             </div>
 
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+            <div data-ui="surface" className="gradient-card lg:col-span-2 bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
               <div className="p-3 border-b border-stone-200 flex items-center justify-between gap-2 bg-stone-50/60">
                 <div className="relative flex-1 max-w-xs">
                   <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                  <input
+                  <input data-ui="input"
                     type="text"
                     placeholder="Search vouchers..."
                     value={searchQuery}
@@ -1917,7 +1899,7 @@ export default function ReportsView({
                     className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-stone-300 rounded-xl"
                   />
                 </div>
-                <select
+                <select data-ui="select"
                   value={expenseCategoryFilter}
                   onChange={(e) => setExpenseCategoryFilter(e.target.value)}
                   className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -1932,7 +1914,7 @@ export default function ReportsView({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table data-ui="table" className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-stone-100/70 text-stone-700 font-bold border-b border-stone-200">
                       <th className="py-2 px-3">Voucher #</th>
@@ -1972,22 +1954,22 @@ export default function ReportsView({
       {/* 3.5 SUPPLIER / VENDOR REPORT DASHBOARD                    */}
       {/* ========================================================= */}
       {activeCategory === 'suppliers' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Registered Suppliers</span>
+        <div className="report-category-panel space-y-4">
+          <div className="reports-category-summary grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Registered Suppliers" />
               <div className="text-2xl font-black text-stone-900 mt-1">{db.suppliers.length}</div>
               <span className="text-[11px] text-stone-500">Active vendor accounts</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Total Outstanding Payables</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Total Outstanding Payables" />
               <div className="text-2xl font-black text-amber-800 mt-1">
                 {formatPKR(overviewMetrics.totalPayablesOutstanding)}
               </div>
               <span className="text-[11px] text-amber-700 font-bold">Total debt owed to vendors</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Top Creditor</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Top Creditor" />
               <div className="text-lg font-black text-stone-900 mt-1 truncate">
                 {supplierPayables[0]?.name || 'None'}
               </div>
@@ -1998,11 +1980,11 @@ export default function ReportsView({
           </div>
 
           {/* Supplier Payables Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
             <div className="p-3 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-stone-50/60">
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                <input
+                <input data-ui="input"
                   type="text"
                   placeholder="Search supplier, phone, city..."
                   value={searchQuery}
@@ -2011,7 +1993,7 @@ export default function ReportsView({
                 />
               </div>
 
-              <select
+              <select data-ui="select"
                 value={supplierCategoryFilter}
                 onChange={(e) => setSupplierCategoryFilter(e.target.value)}
                 className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -2026,7 +2008,7 @@ export default function ReportsView({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table data-ui="table" className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-stone-100/70 text-stone-700 font-bold border-b border-stone-200">
                     <th className="py-2 px-3">Supplier Name</th>
@@ -2069,22 +2051,22 @@ export default function ReportsView({
       {/* 3.6 CUSTOMER / CONTACT REPORT DASHBOARD                   */}
       {/* ========================================================= */}
       {activeCategory === 'customers' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Active Customers</span>
+        <div className="report-category-panel space-y-4">
+          <div className="reports-category-summary grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Active Customers" />
               <div className="text-2xl font-black text-stone-900 mt-1">{db.customers.length}</div>
               <span className="text-[11px] text-stone-500">Distributors, wholesalers & retailers</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Total Market Receivables</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Total Market Receivables" />
               <div className="text-2xl font-black text-emerald-800 mt-1">
                 {formatPKR(overviewMetrics.totalReceivablesOutstanding)}
               </div>
               <span className="text-[11px] text-emerald-700 font-bold">Total market credit to collect</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Top Debtor Balance</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Top Debtor Balance" />
               <div className="text-lg font-black text-stone-900 mt-1 truncate">
                 {customerReceivables[0]?.name || 'None'}
               </div>
@@ -2095,11 +2077,11 @@ export default function ReportsView({
           </div>
 
           {/* Customer Receivables Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
             <div className="p-3 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-stone-50/60">
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                <input
+                <input data-ui="input"
                   type="text"
                   placeholder="Search customer, business name..."
                   value={searchQuery}
@@ -2108,7 +2090,7 @@ export default function ReportsView({
                 />
               </div>
 
-              <select
+              <select data-ui="select"
                 value={customerTypeFilter}
                 onChange={(e) => setCustomerTypeFilter(e.target.value)}
                 className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -2122,7 +2104,7 @@ export default function ReportsView({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table data-ui="table" className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-stone-100/70 text-stone-700 font-bold border-b border-stone-200">
                     <th className="py-2 px-3">Customer Name</th>
@@ -2167,27 +2149,27 @@ export default function ReportsView({
       {/* 3.7 SALARY / PAYROLL REPORT DASHBOARD                     */}
       {/* ========================================================= */}
       {activeCategory === 'salary' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Total Factory Staff</span>
+        <div className="report-category-panel space-y-4">
+          <div className="reports-category-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Total Factory Staff" />
               <div className="text-2xl font-black text-stone-900 mt-1">{db.employees.length}</div>
               <span className="text-[11px] text-stone-500">Operators & management</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Monthly Payroll Obligation</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Monthly Payroll Obligation" />
               <div className="text-2xl font-black text-stone-900 mt-1">
                 {formatPKR(db.employees.reduce((s, e) => s + (e.baseSalary || 0), 0))}
               </div>
               <span className="text-[11px] text-stone-500">Base salary run</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Disbursed in Period</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Disbursed in Period" />
               <div className="text-2xl font-black text-emerald-700 mt-1">{formatPKR(overviewMetrics.totalSalaries)}</div>
               <span className="text-[11px] text-emerald-700 font-bold">{filteredSalaryPayments.length} payouts</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Staff Loan Advances</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Staff Loan Advances" />
               <div className="text-2xl font-black text-amber-800 mt-1">
                 {formatPKR(db.employees.reduce((s, e) => s + (e.totalLoanBalance || 0), 0))}
               </div>
@@ -2196,11 +2178,11 @@ export default function ReportsView({
           </div>
 
           {/* Detailed Employee Payroll Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
             <div className="p-3 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-stone-50/60">
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                <input
+                <input data-ui="input"
                   type="text"
                   placeholder="Search staff, designation..."
                   value={searchQuery}
@@ -2209,7 +2191,7 @@ export default function ReportsView({
                 />
               </div>
 
-              <select
+              <select data-ui="select"
                 value={payrollDeptFilter}
                 onChange={(e) => setPayrollDeptFilter(e.target.value)}
                 className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -2224,7 +2206,7 @@ export default function ReportsView({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table data-ui="table" className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-stone-100/70 text-stone-700 font-bold border-b border-stone-200">
                     <th className="py-2 px-3">Employee Name</th>
@@ -2274,31 +2256,31 @@ export default function ReportsView({
       {/* 3.8 INVENTORY / STOCK REPORT DASHBOARD                    */}
       {/* ========================================================= */}
       {activeCategory === 'inventory' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Total Stock Valuation</span>
+        <div className="report-category-panel space-y-4">
+          <div className="reports-category-summary grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Total Stock Valuation" />
               <div className="text-2xl font-black text-stone-900 mt-1">
                 {formatPKR(overviewMetrics.totalInventoryValuation)}
               </div>
               <span className="text-[11px] text-purple-700 font-bold">{inventoryItems.length} SKUs</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Finished Goods</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Finished Goods" />
               <div className="text-2xl font-black text-emerald-800 mt-1">
                 {formatPKR(overviewMetrics.finishedGoodsValuation)}
               </div>
               <span className="text-[11px] text-emerald-700 font-bold">{db.products.length} catalog items</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Raw Materials</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Raw Materials" />
               <div className="text-2xl font-black text-blue-800 mt-1">
                 {formatPKR(overviewMetrics.rawMaterialsValuation)}
               </div>
               <span className="text-[11px] text-blue-700 font-bold">{db.rawMaterials.length} ingredients/packaging</span>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">Low Stock Reorders</span>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+              <ReportMetricHeading label="Low Stock Reorders" />
               <div className="text-2xl font-black text-rose-700 mt-1">
                 {inventoryItems.filter((i) => i.quantity <= i.reorderLevel).length}
               </div>
@@ -2307,11 +2289,11 @@ export default function ReportsView({
           </div>
 
           {/* Detailed Inventory Valuation Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
             <div className="p-3 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-stone-50/60">
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                <input
+                <input data-ui="input"
                   type="text"
                   placeholder="Search item, SKU..."
                   value={searchQuery}
@@ -2320,7 +2302,7 @@ export default function ReportsView({
                 />
               </div>
 
-              <select
+              <select data-ui="select"
                 value={inventoryTypeFilter}
                 onChange={(e) => setInventoryTypeFilter(e.target.value as any)}
                 className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
@@ -2332,7 +2314,7 @@ export default function ReportsView({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+              <table data-ui="table" className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-stone-100/70 text-stone-700 font-bold border-b border-stone-200">
                     <th className="py-2 px-3">Item Name</th>

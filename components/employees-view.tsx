@@ -1,8 +1,13 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { confirmAction } from '@/lib/confirmation'
+
+import ModuleHeading from './module-heading'
+
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   Users,
+  ArrowLeft,
   Plus,
   Search,
   Calendar,
@@ -79,6 +84,35 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
   const [isCreatingEmployee, setIsCreatingEmployee] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<EmployeeItem | null>(null)
   const [viewingEmployee, setViewingEmployee] = useState<EmployeeItem | null>(null)
+  const directoryScroll = useRef(0)
+  const profileTrigger = useRef<HTMLElement | null>(null)
+  const profileHeading = useRef<HTMLHeadingElement>(null)
+  const directoryHeading = useRef<HTMLHeadingElement>(null)
+  function openEmployeeProfile(employee: EmployeeItem) {
+    directoryScroll.current = window.scrollY
+    profileTrigger.current = document.activeElement as HTMLElement
+    setProfileTab('overview')
+    setViewingEmployee(employee)
+  }
+  function closeEmployeeProfile() {
+    setViewingEmployee(null)
+    setIsRecordingLeave(false)
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: directoryScroll.current, behavior: 'instant' })
+      if (profileTrigger.current?.isConnected) profileTrigger.current.focus({ preventScroll: true })
+      else directoryHeading.current?.focus({ preventScroll: true })
+    })
+  }
+  useEffect(() => {
+    if (viewingEmployee?.id) {
+      window.scrollTo({ top: 0, behavior: 'instant' })
+      profileHeading.current?.focus({ preventScroll: true })
+    }
+  }, [viewingEmployee?.id])
+  useEffect(() => {
+    if (viewingEmployee?.id) setViewingEmployee(db.employees.find(employee => employee.id === viewingEmployee.id) || null)
+  }, [db.employees, viewingEmployee?.id])
+
   const [profileTab, setProfileTab] = useState<'overview' | 'salary' | 'attendance' | 'loans' | 'leaves' | 'slips'>('overview')
 
   // Leave Management State
@@ -256,7 +290,7 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
   }
 
   // Handle Leave Deletion
-  const handleDeleteLeave = (leaveId: string) => {
+  const handleDeleteLeave = async (leaveId: string) => {
     if (!viewingEmployee) return
     const updatedEmployees = employees.map((emp) => {
       if (emp.id !== viewingEmployee.id) return emp
@@ -267,6 +301,7 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
       }
     })
 
+    if (!(await confirmAction({"title":"Delete leave record?","message":"Remove this leave record from the employee history?","confirmLabel":"Delete record","destructive":true}))) return
     onSaveDatabase({ ...db, employees: updatedEmployees })
     const updatedViewing = updatedEmployees.find((e) => e.id === viewingEmployee.id) || null
     setViewingEmployee(updatedViewing)
@@ -565,8 +600,8 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
   }
 
   // Delete Employee
-  const handleDeleteEmployee = (empId: string, name: string) => {
-    if (confirm(`Are you sure you want to delete employee "${name}"? This action cannot be undone.`)) {
+  const handleDeleteEmployee = async (empId: string, name: string) => {
+    if (await confirmAction(`Are you sure you want to delete employee "${name}"? This action cannot be undone.`)) {
       const updated = employees.filter((e) => e.id !== empId)
       onSaveDatabase({ ...db, employees: updated })
       if (viewingEmployee?.id === empId) setViewingEmployee(null)
@@ -637,29 +672,30 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack" id="employees-payroll-page">
+      {!viewingEmployee && <>
       {/* Top Heading & Quick Actions */}
-      <div className="page-heading">
+      <ModuleHeading icon="employees">
         <div>
           <p className="eyebrow">Administration & Human Resources</p>
-          <h1>Employees & Staff Payroll</h1>
+          <h1 ref={directoryHeading} tabIndex={-1}>Employees & Staff Payroll</h1>
           <p className="subheading">
             Manage factory plant personnel, duty shifts, attendance tracking, loans & advances, and monthly salary disbursement with transaction proof.
           </p>
         </div>
 
         <div className="heading-actions">
-          <button className="button secondary" onClick={handleExportCSV}>
+          <button data-ui="button" className="button secondary" onClick={handleExportCSV}>
             <Download className="w-4 h-4" /> Export CSV
           </button>
-          <button className="button secondary" onClick={() => setActiveTab('attendance')}>
+          <button data-ui="button" className="button secondary" onClick={() => setActiveTab('attendance')}>
             <Calendar className="w-4 h-4" /> Attendance Register
           </button>
-          <button className="button primary" onClick={() => setIsCreatingEmployee(true)}>
+          <button data-ui="button" className="button primary" onClick={() => setIsCreatingEmployee(true)}>
             <Plus className="w-4 h-4" /> Add Employee
           </button>
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* KPI Cards */}
       <div className="stat-grid" id="employees-kpi-stats">
@@ -709,30 +745,30 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
       </div>
 
       {/* Main Tab Navigation */}
-      <div className="flex items-center justify-between border-b border-border pb-2">
+      <div className="employee-module-tabs flex items-center justify-between border-b border-border pb-2">
         <div className="tab-pill-group">
-          <button
+          <button data-ui="tab"
             className={`tab-pill ${activeTab === 'employees' ? 'tab-pill-active' : ''}`}
             onClick={() => setActiveTab('employees')}
           >
             <Users className="w-4 h-4 mr-1.5 inline" />
             All Employees ({employees.length})
           </button>
-          <button
+          <button data-ui="tab"
             className={`tab-pill ${activeTab === 'attendance' ? 'tab-pill-active' : ''}`}
             onClick={() => setActiveTab('attendance')}
           >
             <Calendar className="w-4 h-4 mr-1.5 inline" />
             Daily Attendance Register
           </button>
-          <button
+          <button data-ui="tab"
             className={`tab-pill ${activeTab === 'loans' ? 'tab-pill-active' : ''}`}
             onClick={() => setActiveTab('loans')}
           >
             <CreditCard className="w-4 h-4 mr-1.5 inline" />
             Loans & Advances ({employees.filter((e) => e.totalLoanBalance > 0).length})
           </button>
-          <button
+          <button data-ui="tab"
             className={`tab-pill ${activeTab === 'payroll' ? 'tab-pill-active' : ''}`}
             onClick={() => setActiveTab('payroll')}
           >
@@ -749,7 +785,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
           <div className="panel p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="search-field flex-1 min-w-[240px]">
               <Search className="search-icon" />
-              <input
+              <input data-ui="input"
                 type="text"
                 placeholder="Search staff by name, phone, role, department, CNIC or ID..."
                 value={searchQuery}
@@ -757,14 +793,14 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                 className="w-full bg-transparent outline-none pl-9 pr-3 py-2 text-sm"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-muted-foreground mr-2 hover:text-foreground">
+                <button data-ui="button" onClick={() => setSearchQuery('')} className="text-muted-foreground mr-2 hover:text-foreground">
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <select
+              <select data-ui="select"
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
                 className="input-select text-sm py-2 px-3 bg-white border rounded-lg"
@@ -777,7 +813,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                 ))}
               </select>
 
-              <select
+              <select data-ui="select"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="input-select text-sm py-2 px-3 bg-white border rounded-lg"
@@ -790,7 +826,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                 ))}
               </select>
 
-              <select
+              <select data-ui="select"
                 value={shiftFilter}
                 onChange={(e) => setShiftFilter(e.target.value)}
                 className="input-select text-sm py-2 px-3 bg-white border rounded-lg"
@@ -803,7 +839,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                 <option value="Rotating">Rotating Shift</option>
               </select>
 
-              <select
+              <select data-ui="select"
                 value={salaryStatusFilter}
                 onChange={(e) => setSalaryStatusFilter(e.target.value as 'All' | 'Pending' | 'Paid')}
                 className="input-select text-sm py-2 px-3 bg-white border rounded-lg font-medium"
@@ -821,7 +857,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               <Users className="w-12 h-12 mx-auto mb-3 opacity-40 text-stone-400" />
               <p className="font-bold text-stone-700 text-base">No employee records match your filters.</p>
               <p className="text-xs text-stone-500 mt-1">Try adjusting search query, department, designation, shift or salary status.</p>
-              <button
+              <button data-ui="button"
                 className="button secondary text-xs mt-4"
                 onClick={() => {
                   setSearchQuery('')
@@ -835,11 +871,8 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4.5">
+            <div className="employee-directory-grid">
               {filteredEmployees.map((emp) => {
-                const isPending = emp.currentSalaryStatus === 'Pending'
-                const todayAtt = emp.attendance?.find((a) => a.date === attendanceDate)
-                const totalPkg = (emp.baseSalary || 0) + (emp.totalAllowances || 0)
                 const deptStyle = getDepartmentStyle(emp.department)
                 const initials = emp.name
                   .split(' ')
@@ -850,96 +883,51 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                   .toUpperCase()
 
                 return (
-                  <div
+                  <div data-ui="surface"
                     key={emp.id}
-                    className="group bg-white rounded-2xl p-3.5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative overflow-hidden border border-stone-100"
+                    className="employee-directory-card employee-summary-card group"
                     id={`employee-card-${emp.id}`}
                   >
-                    {/* Top Section: Avatar Box & Overlaid Badges */}
+                    {/* Compact employee identity */}
                     <div>
-                      <div className="w-full aspect-[4/3] rounded-xl bg-gradient-to-br from-stone-50 to-stone-100/90 border border-stone-200/60 overflow-hidden relative flex flex-col items-center justify-center mb-3 group-hover:border-stone-300 transition-colors">
-                        {/* Top-Right Action Buttons (Glassmorphic) */}
-                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-xs p-1 rounded-lg shadow-xs opacity-90 group-hover:opacity-100 transition-opacity z-10">
-                          <button
-                            type="button"
-                            className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-stone-100 rounded-md transition-colors"
-                            title="Edit Employee"
-                            onClick={() => setEditingEmployee(emp)}
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-md transition-colors"
-                            title="Delete Employee"
-                            onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {/* Top-Left Source & Status Badges */}
-                        <div className="absolute top-2 left-2 flex flex-col gap-1 items-start z-10">
-                          {emp.status === 'Active' ? (
-                            <span className="inline-flex items-center gap-1 bg-[#7cb518]/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
-                              Active
-                            </span>
-                          ) : emp.status === 'On Leave' ? (
-                            <span className="inline-flex items-center gap-1 bg-amber-600/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
-                              On Leave
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 bg-stone-600/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
-                              Terminated
-                            </span>
-                          )}
-
-                          {isPending ? (
-                            <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-xs">
-                              <Clock className="w-2.5 h-2.5 mr-0.5" /> Pending Salary
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-0.5 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-xs">
-                              <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Salary Paid
-                            </span>
-                          )}
+                      <div className="employee-card-header">
+                        <div className="employee-card-statuses">
+                          <span className="employee-status-pill" data-status={emp.status}>
+                            <span aria-hidden="true" />{emp.status}
+                          </span>
                         </div>
 
                         {/* Centered Initials Circle */}
-                        <div
-                          className={`w-16 h-16 rounded-full font-black text-xl flex items-center justify-center shadow-xs border-2 cursor-pointer group-hover:scale-105 transition-transform ${deptStyle.avatar}`}
+                        <button
+                          type="button"
+                          className={`employee-card-avatar ${deptStyle.avatar}`}
                           onClick={() => {
-                            setViewingEmployee(emp)
+                            openEmployeeProfile(emp)
                             setProfileTab('overview')
                           }}
                           title="Click to view employee profile"
+                          aria-label={`View ${emp.name}'s profile`}
                         >
                           {initials}
-                        </div>
+                        </button>
 
-                        {/* Shift Tag */}
-                        <div className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-stone-500 bg-white/80 px-2 py-0.5 rounded-full border border-stone-200/50 shadow-2xs">
-                          <Clock className="w-2.5 h-2.5 text-stone-400" />
-                          <span>{emp.shift} Shift</span>
-                        </div>
+
                       </div>
 
                       {/* Department Pill & SKU / Employee ID */}
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="employee-card-department flex items-center justify-between gap-2 mb-1.5">
                         <span className={`inline-block font-semibold text-[10px] px-2 py-0.5 rounded-md ${deptStyle.badge}`}>
                           {emp.department || 'Production & Plant'}
                         </span>
-                        <span className="font-mono text-[10px] text-stone-400 font-semibold">
-                          {emp.id.toUpperCase()}
-                        </span>
+
                       </div>
 
                       {/* Employee Name */}
                       <h4
-                        className="font-bold text-stone-900 text-sm leading-snug line-clamp-1 group-hover:text-[#7cb518] transition-colors cursor-pointer"
+                        className="employee-card-name"
                         title={emp.name}
                         onClick={() => {
-                          setViewingEmployee(emp)
+                          openEmployeeProfile(emp)
                           setProfileTab('overview')
                         }}
                       >
@@ -947,105 +935,23 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       </h4>
 
                       {/* Role / Designation */}
-                      <p className="text-xs text-stone-600 font-medium truncate mt-0.5" title={emp.role}>
+                      <p className="employee-card-role" title={emp.role}>
                         {emp.role}
                       </p>
 
-                      {/* Shift / Timing & Phone Line */}
-                      <div className="flex items-center justify-between text-xs text-stone-500 mt-2 pt-2 border-t border-stone-100">
-                        <span className="truncate pr-1 text-[11px]" title={emp.dutyTiming}>
-                          {emp.dutyTiming || '08:00 AM - 04:00 PM'}
-                        </span>
-                        <span className="font-mono text-[11px] text-stone-700 font-medium whitespace-nowrap">
-                          {emp.phone}
-                        </span>
-                      </div>
-
-                      {/* Quick Today Attendance Selector */}
-                      <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">
-                          Today ({attendanceDate.slice(5)})
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleSetAttendance(emp.id, 'Present')}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                              todayAtt?.status === 'Present'
-                                ? 'bg-emerald-600 text-white shadow-2xs'
-                                : 'bg-stone-100 hover:bg-emerald-100 text-stone-600 hover:text-emerald-800'
-                            }`}
-                            title="Mark Present"
-                          >
-                            P
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSetAttendance(emp.id, 'Absent')}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                              todayAtt?.status === 'Absent'
-                                ? 'bg-rose-600 text-white shadow-2xs'
-                                : 'bg-stone-100 hover:bg-rose-100 text-stone-600 hover:text-rose-800'
-                            }`}
-                            title="Mark Absent"
-                          >
-                            A
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSetAttendance(emp.id, 'Off-day')}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                              todayAtt?.status === 'Off-day'
-                                ? 'bg-slate-700 text-white shadow-2xs'
-                                : 'bg-stone-100 hover:bg-slate-200 text-stone-600'
-                            }`}
-                            title="Mark Off-day"
-                          >
-                            Off
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSetAttendance(emp.id, 'Leave')}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                              todayAtt?.status === 'Leave'
-                                ? 'bg-blue-600 text-white shadow-2xs'
-                                : 'bg-stone-100 hover:bg-blue-100 text-stone-600 hover:text-blue-800'
-                            }`}
-                            title="Mark Leave"
-                          >
-                            L
-                          </button>
-                        </div>
-                      </div>
                     </div>
 
-                    {/* Bottom Pricing / Package Bar */}
-                    <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-end justify-between">
-                      <div>
-                        <span className="text-[10px] text-stone-400 uppercase font-bold tracking-wider block">
-                          Monthly Package
-                        </span>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-sm font-black text-stone-900">
-                            {formatPKR(totalPkg)}
-                          </span>
-                          {emp.totalLoanBalance > 0 && (
-                            <span className="text-[9px] text-[#b8481e] font-semibold bg-rose-50 px-1 rounded ml-1" title="Active Advance Balance">
-                              Adv: {formatPKR(emp.totalLoanBalance)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <button
+                    {/* Full details are available on the profile page */}
+                    <div className="employee-card-footer mt-3 pt-2.5 border-t border-stone-100 flex items-end justify-between">
+                      <button data-ui="button"
                         type="button"
                         onClick={() => {
-                          setViewingEmployee(emp)
+                          openEmployeeProfile(emp)
                           setProfileTab('overview')
                         }}
                         className="text-[11px] font-semibold text-stone-600 hover:text-[#7cb518] flex items-center gap-1 hover:underline transition-colors pb-0.5"
                       >
-                        <Eye className="w-3.5 h-3.5" /> View Profile
+                        <span>View Profile</span><ArrowUpRight className="w-4 h-4" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -1064,13 +970,13 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               <label className="text-sm font-semibold flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#7cb518]" /> Register Date:
               </label>
-              <input
+              <input data-ui="input"
                 type="date"
                 value={attendanceDate}
                 onChange={(e) => setAttendanceDate(e.target.value)}
                 className="input-field max-w-[180px] text-sm py-1.5"
               />
-              <button
+              <button data-ui="button"
                 className="button secondary text-xs py-1.5"
                 onClick={() => setAttendanceDate(new Date().toISOString().slice(0, 10))}
               >
@@ -1094,7 +1000,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                 </span>
               </div>
 
-              <button className="button primary text-xs py-1.5" onClick={handleMarkAllPresent}>
+              <button data-ui="button" className="button primary text-xs py-1.5" onClick={handleMarkAllPresent}>
                 <Check className="w-4 h-4 mr-1" /> Mark All as Present
               </button>
             </div>
@@ -1102,7 +1008,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
           <div className="panel overflow-hidden">
             <div className="table-wrapper">
-              <table className="data-table">
+              <table data-ui="table" className="data-table">
                 <thead>
                   <tr>
                     <th>Staff Name & Role</th>
@@ -1154,7 +1060,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                         <td>
                           <div className="flex items-center gap-2">
-                            <button
+                            <button data-ui="button"
                               onClick={() => handleSetAttendance(emp.id, 'Present')}
                               className={`px-3 py-1 rounded text-xs font-semibold ${
                                 status === 'Present'
@@ -1164,7 +1070,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                             >
                               Present
                             </button>
-                            <button
+                            <button data-ui="button"
                               onClick={() => handleSetAttendance(emp.id, 'Absent')}
                               className={`px-3 py-1 rounded text-xs font-semibold ${
                                 status === 'Absent'
@@ -1174,7 +1080,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                             >
                               Absent
                             </button>
-                            <button
+                            <button data-ui="button"
                               onClick={() => handleSetAttendance(emp.id, 'Off-day')}
                               className={`px-3 py-1 rounded text-xs font-semibold ${
                                 status === 'Off-day'
@@ -1184,7 +1090,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                             >
                               Off-Day
                             </button>
-                            <button
+                            <button data-ui="button"
                               onClick={() => handleSetAttendance(emp.id, 'Leave')}
                               className={`px-3 py-1 rounded text-xs font-semibold ${
                                 status === 'Leave'
@@ -1224,7 +1130,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
           <div className="panel overflow-hidden">
             <div className="table-wrapper">
-              <table className="data-table">
+              <table data-ui="table" className="data-table">
                 <thead>
                   <tr>
                     <th>Staff Name & Role</th>
@@ -1285,7 +1191,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                         </td>
 
                         <td className="text-right">
-                          <button
+                          <button data-ui="button"
                             className="button primary text-xs py-1 px-3"
                             onClick={() => {
                               setLoaningEmployee(emp)
@@ -1318,7 +1224,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-muted-foreground">Change Cycle:</span>
-              <select
+              <select data-ui="select"
                 value={salaryMonth}
                 onChange={(e) => setSalaryMonth(e.target.value)}
                 className="input-select text-sm py-1.5 px-3 bg-white border rounded-lg font-semibold"
@@ -1333,7 +1239,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
           <div className="panel overflow-hidden">
             <div className="table-wrapper">
-              <table className="data-table">
+              <table data-ui="table" className="data-table">
                 <thead>
                   <tr>
                     <th>Staff Name & Role</th>
@@ -1400,14 +1306,14 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                         <td className="text-right">
                           {recentPayment ? (
                             <div className="flex items-center justify-end gap-2">
-                              <button
+                              <button data-ui="button"
                                 className="button secondary text-xs py-1 px-2.5"
                                 onClick={() => setActiveReceipt({ employee: emp, payment: recentPayment })}
                               >
                                 <Printer className="w-3.5 h-3.5 mr-1" /> View Slip
                               </button>
                               {recentPayment.paymentScreenshot && (
-                                <button
+                                <button data-ui="button"
                                   className="button secondary text-xs py-1 px-2 text-blue-600"
                                   onClick={() => setZoomedImage(recentPayment.paymentScreenshot!)}
                                   title="View Online Transaction Screenshot"
@@ -1416,7 +1322,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                                 </button>
                               )}
                               {emp.currentSalaryStatus === 'Partial' && (
-                                <button
+                                <button data-ui="button"
                                   className="button primary text-xs py-1 px-2.5"
                                   onClick={() => handleOpenDisburse(emp)}
                                 >
@@ -1425,7 +1331,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                               )}
                             </div>
                           ) : (
-                            <button
+                            <button data-ui="button"
                               className="button primary text-xs py-1 px-3"
                               onClick={() => handleOpenDisburse(emp)}
                             >
@@ -1442,6 +1348,8 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
           </div>
         </div>
       )}
+
+      </>}
 
       {/* MODAL 1: ADD / EDIT EMPLOYEE */}
       {(isCreatingEmployee || editingEmployee) && (
@@ -1468,7 +1376,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
       {/* MODAL 2: PAY SALARY / DISBURSEMENT */}
       {disbursingEmployee && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-card w-full max-w-2xl rounded-2xl shadow-2xl border border-border p-6 space-y-5 my-8">
+          <div data-ui="surface" className="gradient-card bg-card w-full max-w-2xl rounded-2xl shadow-2xl border border-border p-6 space-y-5 my-8">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">
@@ -1478,7 +1386,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                   Issue payroll for <strong className="text-foreground">{disbursingEmployee.name}</strong> ({disbursingEmployee.role})
                 </p>
               </div>
-              <button
+              <button data-ui="button"
                 className="icon-button"
                 onClick={() => setDisbursingEmployee(null)}
               >
@@ -1489,7 +1397,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="field-label">Salary Month / Period</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={salaryMonth}
                   onChange={(e) => setSalaryMonth(e.target.value)}
@@ -1500,7 +1408,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
               <div>
                 <label className="field-label">Payment Date</label>
-                <input
+                <input data-ui="input"
                   type="date"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
@@ -1510,7 +1418,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             </div>
 
             {/* Compensation Breakdown Inputs */}
-            <div className="bg-muted/40 rounded-xl p-4 space-y-3 border border-border">
+            <div data-ui="surface" className="gradient-card bg-muted/40 rounded-xl p-4 space-y-3 border border-border">
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Salary Computation Breakdown
               </h4>
@@ -1518,7 +1426,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="field-label">Base Salary (PKR)</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={basePayInput}
                     onChange={(e) => setBasePayInput(Number(e.target.value) || 0)}
@@ -1528,7 +1436,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                 <div>
                   <label className="field-label">Allowances & Benefits (+)</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={allowancePayInput}
                     onChange={(e) => setAllowancePayInput(Number(e.target.value) || 0)}
@@ -1538,7 +1446,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                 <div>
                   <label className="field-label">Overtime / Bonus (+)</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={overtimePayInput}
                     onChange={(e) => setOvertimePayInput(Number(e.target.value) || 0)}
@@ -1558,7 +1466,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       </span>
                     )}
                   </div>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={loanDeductInput}
                     onChange={(e) => setLoanDeductInput(Number(e.target.value) || 0)}
@@ -1568,7 +1476,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                 <div>
                   <label className="field-label">Absent / Fine Deduction (-)</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={absentDeductInput}
                     onChange={(e) => setAbsentDeductInput(Number(e.target.value) || 0)}
@@ -1590,7 +1498,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="field-label">Payment Mode</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as any)}
                     className="input-select"
@@ -1603,7 +1511,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                 <div>
                   <label className="field-label">Disburse From Account</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentAccount}
                     onChange={(e) => setPaymentAccount(e.target.value as any)}
                     className="input-select"
@@ -1619,13 +1527,13 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
               {/* Transaction Screenshot Upload for Online / Bank Transfer */}
               {(paymentMethod === 'Online' || paymentMethod === 'Bank Transfer') && (
-                <div className="border-2 border-dashed border-border rounded-xl p-4 bg-muted/20">
+                <div data-ui="surface" className="gradient-card border-2 border-dashed border-border rounded-xl p-4 bg-muted/20">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
                       <Upload className="w-4 h-4 text-[#7cb518]" /> Attach Online Payment Screenshot Proof
                     </label>
                     {paymentScreenshot && (
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => setPaymentScreenshot('')}
                         className="text-xs text-destructive hover:underline font-semibold"
@@ -1659,7 +1567,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                     </div>
                   ) : (
                     <div className="text-center py-4">
-                      <input
+                      <input data-ui="file"
                         type="file"
                         accept="image/*"
                         ref={fileInputRef}
@@ -1672,7 +1580,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                           }
                         }}
                       />
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         className="button secondary text-xs py-2 px-4"
@@ -1689,7 +1597,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
               <div>
                 <label className="field-label">Voucher Notes (Optional)</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
@@ -1700,14 +1608,14 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t">
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary"
                 onClick={() => setDisbursingEmployee(null)}
               >
                 Cancel
               </button>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button primary px-6"
                 onClick={handleConfirmDisburse}
@@ -1722,7 +1630,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
       {/* MODAL 3: GENERATED SALARY RECEIPT / SLIP */}
       {activeReceipt && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white text-slate-900 w-full max-w-xl rounded-2xl shadow-2xl border border-border p-6 space-y-5 my-8">
+          <div data-ui="surface" className="gradient-card bg-white text-slate-900 w-full max-w-xl rounded-2xl shadow-2xl border border-border p-6 space-y-5 my-8">
             <div className="flex items-center justify-between border-b pb-3 print:hidden">
               <div className="flex items-center gap-2">
                 <span className="badge badge-success text-xs font-semibold">✓ Salary Paid</span>
@@ -1730,13 +1638,13 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                   {activeReceipt.payment.receiptNumber}
                 </span>
               </div>
-              <button className="icon-button" onClick={() => setActiveReceipt(null)}>
+              <button data-ui="button" className="icon-button" onClick={() => setActiveReceipt(null)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Printable Receipt Layout */}
-            <div id="salary-slip-print" className="border border-slate-300 rounded-xl p-5 space-y-4 bg-slate-50/50">
+            <div data-ui="surface" id="salary-slip-print" className="gradient-card border border-slate-300 rounded-xl p-5 space-y-4 bg-slate-50/50">
               {/* Receipt Header */}
               <div className="flex items-start justify-between border-b border-slate-300 pb-3">
                 <div>
@@ -1774,7 +1682,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               </div>
 
               {/* Itemized Table */}
-              <table className="w-full text-xs border border-slate-300 rounded overflow-hidden">
+              <table data-ui="table" className="w-full text-xs border border-slate-300 rounded overflow-hidden">
                 <thead className="bg-slate-200 text-slate-800 font-bold">
                   <tr>
                     <th className="text-left p-2">Component</th>
@@ -1861,7 +1769,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
             {/* Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2 print:hidden">
-              <button
+              <button data-ui="button"
                 className="button secondary text-xs"
                 onClick={() => handleCopyWhatsAppSlip(activeReceipt.employee, activeReceipt.payment)}
               >
@@ -1869,13 +1777,13 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               </button>
 
               <div className="flex items-center gap-2">
-                <button
+                <button data-ui="button"
                   className="button secondary text-xs"
                   onClick={() => generateSalarySlipPDF(activeReceipt.employee, activeReceipt.payment)}
                 >
                   <Download className="w-4 h-4 mr-1.5" /> Download PDF
                 </button>
-                <button
+                <button data-ui="button"
                   className="button primary text-xs"
                   onClick={() => window.print()}
                 >
@@ -1890,7 +1798,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
       {/* MODAL 4: ISSUE LOAN / ADVANCE */}
       {loaningEmployee && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-card w-full max-w-lg rounded-2xl shadow-2xl border border-border p-6 space-y-4">
+          <div data-ui="surface" className="gradient-card bg-card w-full max-w-lg rounded-2xl shadow-2xl border border-border p-6 space-y-4">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h3 className="text-lg font-bold flex items-center gap-2">
@@ -1900,7 +1808,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                   For: <strong className="text-foreground">{loaningEmployee.name}</strong> (Current Balance: {formatPKR(loaningEmployee.totalLoanBalance)})
                 </p>
               </div>
-              <button className="icon-button" onClick={() => setLoaningEmployee(null)}>
+              <button data-ui="button" className="icon-button" onClick={() => setLoaningEmployee(null)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1908,7 +1816,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             <div className="space-y-3">
               <div>
                 <label className="field-label">Disbursement Date</label>
-                <input
+                <input data-ui="input"
                   type="date"
                   value={loanDate}
                   onChange={(e) => setLoanDate(e.target.value)}
@@ -1919,7 +1827,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="field-label">Advance Type</label>
-                  <select
+                  <select data-ui="select"
                     value={loanType}
                     onChange={(e) => setLoanType(e.target.value as any)}
                     className="input-select"
@@ -1931,7 +1839,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                 <div>
                   <label className="field-label">Amount (PKR)</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={loanAmount}
                     onChange={(e) => setLoanAmount(Number(e.target.value) || 0)}
@@ -1944,7 +1852,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
               <div>
                 <label className="field-label">Disburse From Account</label>
-                <select
+                <select data-ui="select"
                   value={loanAccount}
                   onChange={(e) => setLoanAccount(e.target.value as any)}
                   className="input-select"
@@ -1959,7 +1867,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
               <div>
                 <label className="field-label">Reason / Notes</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={loanReason}
                   onChange={(e) => setLoanReason(e.target.value)}
@@ -1970,14 +1878,14 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t">
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary"
                 onClick={() => setLoaningEmployee(null)}
               >
                 Cancel
               </button>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button primary"
                 onClick={handleConfirmLoan}
@@ -1989,17 +1897,18 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
         </div>
       )}
 
-      {/* MODAL 5: EMPLOYEE DETAILED PROFILE & DEDICATED MANAGEMENT VIEW */}
+      {/* Full-page employee profile */}
       {viewingEmployee && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-card w-full max-w-4xl rounded-2xl shadow-2xl border border-border flex flex-col my-6 max-h-[92vh] overflow-hidden">
+        <section className="employee-profile-page" aria-labelledby="employee-profile-heading">
+          <button type="button" className="employee-profile-back" onClick={closeEmployeeProfile}><ArrowLeft size={16} /> Back to employees</button>
+          <div data-ui="surface" className="employee-profile-surface gradient-card bg-card w-full rounded-2xl border border-border flex flex-col">
             {/* Profile Header */}
-            <div className="bg-gradient-to-r from-stone-50 via-white to-stone-50 border-b border-border p-5 sm:p-6">
+            <div className="employee-profile-hero border-b border-border p-5 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-4">
                   {/* Large Avatar */}
                   <div
-                    className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl font-black text-2xl sm:text-3xl flex items-center justify-center shadow-xs border-2 shrink-0 ${
+                    className={`employee-profile-avatar w-16 h-16 sm:w-20 sm:h-20 rounded-2xl font-black text-2xl sm:text-3xl flex items-center justify-center shadow-xs border-2 shrink-0 ${
                       getDepartmentStyle(viewingEmployee.department).avatar
                     }`}
                   >
@@ -2012,11 +1921,11 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       .toUpperCase()}
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="employee-profile-identity space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-xl sm:text-2xl font-bold text-foreground">
+                      <h1 ref={profileHeading} tabIndex={-1} id="employee-profile-heading" className="text-xl sm:text-2xl font-bold text-foreground">
                         {viewingEmployee.name}
-                      </h2>
+                      </h1>
                       <span className="font-mono text-xs px-2 py-0.5 bg-stone-100 text-stone-700 rounded-md font-bold border border-stone-200">
                         {viewingEmployee.id.toUpperCase()}
                       </span>
@@ -2063,9 +1972,9 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                 </div>
 
                 {/* Quick Profile Actions */}
-                <div className="flex items-center gap-2 self-start sm:self-center">
+                <div className="employee-profile-actions flex items-center flex-wrap gap-2 self-start sm:self-center">
                   {viewingEmployee.currentSalaryStatus === 'Pending' && (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="button primary text-xs py-1.5 px-3"
                       onClick={() => {
@@ -2075,7 +1984,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       <DollarSign className="w-3.5 h-3.5" /> Pay Salary
                     </button>
                   )}
-                  <button
+                  <button data-ui="button"
                     type="button"
                     className="button secondary text-xs py-1.5 px-3"
                     onClick={() => {
@@ -2085,20 +1994,27 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                   >
                     <CreditCard className="w-3.5 h-3.5 text-amber-700" /> Issue Advance
                   </button>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     className="icon-button"
                     onClick={() => {
                       setEditingEmployee(viewingEmployee)
                     }}
                     title="Edit Employee Details"
+                    aria-label="Edit employee details"
                   >
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button
+                  <button data-ui="button" type="button" className="icon-button text-rose-600"
+                    title="Delete Employee" aria-label={`Delete ${viewingEmployee.name}`}
+                    onClick={() => handleDeleteEmployee(viewingEmployee.id, viewingEmployee.name)}>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button data-ui="button"
                     type="button"
                     className="icon-button text-muted-foreground hover:text-foreground"
-                    onClick={() => setViewingEmployee(null)}
+                    aria-label="Back to employees"
+                    onClick={closeEmployeeProfile}
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -2106,63 +2022,93 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               </div>
 
               {/* Profile Navigation Tabs */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pt-4 mt-2 border-t border-stone-200/70">
-                <button
+              <div className="employee-profile-tabs" aria-label="Employee profile sections">
+                <button data-ui="button"
                   type="button"
                   className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
                     profileTab === 'overview' ? 'tab-pill-active' : ''
                   }`}
-                  onClick={() => setProfileTab('overview')}
+                  aria-pressed={profileTab === 'overview'}
+                  aria-controls="employee-profile-content"
+                  onClick={(event) => {
+                    setProfileTab('overview')
+                    event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                  }}
                 >
                   <Users className="w-3.5 h-3.5 mr-1.5 inline" />
                   Overview & Biodata
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
                     profileTab === 'salary' ? 'tab-pill-active' : ''
                   }`}
-                  onClick={() => setProfileTab('salary')}
+                  aria-pressed={profileTab === 'salary'}
+                  aria-controls="employee-profile-content"
+                  onClick={(event) => {
+                    setProfileTab('salary')
+                    event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                  }}
                 >
                   <DollarSign className="w-3.5 h-3.5 mr-1.5 inline text-emerald-600" />
                   Salary & Allowances
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
                     profileTab === 'attendance' ? 'tab-pill-active' : ''
                   }`}
-                  onClick={() => setProfileTab('attendance')}
+                  aria-pressed={profileTab === 'attendance'}
+                  aria-controls="employee-profile-content"
+                  onClick={(event) => {
+                    setProfileTab('attendance')
+                    event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                  }}
                 >
                   <Calendar className="w-3.5 h-3.5 mr-1.5 inline text-blue-600" />
                   Attendance Log ({viewingEmployee.attendance?.length || 0})
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
                     profileTab === 'loans' ? 'tab-pill-active' : ''
                   }`}
-                  onClick={() => setProfileTab('loans')}
+                  aria-pressed={profileTab === 'loans'}
+                  aria-controls="employee-profile-content"
+                  onClick={(event) => {
+                    setProfileTab('loans')
+                    event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                  }}
                 >
                   <CreditCard className="w-3.5 h-3.5 mr-1.5 inline text-amber-600" />
                   Loans & Advances ({viewingEmployee.loans?.length || 0})
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
                     profileTab === 'leaves' ? 'tab-pill-active' : ''
                   }`}
-                  onClick={() => setProfileTab('leaves')}
+                  aria-pressed={profileTab === 'leaves'}
+                  aria-controls="employee-profile-content"
+                  onClick={(event) => {
+                    setProfileTab('leaves')
+                    event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                  }}
                 >
                   <CalendarDays className="w-3.5 h-3.5 mr-1.5 inline text-purple-600" />
                   Leaves & Time Off ({viewingEmployee.leaves?.length || 0})
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   className={`tab-pill whitespace-nowrap text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors ${
                     profileTab === 'slips' ? 'tab-pill-active' : ''
                   }`}
-                  onClick={() => setProfileTab('slips')}
+                  aria-pressed={profileTab === 'slips'}
+                  aria-controls="employee-profile-content"
+                  onClick={(event) => {
+                    setProfileTab('slips')
+                    event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                  }}
                 >
                   <Receipt className="w-3.5 h-3.5 mr-1.5 inline text-indigo-600" />
                   Salary Slips & Receipts ({viewingEmployee.salaryHistory?.length || 0})
@@ -2171,13 +2117,13 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             </div>
 
             {/* Profile Tab Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+            <div id="employee-profile-content" className="employee-profile-body p-6 space-y-6 flex-1">
               {/* TAB 1: OVERVIEW & BIODATA */}
               {profileTab === 'overview' && (
                 <div className="space-y-6">
                   {/* Summary Metric Cards */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-stone-50 rounded-xl p-3.5 border border-stone-200/60">
+                  <div className="employee-profile-metrics grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div data-ui="surface" className="gradient-card bg-stone-50 rounded-xl p-3.5 border border-stone-200/60">
                       <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500 block">
                         Monthly Package
                       </span>
@@ -2187,7 +2133,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       <span className="text-[10px] text-stone-500">Base + Allowances</span>
                     </div>
 
-                    <div className="bg-emerald-50/70 rounded-xl p-3.5 border border-emerald-200/60">
+                    <div data-ui="surface" className="gradient-card bg-emerald-50/70 rounded-xl p-3.5 border border-emerald-200/60">
                       <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-800 block">
                         Salary Status
                       </span>
@@ -2199,7 +2145,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       </span>
                     </div>
 
-                    <div className="bg-amber-50/70 rounded-xl p-3.5 border border-amber-200/60">
+                    <div data-ui="surface" className="gradient-card bg-amber-50/70 rounded-xl p-3.5 border border-amber-200/60">
                       <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800 block">
                         Advance Balance
                       </span>
@@ -2211,7 +2157,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       </span>
                     </div>
 
-                    <div className="bg-purple-50/70 rounded-xl p-3.5 border border-purple-200/60">
+                    <div data-ui="surface" className="gradient-card bg-purple-50/70 rounded-xl p-3.5 border border-purple-200/60">
                       <span className="text-[10px] uppercase tracking-wider font-bold text-purple-800 block">
                         Leaves Logged
                       </span>
@@ -2224,7 +2170,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                   {/* Personal & Employment Details */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="panel p-4 space-y-3 bg-white border border-stone-200">
+                    <div className="employee-profile-info panel p-4 space-y-3 bg-white border border-stone-200">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b pb-2 flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5 text-stone-400" /> Personal Information
                       </h4>
@@ -2256,7 +2202,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       </div>
                     </div>
 
-                    <div className="panel p-4 space-y-3 bg-white border border-stone-200">
+                    <div className="employee-profile-info panel p-4 space-y-3 bg-white border border-stone-200">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 border-b pb-2 flex items-center gap-1.5">
                         <Briefcase className="w-3.5 h-3.5 text-stone-400" /> Job & Factory Assignment
                       </h4>
@@ -2291,7 +2237,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                   {/* Bank & Payment Method Overview */}
                   {viewingEmployee.bankDetails && (
-                    <div className="panel p-4 bg-stone-50/70 border border-stone-200/80 rounded-xl">
+                    <div data-ui="surface" className="gradient-card panel p-4 bg-stone-50/70 border border-stone-200/80 rounded-xl">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600 mb-2 flex items-center gap-1.5">
                         <Banknote className="w-3.5 h-3.5 text-stone-500" /> Bank & Account Information
                       </h4>
@@ -2317,7 +2263,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               {/* TAB 2: SALARY & ALLOWANCES BREAKDOWN */}
               {profileTab === 'salary' && (
                 <div className="space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-50 p-4 rounded-xl border border-stone-200">
+                  <div data-ui="surface" className="gradient-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-50 p-4 rounded-xl border border-stone-200">
                     <div>
                       <h4 className="font-bold text-stone-900 text-sm">Monthly Compensation Package</h4>
                       <p className="text-xs text-stone-500">Full breakdown of base wage, allowances, and net monthly entitlement.</p>
@@ -2385,7 +2331,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       </div>
 
                       <div className="pt-3">
-                        <button
+                        <button data-ui="button"
                           type="button"
                           className="button primary w-full text-xs py-2"
                           onClick={() => handleOpenDisburse(viewingEmployee)}
@@ -2403,25 +2349,25 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                 <div className="space-y-4">
                   {/* Attendance Stats for this employee */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+                    <div data-ui="surface" className="gradient-card bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-emerald-800 block">Present Days</span>
                       <span className="text-lg font-black text-emerald-900">
                         {(viewingEmployee.attendance || []).filter((a) => a.status === 'Present').length}
                       </span>
                     </div>
-                    <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl">
+                    <div data-ui="surface" className="gradient-card bg-rose-50 border border-rose-200 p-3 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-rose-800 block">Absent Days</span>
                       <span className="text-lg font-black text-rose-900">
                         {(viewingEmployee.attendance || []).filter((a) => a.status === 'Absent').length}
                       </span>
                     </div>
-                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl">
+                    <div data-ui="surface" className="gradient-card bg-slate-50 border border-slate-200 p-3 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-slate-800 block">Off-days</span>
                       <span className="text-lg font-black text-slate-900">
                         {(viewingEmployee.attendance || []).filter((a) => a.status === 'Off-day').length}
                       </span>
                     </div>
-                    <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl">
+                    <div data-ui="surface" className="gradient-card bg-blue-50 border border-blue-200 p-3 rounded-xl">
                       <span className="text-[10px] uppercase font-bold text-blue-800 block">Leaves / Half</span>
                       <span className="text-lg font-black text-blue-900">
                         {(viewingEmployee.attendance || []).filter((a) => a.status === 'Leave' || a.status === 'Half-day').length}
@@ -2429,7 +2375,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                     </div>
                   </div>
 
-                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                  <div className="gradient-card border border-stone-200 rounded-xl overflow-hidden bg-white">
                     <div className="p-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
                       <span className="text-xs font-bold text-stone-700">Detailed Daily Attendance Register</span>
                       <span className="text-[11px] text-stone-500">
@@ -2484,12 +2430,12 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               {/* TAB 4: LOANS & ADVANCES */}
               {profileTab === 'loans' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                  <div data-ui="surface" className="gradient-card flex items-center justify-between bg-amber-50 border border-amber-200 p-4 rounded-xl">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-amber-800 block">Total Active Advance Balance</span>
                       <span className="text-xl font-black text-amber-900">{formatPKR(viewingEmployee.totalLoanBalance || 0)}</span>
                     </div>
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="button primary text-xs py-1.5 px-3"
                       onClick={() => {
@@ -2501,7 +2447,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                     </button>
                   </div>
 
-                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                  <div className="gradient-card border border-stone-200 rounded-xl overflow-hidden bg-white">
                     <div className="p-3 bg-stone-50 border-b border-stone-200">
                       <span className="text-xs font-bold text-stone-700">Advances & Loan History</span>
                     </div>
@@ -2541,12 +2487,12 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               {/* TAB 5: LEAVES & TIME OFF */}
               {profileTab === 'leaves' && (
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-50/70 border border-purple-200/80 p-4 rounded-xl">
+                  <div data-ui="surface" className="gradient-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-50/70 border border-purple-200/80 p-4 rounded-xl">
                     <div>
                       <h4 className="font-bold text-purple-900 text-sm">Leave & Time-Off Management</h4>
                       <p className="text-xs text-purple-700">Track and record approved leaves (Casual, Sick, Annual, Emergency).</p>
                     </div>
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="button primary text-xs py-1.5 px-3 bg-purple-700 hover:bg-purple-800"
                       onClick={() => setIsRecordingLeave(true)}
@@ -2557,12 +2503,12 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                   {/* Inline Leave Entry Form */}
                   {isRecordingLeave && (
-                    <div className="panel p-4 bg-purple-50/30 border border-purple-200 rounded-xl space-y-3 animate-in fade-in">
+                    <div data-ui="surface" className="gradient-card panel p-4 bg-purple-50/30 border border-purple-200 rounded-xl space-y-3 animate-in fade-in">
                       <div className="flex items-center justify-between border-b pb-2 border-purple-200">
                         <h5 className="font-bold text-xs text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
                           <CalendarDays className="w-3.5 h-3.5 text-purple-700" /> Record Leave Application for {viewingEmployee.name}
                         </h5>
-                        <button
+                        <button data-ui="button"
                           type="button"
                           className="text-stone-400 hover:text-stone-600"
                           onClick={() => setIsRecordingLeave(false)}
@@ -2574,7 +2520,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                         <div>
                           <label className="field-label text-[11px]">Leave Type</label>
-                          <select
+                          <select data-ui="select"
                             value={leaveType}
                             onChange={(e) => setLeaveType(e.target.value as any)}
                             className="input-select text-xs py-1.5"
@@ -2589,7 +2535,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                         <div>
                           <label className="field-label text-[11px]">From Date</label>
-                          <input
+                          <input data-ui="input"
                             type="date"
                             value={leaveStartDate}
                             onChange={(e) => setLeaveStartDate(e.target.value)}
@@ -2599,7 +2545,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                         <div>
                           <label className="field-label text-[11px]">To Date</label>
-                          <input
+                          <input data-ui="input"
                             type="date"
                             value={leaveEndDate}
                             onChange={(e) => setLeaveEndDate(e.target.value)}
@@ -2609,7 +2555,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                         <div>
                           <label className="field-label text-[11px]">Total Days</label>
-                          <input
+                          <input data-ui="input"
                             type="number"
                             min="1"
                             max="60"
@@ -2621,7 +2567,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
 
                         <div className="sm:col-span-3">
                           <label className="field-label text-[11px]">Reason / Details</label>
-                          <input
+                          <input data-ui="input"
                             type="text"
                             value={leaveReason}
                             onChange={(e) => setLeaveReason(e.target.value)}
@@ -2631,7 +2577,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                         </div>
 
                         <div className="flex items-end">
-                          <button
+                          <button data-ui="button"
                             type="button"
                             className="button primary w-full text-xs py-1.5"
                             onClick={handleSaveLeave}
@@ -2644,7 +2590,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                   )}
 
                   {/* Leave History List */}
-                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                  <div className="gradient-card border border-stone-200 rounded-xl overflow-hidden bg-white">
                     <div className="p-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
                       <span className="text-xs font-bold text-stone-700">Leave History</span>
                       <span className="text-[11px] text-stone-500">
@@ -2676,7 +2622,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <button
+                              <button data-ui="button"
                                 type="button"
                                 className="icon-button text-stone-400 hover:text-rose-600"
                                 title="Delete Leave Record"
@@ -2696,7 +2642,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               {/* TAB 6: SALARY SLIPS & DISBURSEMENT HISTORY */}
               {profileTab === 'slips' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between bg-stone-50 border border-stone-200 p-4 rounded-xl">
+                  <div data-ui="surface" className="gradient-card flex items-center justify-between bg-stone-50 border border-stone-200 p-4 rounded-xl">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-stone-500 block">Total Disbursed to Date</span>
                       <span className="text-xl font-black text-stone-900">
@@ -2706,7 +2652,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                       </span>
                     </div>
                     {viewingEmployee.currentSalaryStatus === 'Pending' && (
-                      <button
+                      <button data-ui="button"
                         type="button"
                         className="button primary text-xs py-1.5 px-3"
                         onClick={() => handleOpenDisburse(viewingEmployee)}
@@ -2716,7 +2662,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                     )}
                   </div>
 
-                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                  <div className="gradient-card border border-stone-200 rounded-xl overflow-hidden bg-white">
                     <div className="p-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
                       <span className="text-xs font-bold text-stone-700">Salary Receipts & Pay Slips</span>
                       <span className="text-[11px] text-stone-500">
@@ -2748,7 +2694,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                                 <span className="font-bold text-sm text-stone-900 block">{formatPKR(sal.amountPaid)}</span>
                                 <span className="text-[10px] text-emerald-700 font-semibold">Net Paid</span>
                               </div>
-                              <button
+                              <button data-ui="button"
                                 type="button"
                                 className="button secondary text-xs py-1 px-2.5 flex items-center gap-1 text-emerald-700"
                                 onClick={() => {
@@ -2768,20 +2714,20 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
             </div>
 
             {/* Profile Footer */}
-            <div className="bg-stone-50 border-t border-border p-4 flex items-center justify-between">
+            <div className="employee-profile-footer bg-stone-50 border-t border-border p-4 flex items-center justify-between">
               <span className="text-xs text-stone-500">
                 Al-Farooq Foods • Employee Management Profile
               </span>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary text-xs py-1.5 px-4"
-                onClick={() => setViewingEmployee(null)}
+                onClick={closeEmployeeProfile}
               >
-                Close Profile
+                Back to employees
               </button>
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* MODAL 6: IMAGE ZOOM */}
@@ -2793,7 +2739,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
           <div className="relative max-w-2xl max-h-[90vh] bg-white p-2 rounded-xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={zoomedImage} alt="Payment Proof" className="max-w-full max-h-[85vh] object-contain rounded-lg" />
-            <button
+            <button data-ui="button"
               className="absolute top-4 right-4 bg-black/70 text-white rounded-full p-1.5"
               onClick={() => setZoomedImage(null)}
             >
@@ -2866,7 +2812,7 @@ function EmployeeFormModal({
 
   const totalAllowances = allowances.reduce((sum, a) => sum + (a.amount || 0), 0)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !phone.trim()) {
       alert('Please provide at least the employee name and phone number.')
@@ -2904,18 +2850,19 @@ function EmployeeFormModal({
       updatedAt: new Date().toISOString().slice(0, 10),
     }
 
+    if (Boolean(employee) && !(await confirmAction({"title":"Save employee changes?","message":"Update this employee profile?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(saved)
   }
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-card w-full max-w-2xl rounded-2xl shadow-2xl border border-border p-6 space-y-4 my-8">
+      <div data-ui="surface" className="gradient-card bg-card w-full max-w-2xl rounded-2xl shadow-2xl border border-border p-6 space-y-4 my-8">
         <div className="flex items-center justify-between border-b pb-3">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Users className="w-5 h-5 text-[#7cb518]" />
             {isEdit ? 'Edit Employee Record' : 'Register New Employee'}
           </h2>
-          <button className="icon-button" onClick={onClose}>
+          <button data-ui="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2924,7 +2871,7 @@ function EmployeeFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="field-label">Full Name *</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 required
                 value={name}
@@ -2936,7 +2883,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Phone Number *</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 required
                 value={phone}
@@ -2948,7 +2895,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">CNIC Number (Optional)</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 value={cnic}
                 onChange={(e) => setCnic(e.target.value)}
@@ -2959,7 +2906,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Role / Designation *</label>
-              <select
+              <select data-ui="select"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 className="input-select"
@@ -2980,7 +2927,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Department</label>
-              <select
+              <select data-ui="select"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className="input-select"
@@ -2996,7 +2943,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Base Monthly Salary (PKR) *</label>
-              <input
+              <input data-ui="input"
                 type="number"
                 required
                 value={baseSalary}
@@ -3009,7 +2956,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Duty Shift</label>
-              <select
+              <select data-ui="select"
                 value={shift}
                 onChange={(e) => setShift(e.target.value as any)}
                 className="input-select"
@@ -3024,7 +2971,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Duty Timing Details</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 value={dutyTiming}
                 onChange={(e) => setDutyTiming(e.target.value)}
@@ -3035,7 +2982,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Joining Date</label>
-              <input
+              <input data-ui="input"
                 type="date"
                 value={joiningDate}
                 onChange={(e) => setJoiningDate(e.target.value)}
@@ -3045,7 +2992,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Employment Status</label>
-              <select
+              <select data-ui="select"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
                 className="input-select"
@@ -3058,7 +3005,7 @@ function EmployeeFormModal({
           </div>
 
           {/* Dynamic Allowances Section */}
-          <div className="bg-muted/40 p-4 rounded-xl space-y-3 border border-border">
+          <div data-ui="surface" className="gradient-card bg-muted/40 p-4 rounded-xl space-y-3 border border-border">
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
@@ -3068,7 +3015,7 @@ function EmployeeFormModal({
                   Food, conveyance, overtime, medical or house rent allowances
                 </p>
               </div>
-              <button
+              <button data-ui="button"
                 type="button"
                 onClick={handleAddAllowance}
                 className="button secondary text-xs py-1 px-2.5"
@@ -3079,14 +3026,14 @@ function EmployeeFormModal({
 
             {allowances.map((item) => (
               <div key={item.id} className="flex items-center gap-2">
-                <input
+                <input data-ui="input"
                   type="text"
                   value={item.name}
                   onChange={(e) => handleUpdateAllowance(item.id, 'name', e.target.value)}
                   className="input-field flex-1 text-xs"
                   placeholder="Allowance Name (e.g. Food Allowance)"
                 />
-                <input
+                <input data-ui="input"
                   type="number"
                   value={item.amount}
                   onChange={(e) => handleUpdateAllowance(item.id, 'amount', e.target.value)}
@@ -3094,7 +3041,7 @@ function EmployeeFormModal({
                   placeholder="Amount"
                   step="500"
                 />
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => handleRemoveAllowance(item.id)}
                   className="icon-button text-muted-foreground hover:text-destructive"
@@ -3115,7 +3062,7 @@ function EmployeeFormModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="field-label">Emergency Contact Phone</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 value={emergencyContact}
                 onChange={(e) => setEmergencyContact(e.target.value)}
@@ -3126,7 +3073,7 @@ function EmployeeFormModal({
 
             <div>
               <label className="field-label">Bank Account Number (IBFT)</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
@@ -3137,10 +3084,10 @@ function EmployeeFormModal({
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t">
-            <button type="button" className="button secondary" onClick={onClose}>
+            <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="button primary px-6">
+            <button data-ui="button" type="submit" className="button primary px-6">
               <Check className="w-4 h-4 mr-1.5" />
               {isEdit ? 'Save Changes' : 'Register Staff Member'}
             </button>

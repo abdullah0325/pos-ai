@@ -1,7 +1,13 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { confirmAction } from '@/lib/confirmation'
+
+import CatalogPhoto from './catalog-photo'
+import ModuleHeading from './module-heading'
+
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
+  ScanLine,
   ShoppingCart,
   Search,
   Plus,
@@ -179,6 +185,50 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   // 2. Product Search and Category Filter
   const [productQuery, setProductQuery] = useState('')
+  const [productEntryMode, setProductEntryMode] = useState<'manual' | 'scan' | null>(null)
+  const productEntryDialog = useRef<HTMLDialogElement>(null)
+  const currentSaleHeading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (productEntryMode) {
+      productEntryDialog.current?.showModal()
+      productEntryDialog.current?.querySelector<HTMLInputElement>('input')?.focus()
+    } else {
+      productEntryDialog.current?.close()
+    }
+  }, [productEntryMode])
+  const returnToCurrentSale = () => {
+    setProductEntryMode(null)
+    requestAnimationFrame(() => {
+      currentSaleHeading.current?.scrollIntoView({ block: 'nearest' })
+      currentSaleHeading.current?.focus({ preventScroll: true })
+    })
+  }
+  const [scanCode, setScanCode] = useState('')
+  const [entryMessage, setEntryMessage] = useState('')
+  const [manualProduct, setManualProduct] = useState({ name: '', sku: '', price: '', cost: '', stock: '', unit: 'Pcs' })
+  const closingProductEntry = useRef(false)
+  const closeProductEntry = async () => {
+    if (closingProductEntry.current) return
+    const hasInput = productEntryMode === 'scan'
+      ? scanCode.length > 0
+      : Object.entries(manualProduct).some(([key, value]) => key === 'unit' ? value !== 'Pcs' : value.length > 0)
+    closingProductEntry.current = true
+    try {
+      if (hasInput && !(await confirmAction({
+        title: 'Discard entered details?',
+        message: 'Your unsaved product details will be lost.',
+        confirmLabel: 'Discard',
+        destructive: true,
+      }))) return
+      setScanCode('')
+      setManualProduct({ name: '', sku: '', price: '', cost: '', stock: '', unit: 'Pcs' })
+      setEntryMessage('')
+      setProductEntryMode(null)
+    } finally {
+      closingProductEntry.current = false
+    }
+  }
+
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
 
   // 3. Cart State
@@ -304,30 +354,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     })
   }, [db.products, selectedCategory, productQuery])
 
-  // POS Top Bar Metrics
-  const posMetrics = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10)
-    let todayCount = 0
-    let todayRevenue = 0
-    let todayCollected = 0
-    let todayPending = 0
 
-    db.invoices.forEach((inv) => {
-      if (inv.date === todayStr) {
-        todayCount += 1
-        todayRevenue += inv.grandTotal || 0
-        todayCollected += inv.amountPaid || 0
-        todayPending += inv.balanceDue || 0
-      }
-    })
-
-    return {
-      todayCount,
-      todayRevenue,
-      todayCollected,
-      todayPending,
-    }
-  }, [db.invoices])
 
   // Pricing Rule: Wholesale category auto-applies Wholesale rate; Retail / Walk-in applies Retail rate
   const getProductPriceForQty = (
@@ -465,6 +492,58 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const newCart = [...cart]
     newCart[index] = updated
     setCart(newCart)
+  }
+
+  const handleScanProduct = (event: React.FormEvent) => {
+    event.preventDefault()
+    const code = scanCode.trim().toLowerCase()
+    if (!code) return
+    const matches = db.products.filter(product => product.sku.trim().toLowerCase() === code)
+    if (matches.length !== 1) {
+      setEntryMessage(matches.length ? 'Multiple products use this SKU. Select the correct product from the catalog.' : 'No product found. Scan the product SKU or add it manually.')
+      return
+    }
+    const product = matches[0]
+    const quantity = cart.find(item => item.product.id === product.id)?.quantity || 0
+    if (quantity + 1 > product.quantity) {
+      setEntryMessage('Stock limit reached for ' + product.name)
+      return
+    }
+    handleAddToCart(product)
+    setEntryMessage(product.name + ' added to cart.')
+    setScanCode('')
+    returnToCurrentSale()
+  }
+
+  const handleManualProduct = (event: React.FormEvent) => {
+    event.preventDefault()
+    const name = manualProduct.name.trim()
+    const sku = manualProduct.sku.trim()
+    const price = Number(manualProduct.price)
+    const stock = Number(manualProduct.stock)
+    const cost = Number(manualProduct.cost)
+    if (!name || !sku || !manualProduct.cost || !Number.isFinite(cost) || cost < 0 || !manualProduct.price || !Number.isFinite(price) || price <= 0 || !Number.isInteger(stock) || stock < 1) {
+      setEntryMessage('Enter a name, unique SKU, valid cost, positive selling price, and whole stock quantity of at least 1.')
+      return
+    }
+    if (db.products.some(product => product.sku.trim().toLowerCase() === sku.toLowerCase())) {
+      setEntryMessage('This SKU already exists. Find it in the catalog or scan it.')
+      return
+    }
+    const product: ProductItem = {
+      id: 'prod-' + crypto.randomUUID(), name, sku, category: 'General', unit: manualProduct.unit,
+      quantity: stock, retailPrice: price, wholesalePrice: price, costPrice: cost, reorderLevel: 0,
+      status: 'Active', updatedAt: new Date().toISOString().slice(0, 10),
+    }
+    try {
+      onSaveDatabase({ ...db, products: [...db.products, product] })
+      handleAddToCart(product)
+      setManualProduct({ name: '', sku: '', price: '', cost: '', stock: '', unit: 'Pcs' })
+      setEntryMessage(name + ' saved to the catalog and added to cart.')
+      returnToCurrentSale()
+    } catch {
+      setEntryMessage('Unable to save the product. Please try again.')
+    }
   }
 
   // Toggle Pricing Tier manually (Retail vs Wholesale)
@@ -890,84 +969,15 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   return (
     <div className="space-y-4" id="pos-terminal-root">
-      {/* 1. TOP STATS BAR: CRISP BORDERED STAT CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Stat 1: Today's Sales */}
-        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-lime-100/80 flex items-center justify-center text-lime-700 shrink-0 shadow-2xs">
-            <ShoppingCart className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
-              Today&apos;s Sales
-            </span>
-            <span className="text-base sm:text-lg font-bold text-stone-900 mt-1 block">
-              {posMetrics.todayCount} Invoices
-            </span>
-          </div>
+      <ModuleHeading icon="invoices" className="pos-no-print">
+        <div>
+          <p className="eyebrow">Al Farooq Foods · Sales Workspace</p>
+          <h1>Point of Sale</h1>
+          <p className="subheading">Create sales, manage customer pricing, and issue receipts.</p>
         </div>
-
-        {/* Stat 2: Revenue */}
-        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-100/80 flex items-center justify-center text-blue-700 shrink-0 shadow-2xs">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
-              Total Revenue
-            </span>
-            <span className="text-base sm:text-lg font-bold text-stone-900 mt-1 block truncate">
-              {formatPKR(posMetrics.todayRevenue)}
-            </span>
-          </div>
-        </div>
-
-        {/* Stat 3: Cash Collected */}
-        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100/80 flex items-center justify-center text-emerald-700 shrink-0 shadow-2xs">
-            <Banknote className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
-              Cash Collected
-            </span>
-            <span className="text-base sm:text-lg font-bold text-emerald-800 mt-1 block truncate">
-              {formatPKR(posMetrics.todayCollected)}
-            </span>
-          </div>
-        </div>
-
-        {/* Stat 4: Pending Credit */}
-        <div className="stat-card bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200 shadow-xs flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-100/80 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block leading-none truncate">
-                Pending Credit
-              </span>
-              <span className="text-base sm:text-lg font-bold text-amber-800 mt-1 block truncate">
-                {formatPKR(posMetrics.todayPending)}
-              </span>
-            </div>
-          </div>
-
-          {drafts.length > 0 && (
-            <button
-              onClick={() => setShowDraftsModal(true)}
-              className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold flex items-center gap-1.5 transition shadow-xs shrink-0"
-              title="View held drafts"
-            >
-              <PauseCircle className="w-3.5 h-3.5" />
-              <span>Drafts ({drafts.length})</span>
-            </button>
-          )}
-        </div>
-      </div>
-
+      </ModuleHeading>
       {/* 2. DYNAMIC CUSTOMER CATEGORY & SELECTION SECTION */}
-      <div className="bg-white p-4 rounded-2xl shadow-xs border border-stone-200 space-y-3.5">
+      <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl shadow-xs border border-stone-200 space-y-3.5">
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-stone-100">
           <div className="flex items-center gap-2">
@@ -984,7 +994,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
           <div className="flex items-center gap-2">
             {drafts.length > 0 && (
-              <button
+              <button data-ui="button"
                 type="button"
                 onClick={() => setShowDraftsModal(true)}
                 className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition"
@@ -994,7 +1004,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               </button>
             )}
 
-            <button
+            <button data-ui="button"
               type="button"
               onClick={() => {
                 setNewCustType(activeCustomerCategory.name)
@@ -1007,7 +1017,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
             </button>
 
             {onNavigate && (
-              <button
+              <button data-ui="button"
                 type="button"
                 onClick={() => onNavigate('customer-management')}
                 className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition"
@@ -1028,7 +1038,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               Customer Category <span className="text-lime-700 font-normal">({liveCustomerCategories.length} live)</span>
             </label>
             <div className="relative">
-              <select
+              <select data-ui="select"
                 value={selectedCategoryName}
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full pl-3 pr-8 py-2.5 text-xs font-semibold text-stone-900 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/50 appearance-none transition cursor-pointer"
@@ -1060,7 +1070,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               /* Walk-in Counter Inputs */
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="relative">
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={walkinCustomerName}
                     onChange={(e) => setWalkinCustomerName(e.target.value)}
@@ -1069,7 +1079,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   />
                 </div>
                 <div className="relative">
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={walkinCustomerPhone}
                     onChange={(e) => setWalkinCustomerPhone(e.target.value)}
@@ -1113,7 +1123,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
                   <div className="flex items-center gap-1 shrink-0 ml-2">
                     {selectedCustomer && (
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
@@ -1131,11 +1141,11 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
                 {/* Dropdown Menu Popup */}
                 {isCustomerDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 z-40 mt-1.5 bg-white rounded-2xl shadow-xl border border-stone-200 max-h-64 overflow-hidden flex flex-col p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="gradient-card absolute top-full left-0 right-0 z-40 mt-1.5 bg-white rounded-2xl shadow-xl border border-stone-200 max-h-64 overflow-hidden flex flex-col p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
                     {/* Search Input */}
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
-                      <input
+                      <input data-ui="input"
                         type="text"
                         autoFocus
                         value={customerSearchQuery}
@@ -1171,7 +1181,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                         filteredProfiles.map((cust) => {
                           const isSelected = selectedCustomerId === cust.id
                           return (
-                            <div
+                            <div data-ui="surface"
                               key={cust.id}
                               onClick={() => {
                                 setSelectedCustomerId(cust.id)
@@ -1299,15 +1309,42 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
         )}
       </div>
 
+      <dialog ref={productEntryDialog} className="pos-product-dialog" aria-labelledby="pos-product-dialog-title" onCancel={(event) => { event.preventDefault(); void closeProductEntry() }} onClose={() => setProductEntryMode(null)}>
+        <div className="pos-entry-panel">
+          <div className="pos-product-dialog-header">
+            <h2 id="pos-product-dialog-title">{productEntryMode === 'manual' ? 'Add product' : 'Scan product'}</h2>
+            <button type="button" aria-label="Close product entry" onClick={() => void closeProductEntry()}><X size={18} /></button>
+          </div>
+            {productEntryMode === 'scan' && <form onSubmit={handleScanProduct} className="pos-scan-form">
+              <label htmlFor="pos-scan-code">Scan barcode / SKU</label>
+              <p>Use a USB or Bluetooth barcode scanner, or type a SKU and press Enter. Barcodes must match a product SKU.</p>
+              <div><input id="pos-scan-code" autoFocus autoComplete="off" value={scanCode} onChange={event => setScanCode(event.target.value)} placeholder="Scan or enter SKU" /><button type="submit" className="button primary">Add to cart</button></div>
+            </form>}
+            {productEntryMode === 'manual' && <form onSubmit={handleManualProduct} className="pos-manual-form">
+              <p>Create a catalog product and add one unit to this sale. Retail and wholesale prices will use the selling price below.</p>
+              <div className="pos-manual-fields">
+                <label>Product name<input required value={manualProduct.name} onChange={event => setManualProduct({ ...manualProduct, name: event.target.value })} /></label>
+                <label>SKU / barcode<input required value={manualProduct.sku} onChange={event => setManualProduct({ ...manualProduct, sku: event.target.value })} /></label>
+                <label>Selling price (Rs.)<input required type="number" min="0.01" step="0.01" value={manualProduct.price} onChange={event => setManualProduct({ ...manualProduct, price: event.target.value })} /></label>
+                <label>Unit cost (Rs.)<input required type="number" min="0" step="0.01" value={manualProduct.cost} onChange={event => setManualProduct({ ...manualProduct, cost: event.target.value })} /></label>
+                <label>Stock quantity<input required type="number" min="1" step="1" value={manualProduct.stock} onChange={event => setManualProduct({ ...manualProduct, stock: event.target.value })} /></label>
+                <label>Unit<select value={manualProduct.unit} onChange={event => setManualProduct({ ...manualProduct, unit: event.target.value })}>{['Pcs', 'Cartons', 'Bottles', 'Jars', 'Boxes', 'Packs'].map(unit => <option key={unit}>{unit}</option>)}</select></label>
+              </div>
+              <button type="submit" className="button primary">Save & add to cart</button>
+            </form>}
+            {entryMessage && <p className="pos-entry-message" role="status">{entryMessage}</p>}
+
+        </div>
+      </dialog>
       {/* 3. PRODUCT CATALOG (LEFT) + CLEAN CART (RIGHT) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* LEFT: SIMPLIFIED PRODUCT CATALOG */}
         <div className="lg:col-span-7 space-y-3">
           {/* Search & Category Pills */}
-          <div className="bg-white p-3 rounded-2xl shadow-xs border border-stone-100 space-y-2.5">
+          <div data-ui="surface" className="gradient-card bg-white p-3 rounded-2xl shadow-xs border border-stone-100 space-y-2.5">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-              <input
+              <input data-ui="input"
                 type="text"
                 value={productQuery}
                 onChange={(e) => setProductQuery(e.target.value)}
@@ -1315,7 +1352,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-stone-200 bg-stone-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
               />
               {productQuery && (
-                <button onClick={() => setProductQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                <button data-ui="button" onClick={() => setProductQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -1324,7 +1361,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
             {/* Category Filter Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs scrollbar-none">
               {availableCategories.map((cat) => (
-                <button
+                <button data-ui="button"
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-3 py-1 rounded-xl font-semibold text-xs whitespace-nowrap transition ${
@@ -1347,7 +1384,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               const currentPrice = isWholesaleActive ? p.wholesalePrice : p.retailPrice
 
               return (
-                <div
+                <div data-ui="toolbar"
                   key={p.id}
                   onClick={() => {
                     if (!isOut) handleAddToCart(p)
@@ -1362,15 +1399,11 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 >
                   {/* Top Image Box */}
                   <div className="aspect-square w-full rounded-xl bg-stone-100/70 overflow-hidden relative mb-2 flex items-center justify-center">
-                    {(p.imageUrl || (p as any).image) ? (
-                      <img
+                    <CatalogPhoto item={p}
                         src={p.imageUrl || (p as any).image}
                         alt={p.name}
                         className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-200"
                       />
-                    ) : (
-                      <Package className="w-8 h-8 text-stone-300 group-hover:text-lime-600 transition" />
-                    )}
 
                     {/* Out of Stock Overlay */}
                     {isOut && (
@@ -1400,21 +1433,18 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       </span>
 
                       {/* Single Add-to-Cart Icon Button */}
-                      <button
+                      <button data-ui="button"
                         type="button"
                         disabled={isOut}
                         onClick={(e) => {
                           e.stopPropagation()
                           if (!isOut) handleAddToCart(p)
                         }}
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition ${
-                          isOut
-                            ? 'bg-stone-100 text-stone-300'
-                            : 'bg-lime-50 text-lime-700 hover:bg-lime-600 hover:text-white group-hover:bg-lime-600 group-hover:text-white shadow-2xs'
-                        }`}
+                        className="pos-product-add"
+                        aria-label={`Add ${p.name} to cart`}
                         title="Add to cart"
                       >
-                        <Plus className="w-3.5 h-3.5" />
+                        <Plus className="w-4 h-4" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -1426,12 +1456,12 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
         {/* RIGHT: STREAMLINED LIVE CART */}
         <div className="lg:col-span-5 space-y-3">
-          <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-stone-100 space-y-3 sticky top-3">
+          <div data-ui="surface" className="pos-current-sale gradient-card bg-white p-3.5 rounded-2xl shadow-xs border border-stone-100 space-y-3 sticky top-3">
             {/* Cart Header */}
-            <div className="flex items-center justify-between pb-2.5 border-b border-stone-100">
+            <div className="pos-cart-header flex items-center justify-between pb-2.5 border-b border-stone-100">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 text-lime-600" />
-                <h2 className="text-sm font-bold text-stone-900">Current Sale</h2>
+                <h2 ref={currentSaleHeading} tabIndex={-1} className="text-sm font-bold text-stone-900">Current Sale</h2>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-lime-100 text-lime-800">
                   {cart.length} ({totalUnitsCount} units)
                 </span>
@@ -1439,7 +1469,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
               {cart.length > 0 && (
                 <div className="flex items-center gap-1">
-                  <button
+                  <button data-ui="button"
                     onClick={handleHoldSale}
                     className="p-1 rounded-md text-amber-700 hover:bg-amber-50 text-xs font-semibold flex items-center gap-1 transition"
                     title="Hold Sale as Draft"
@@ -1447,9 +1477,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                     <PauseCircle className="w-3.5 h-3.5" />
                     Hold
                   </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Clear sale cart?')) {
+                  <button data-ui="button"
+                    onClick={async () => {
+                      if (await confirmAction({
+                        title: 'Clear current sale?',
+                        message: `Remove ${cart.length} ${cart.length === 1 ? 'product' : 'products'} and all discounts from this cart? Saved sales and inventory will stay unchanged.`,
+                        confirmLabel: 'Clear cart',
+                        destructive: true,
+                      })) {
                         setCart([])
                         setCartDiscountValue(0)
                       }
@@ -1463,6 +1498,11 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               )}
             </div>
 
+            <div className="pos-sale-entry-actions">
+              <button type="button" onClick={() => { setEntryMessage(''); setProductEntryMode('manual') }}><Plus size={16} /> Add product</button>
+              <button type="button" onClick={() => { setEntryMessage(''); setScanCode(''); setProductEntryMode('scan') }}><ScanLine size={16} /> Scan SKU</button>
+            </div>
+            {!productEntryMode && entryMessage && <p className="pos-entry-message" role="status">{entryMessage}</p>}
             {/* Cart Items List */}
             {cart.length === 0 ? (
               <div className="py-12 text-center text-stone-400">
@@ -1471,25 +1511,21 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 <p className="text-[11px] text-stone-400">Click any product on the left to add</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
+              <div className="pos-cart-items space-y-2 max-h-72 overflow-y-auto pr-0.5">
                 {cart.map((item, index) => {
                   const liveProduct = db.products.find((p) => p.id === item.product.id) || item.product
                   const itemImage = liveProduct.imageUrl || (liveProduct as any).image || item.product.imageUrl || (item.product as any).image
 
                   return (
-                    <div key={item.product.id} className="bg-stone-50/80 p-2.5 rounded-xl border border-stone-200/50 space-y-1.5">
+                    <div key={item.product.id} className="pos-cart-item bg-stone-50/80 p-2.5 rounded-xl border border-stone-200/50 space-y-1.5">
                       <div className="flex items-start gap-2.5">
                         {/* Product Image Thumbnail in Cart */}
                         <div className="w-11 h-11 rounded-lg bg-white shrink-0 overflow-hidden relative flex items-center justify-center border border-stone-200/80 shadow-2xs">
-                          {itemImage ? (
-                            <img
+                          <CatalogPhoto item={liveProduct}
                               src={itemImage}
                               alt={item.product.name}
                               className="w-full h-full object-cover"
                             />
-                          ) : (
-                            <Package className="w-5 h-5 text-stone-300" />
-                          )}
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -1499,7 +1535,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                                 {item.product.name}
                               </h4>
                               <div className="flex items-center gap-1.5 mt-0.5">
-                                <button
+                                <button data-ui="button"
                                   type="button"
                                   onClick={() => handleToggleItemTier(index)}
                                   className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase transition ${
@@ -1528,25 +1564,28 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       </div>
 
                       {/* Quantity Modifier & Line Discount */}
-                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-200/50">
+                      <div className="pos-cart-item-controls flex items-center justify-between gap-2 pt-1 border-t border-stone-200/50">
                         {/* Qty +/- */}
                         <div className="flex items-center gap-1">
-                          <button
+                          <button data-ui="button"
                             type="button"
+                            aria-label={`Decrease quantity of ${item.product.name}`}
                             onClick={() => handleUpdateQty(index, item.quantity - 1)}
                             className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
                           >
                             -
                           </button>
-                          <input
+                          <input data-ui="input"
                             type="number"
                             min="1"
+                            aria-label={`Quantity of ${item.product.name}`}
                             value={item.quantity}
                             onChange={(e) => handleUpdateQty(index, Number(e.target.value) || 1)}
                             className="w-9 text-center text-xs font-bold py-0.2 rounded border border-stone-200 bg-white"
                           />
-                          <button
+                          <button data-ui="button"
                             type="button"
+                            aria-label={`Increase quantity of ${item.product.name}`}
                             onClick={() => handleUpdateQty(index, item.quantity + 1)}
                             className="w-5 h-5 rounded bg-white border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center text-xs font-bold"
                           >
@@ -1557,15 +1596,16 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       {/* Line Discount Input */}
                       <div className="flex items-center gap-1 text-[11px]">
                         <span className="text-stone-500 text-[10px]">Disc:</span>
-                        <input
+                        <input data-ui="input"
                           type="number"
                           min="0"
+                          aria-label={`Discount for ${item.product.name}`}
                           value={item.discountValue || ''}
                           onChange={(e) => handleUpdateItemDiscount(index, item.discountType, Number(e.target.value) || 0)}
                           placeholder="0"
                           className="w-10 text-center text-xs font-medium py-0.2 rounded border border-stone-200 bg-white"
                         />
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() =>
                             handleUpdateItemDiscount(
@@ -1582,8 +1622,9 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       </div>
 
                       {/* Delete item */}
-                      <button
+                      <button data-ui="button"
                         type="button"
+                        aria-label={`Remove ${item.product.name} from cart`}
                         onClick={() => handleRemoveItem(index)}
                         className="text-stone-400 hover:text-red-600 p-0.5"
                       >
@@ -1598,20 +1639,21 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
             {/* Cart Summary & Overall Discount */}
             {cart.length > 0 && (
-              <div className="pt-2.5 border-t border-stone-100 space-y-2.5">
+              <div className="pos-cart-summary pt-2.5 border-t border-stone-100 space-y-2.5">
                 {/* Total Bill Discount */}
-                <div className="flex items-center justify-between bg-stone-50 p-2 rounded-xl text-xs">
+                <div className="pos-bill-discount flex items-center justify-between bg-stone-50 p-2 rounded-xl text-xs">
                   <span className="font-semibold text-stone-700">Bill Discount:</span>
                   <div className="flex items-center gap-1">
-                    <input
+                    <input data-ui="input"
                       type="number"
                       min="0"
+                      aria-label="Bill discount"
                       value={cartDiscountValue || ''}
                       onChange={(e) => setCartDiscountValue(Number(e.target.value) || 0)}
                       placeholder="0"
                       className="w-14 text-center text-xs font-bold py-0.5 rounded border border-stone-200 bg-white"
                     />
-                    <button
+                    <button data-ui="button"
                       type="button"
                       onClick={() => setCartDiscountType(cartDiscountType === 'fixed' ? 'percent' : 'fixed')}
                       className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 font-bold text-[10px]"
@@ -1622,7 +1664,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 </div>
 
                 {/* Subtotal & Totals Table */}
-                <div className="space-y-1 text-xs">
+                <div className="pos-cart-totals space-y-1 text-xs">
                   <div className="flex justify-between text-stone-600">
                     <span>Subtotal:</span>
                     <span className="font-semibold text-stone-900">{formatPKR(grossSubtotal)}</span>
@@ -1640,7 +1682,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 </div>
 
                 {/* Checkout CTA Button */}
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={handleOpenCheckout}
                   className="w-full py-2.5 rounded-xl bg-lime-600 hover:bg-lime-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5"
@@ -1658,19 +1700,19 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       {/* MODAL 1: CHECKOUT & SETTLEMENT */}
       {showCheckoutModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden my-6">
+          <div data-ui="surface" className="gradient-card bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden my-6">
             <div className="bg-stone-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Receipt className="w-4 h-4 text-lime-400" />
                 <h3 className="font-bold text-sm">Complete Sale & Issue Invoice</h3>
               </div>
-              <button onClick={() => setShowCheckoutModal(false)} className="text-stone-400 hover:text-white p-1 rounded-lg">
+              <button data-ui="button" onClick={() => setShowCheckoutModal(false)} className="text-stone-400 hover:text-white p-1 rounded-lg">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="p-4 space-y-3 max-h-[80vh] overflow-y-auto text-xs">
-              <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 flex items-center justify-between">
+              <div data-ui="surface" className="gradient-card bg-stone-50 p-3 rounded-xl border border-stone-200 flex items-center justify-between">
                 <div>
                   <span className="text-stone-500 block text-[10px]">Buyer / Account:</span>
                   <strong className="text-xs font-bold text-stone-900">
@@ -1700,11 +1742,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       <div key={item.product.id} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-stone-200/60 text-xs">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-7 h-7 rounded bg-stone-100 border border-stone-200 shrink-0 overflow-hidden flex items-center justify-center">
-                            {itemImg ? (
-                              <img src={itemImg} alt={item.product.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <Package className="w-3.5 h-3.5 text-stone-300" />
-                            )}
+                            <CatalogPhoto item={liveProd} src={itemImg} alt={item.product.name} className="w-full h-full object-cover" />
                           </div>
                           <span className="font-semibold text-stone-900 truncate max-w-[170px]">{item.product.name}</span>
                           <span className="text-stone-400 text-[10px] shrink-0">× {item.quantity}</span>
@@ -1720,7 +1758,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               <div>
                 <label className="block font-bold text-stone-700 mb-1">Payment Status</label>
                 <div className="grid grid-cols-3 gap-1.5">
-                  <button
+                  <button data-ui="button"
                     type="button"
                     onClick={() => {
                       setPaymentStatus('Paid')
@@ -1734,7 +1772,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   >
                     Full Paid
                   </button>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     onClick={() => {
                       setPaymentStatus('Partial')
@@ -1748,7 +1786,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   >
                     Partial Paid
                   </button>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     onClick={() => {
                       setPaymentStatus('Unpaid')
@@ -1769,7 +1807,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">Payment Method</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as any)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-lime-500"
@@ -1784,7 +1822,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">Deposit To</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentAccount}
                     onChange={(e) => setPaymentAccount(e.target.value as any)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-lime-500"
@@ -1802,7 +1840,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               <div className="grid grid-cols-2 gap-2 bg-stone-50 p-2.5 rounded-lg border border-stone-200">
                 <div>
                   <label className="block font-bold text-stone-700 mb-0.5">Amount Received</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     min="0"
                     max={grandTotal}
@@ -1835,7 +1873,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       Payment Due Date (Optional)
                     </label>
                     <div className="flex gap-1">
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => {
                           const d = new Date()
@@ -1846,7 +1884,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       >
                         +7d
                       </button>
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => {
                           const d = new Date()
@@ -1857,7 +1895,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       >
                         +15d
                       </button>
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => {
                           const d = new Date()
@@ -1869,7 +1907,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                         +30d
                       </button>
                       {invoiceDueDate && (
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() => setInvoiceDueDate('')}
                           className="px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 hover:underline"
@@ -1879,7 +1917,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       )}
                     </div>
                   </div>
-                  <input
+                  <input data-ui="input"
                     type="date"
                     value={invoiceDueDate}
                     onChange={(e) => setInvoiceDueDate(e.target.value)}
@@ -1895,7 +1933,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               {(paymentMethod === 'Online' || paymentMethod === 'Bank Transfer') && (
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">Receipt Screenshot (Optional)</label>
-                  <input
+                  <input data-ui="file"
                     type="file"
                     ref={fileInputRef}
                     accept="image/*"
@@ -1908,7 +1946,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                         <img src={paymentScreenshot} alt="Proof" className="w-7 h-7 rounded object-cover" />
                         <span className="text-xs font-semibold text-lime-900">Proof attached</span>
                       </div>
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => setPaymentScreenshot('')}
                         className="text-red-500 hover:text-red-700 p-0.5"
@@ -1917,7 +1955,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       </button>
                     </div>
                   ) : (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="w-full p-2 border border-dashed border-stone-300 hover:border-lime-500 rounded-lg text-center bg-stone-50 hover:bg-lime-50/50 flex items-center justify-center gap-1.5 transition"
@@ -1932,7 +1970,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               {/* Order Notes */}
               <div>
                 <label className="block font-bold text-stone-700 mb-0.5">Notes (Optional)</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={orderNotes}
                   onChange={(e) => setOrderNotes(e.target.value)}
@@ -1943,14 +1981,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
               {/* Submit CTA */}
               <div className="pt-2 border-t border-stone-100 flex items-center justify-end gap-2">
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => setShowCheckoutModal(false)}
                   className="px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
                 >
                   Cancel
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={handleCompleteSale}
                   className="px-4 py-1.5 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold shadow-xs"
@@ -1967,7 +2005,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       {/* MODAL 2: POST-CHECKOUT CONFIRMATION & PRINT */}
       {completedInvoice && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden my-6">
+          <div data-ui="surface" className="gradient-card bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden my-6">
             <div className="bg-emerald-700 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-200" />
@@ -1976,7 +2014,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   <p className="text-[11px] text-emerald-100">Invoice #{completedInvoice.invoiceNumber}</p>
                 </div>
               </div>
-              <button onClick={handleResetPOS} className="text-emerald-200 hover:text-white p-1 rounded-lg">
+              <button data-ui="button" onClick={handleResetPOS} className="text-emerald-200 hover:text-white p-1 rounded-lg">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1986,7 +2024,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               <div className="flex items-center justify-between bg-stone-100 p-1 rounded-lg">
                 <span className="text-[10px] font-bold text-stone-600 px-2">Layout:</span>
                 <div className="flex items-center gap-1">
-                  <button
+                  <button data-ui="button"
                     onClick={() => setPrintMode('thermal')}
                     className={`px-2.5 py-1 rounded-md font-bold transition text-[11px] ${
                       printMode === 'thermal' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600'
@@ -1994,7 +2032,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   >
                     Thermal (80mm)
                   </button>
-                  <button
+                  <button data-ui="button"
                     onClick={() => setPrintMode('a4')}
                     className={`px-2.5 py-1 rounded-md font-bold transition text-[11px] ${
                       printMode === 'a4' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600'
@@ -2079,7 +2117,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
               {/* Action Buttons */}
               <div className="grid grid-cols-3 gap-1.5 pt-1">
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={handleDirectPrint}
                   className="py-2 px-2 rounded-lg bg-stone-900 hover:bg-black text-white font-bold flex items-center justify-center gap-1 transition text-xs"
@@ -2087,7 +2125,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   <Printer className="w-3.5 h-3.5" />
                   Print
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={handleDownloadPDF}
                   className="py-2 px-2 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold flex items-center justify-center gap-1 transition text-xs"
@@ -2095,7 +2133,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                   <Download className="w-3.5 h-3.5" />
                   PDF
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={handleCopyWhatsApp}
                   className="py-2 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1 transition text-xs"
@@ -2106,7 +2144,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               </div>
 
               <div className="text-center pt-1">
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={handleResetPOS}
                   className="text-xs font-bold text-lime-700 hover:underline inline-flex items-center gap-1"
@@ -2123,13 +2161,13 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       {/* MODAL 3: QUICK ADD CUSTOMER MODAL (FALLBACK IF NOT USING NAVIGATION) */}
       {showNewCustomerModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
             <div className="bg-stone-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-lime-400" />
                 <h3 className="font-bold text-sm">Add New Customer Profile</h3>
               </div>
-              <button onClick={() => setShowNewCustomerModal(false)} className="text-stone-400 hover:text-white">
+              <button data-ui="button" onClick={() => setShowNewCustomerModal(false)} className="text-stone-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2137,7 +2175,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
             <form onSubmit={handleSaveNewCustomer} className="p-4 space-y-2.5 text-xs">
               <div>
                 <label className="block font-bold text-stone-700 mb-0.5">Name / Business Name *</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   required
                   value={newCustName}
@@ -2150,7 +2188,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold text-stone-700 mb-0.5">Category Type</label>
-                  <select
+                  <select data-ui="select"
                     value={newCustType}
                     onChange={(e) => setNewCustType(e.target.value as any)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
@@ -2165,7 +2203,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
                 <div>
                   <label className="block font-bold text-stone-700 mb-0.5">Phone Number</label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={newCustPhone}
                     onChange={(e) => setNewCustPhone(e.target.value)}
@@ -2178,7 +2216,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold text-stone-700 mb-0.5">City / Territory</label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={newCustCity}
                     onChange={(e) => setNewCustCity(e.target.value)}
@@ -2189,7 +2227,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
                 <div>
                   <label className="block font-bold text-stone-700 mb-0.5">Opening Balance</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     value={newCustOpeningBalance}
                     onChange={(e) => setNewCustOpeningBalance(Number(e.target.value) || 0)}
@@ -2201,7 +2239,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
               <div>
                 <label className="block font-bold text-stone-700 mb-0.5">Market Address</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={newCustAddress}
                   onChange={(e) => setNewCustAddress(e.target.value)}
@@ -2211,14 +2249,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
               </div>
 
               <div className="pt-2 border-t border-stone-100 flex justify-end gap-2">
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => setShowNewCustomerModal(false)}
                   className="px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
                 >
                   Cancel
                 </button>
-                <button
+                <button data-ui="button"
                   type="submit"
                   className="px-4 py-1.5 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold shadow-xs"
                 >
@@ -2233,13 +2271,13 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       {/* MODAL 4: HELD DRAFTS */}
       {showDraftsModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white w-full max-w-md rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
             <div className="bg-stone-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <PauseCircle className="w-4 h-4 text-amber-400" />
                 <h3 className="font-bold text-sm">Held Sales Drafts ({drafts.length})</h3>
               </div>
-              <button onClick={() => setShowDraftsModal(false)} className="text-stone-400 hover:text-white">
+              <button data-ui="button" onClick={() => setShowDraftsModal(false)} className="text-stone-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2257,14 +2295,14 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button
+                      <button data-ui="button"
                         onClick={() => handleResumeDraft(d)}
                         className="px-2.5 py-1 rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-bold text-xs flex items-center gap-1"
                       >
                         <PlayCircle className="w-3 h-3" />
                         Resume
                       </button>
-                      <button
+                      <button data-ui="button"
                         onClick={() => setDrafts(drafts.filter((item) => item.id !== d.id))}
                         className="p-1 rounded-lg text-red-500 hover:bg-red-50"
                       >

@@ -1,6 +1,12 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { confirmAction } from '@/lib/confirmation'
+
+import ModuleHeading from './module-heading'
+
+import CatalogPhoto from './catalog-photo'
+
+import { useState, useMemo, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import {
   Plus,
@@ -204,8 +210,8 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
   }
 
   // Delete product
-  const handleDeleteProduct = (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete "${name}"?`)) return
+  const handleDeleteProduct = async (id: string, name: string) => {
+    if (!await confirmAction(`Are you sure you want to permanently delete "${name}"?`)) return
     onSaveDatabase({
       ...db,
       products: db.products.filter((p) => p.id !== id),
@@ -214,8 +220,8 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
   }
 
   // Delete raw material
-  const handleDeleteRaw = (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this raw material?')) return
+  const handleDeleteRaw = async (id: string) => {
+    if (!await confirmAction('Are you sure you want to delete this raw material?')) return
     onSaveDatabase({ ...db, rawMaterials: db.rawMaterials.filter((r) => r.id !== id) })
   }
 
@@ -279,7 +285,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
   return (
     <div className="page-stack" id="inventory-view-module">
       {/* Heading */}
-      <div className="page-heading">
+      <ModuleHeading icon="inventory">
         <div>
           <p className="eyebrow">Inventory & Product Catalog</p>
           <h1>
@@ -298,7 +304,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
           </p>
         </div>
         <div className="heading-actions">
-          <button
+          <button data-ui="button"
             className="button secondary"
             onClick={() => generateStockReportPDF(db.products, db.rawMaterials)}
             id="btn-stock-pdf"
@@ -307,17 +313,17 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
           </button>
           {activeSubView === 'products' && (
             <>
-              <button
+              <button data-ui="button"
                 className="button secondary"
                 onClick={() => setIsManagingCategories(true)}
                 id="btn-manage-categories"
               >
                 <Tag className="w-4 h-4" /> Manage Categories
               </button>
-              <button className="button secondary" onClick={exportProductsCSV} id="btn-export-products-csv">
+              <button data-ui="button" className="button secondary" onClick={exportProductsCSV} id="btn-export-products-csv">
                 <Download className="w-4 h-4" /> CSV
               </button>
-              <button
+              <button data-ui="button"
                 className="button primary"
                 onClick={() => setIsCreatingProduct(true)}
                 id="btn-add-product"
@@ -328,10 +334,10 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
           )}
           {activeSubView === 'raw-materials' && (
             <>
-              <button className="button secondary" onClick={exportRawCSV} id="btn-export-raw-csv">
+              <button data-ui="button" className="button secondary" onClick={exportRawCSV} id="btn-export-raw-csv">
                 <Download className="w-4 h-4" /> CSV
               </button>
-              <button
+              <button data-ui="button"
                 className="button primary"
                 onClick={() => setIsCreatingRaw(true)}
                 id="btn-add-raw-material"
@@ -341,7 +347,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
             </>
           )}
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* KPI Stats */}
       <div className="stat-grid">
@@ -377,11 +383,11 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       </div>
 
       {/* Toolbar & Multi-Filters */}
-      <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-3" id="products-toolbar">
+      <div data-ui="toolbar" className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-3" id="products-toolbar">
         <div className="flex items-center gap-2 flex-1 min-w-[240px]">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
+            <input data-ui="input"
               placeholder="Search products by name, SKU, category..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -389,7 +395,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
               id="input-product-search"
             />
             {query && (
-              <button
+              <button data-ui="button"
                 type="button"
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
                 onClick={() => setQuery('')}
@@ -402,7 +408,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Category Dropdown Filter */}
-          <select
+          <select data-ui="select"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -419,7 +425,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
           {activeSubView === 'products' && (
             <>
               {/* Stock Status Filter */}
-              <select
+              <select data-ui="select"
                 value={stockStatusFilter}
                 onChange={(e) => setStockStatusFilter(e.target.value as any)}
                 className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -432,7 +438,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
               </select>
 
               {/* Sourcing Filter */}
-              <select
+              <select data-ui="select"
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value as any)}
                 className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -445,7 +451,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
 
               {/* Sorting */}
               <div className="flex items-center gap-1">
-                <select
+                <select data-ui="select"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
                   className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -458,7 +464,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                   <option value="retailPrice">Sort: Retail Price</option>
                   <option value="valuation">Sort: Total Value</option>
                 </select>
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
                   className="border border-stone-200 rounded-lg px-2.5 py-2 text-xs bg-white hover:bg-stone-50 text-stone-700 font-bold transition-colors"
@@ -476,7 +482,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       {activeSubView === 'products' && (
         <div id="finished-products-panel">
           {filteredProducts.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
+            <div data-ui="surface" className="gradient-card bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
               <div className="flex flex-col items-center justify-center gap-3 max-w-sm mx-auto">
                 <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
                   <Package className="w-7 h-7" />
@@ -487,7 +493,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                     ? 'Try adjusting your search query or filters to find what you are looking for.'
                     : 'Get started by creating your first finished product SKU.'}
                 </p>
-                <button
+                <button data-ui="button"
                   className="button primary text-xs mt-2"
                   onClick={() => setIsCreatingProduct(true)}
                 >
@@ -497,159 +503,26 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4.5" id="products-card-grid">
-              {filteredProducts.map((p) => {
-                const isLow = p.quantity <= p.reorderLevel && p.quantity > 0
-                const isOut = p.quantity <= 0
-                const sizeLabel = p.size ? `${p.size} ${p.sizeUnit || ''}`.trim() : null
-
-                return (
-                  <div
-                    key={p.id}
-                    className="group bg-white rounded-2xl p-3.5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative overflow-hidden"
-                    id={`product-card-${p.id}`}
-                  >
-                    {/* Top Section: Image & Overlaid Badges */}
-                    <div>
-                      <div className="w-full aspect-[4/3] rounded-xl bg-stone-100 overflow-hidden relative flex items-center justify-center mb-3">
-                        {p.imageUrl ? (
-                          <img
-                            src={p.imageUrl}
-                            alt={p.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-stone-300 gap-1">
-                            <Package className="w-10 h-10 stroke-[1.5]" />
-                            <span className="text-[10px] font-medium text-stone-400">No Image</span>
-                          </div>
-                        )}
-
-                        {/* Top-Right Action Buttons */}
-                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-xs p-1 rounded-lg shadow-xs opacity-90 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            className="p-1.5 text-stone-500 hover:text-[#7cb518] hover:bg-stone-100 rounded-md transition-colors"
-                            title="Quick Stock Adjust"
-                            onClick={() =>
-                              setStockAdjustmentItem({
-                                id: p.id,
-                                name: p.name,
-                                current: p.quantity,
-                                type: 'product',
-                              })
-                            }
-                          >
-                            <ArrowUpCircle className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-stone-100 rounded-md transition-colors"
-                            title="Edit Product"
-                            onClick={() => setSelectedProduct(p)}
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-md transition-colors"
-                            title="Delete Product"
-                            onClick={() => handleDeleteProduct(p.id, p.name)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        {/* Top-Left Source Tag */}
-                        <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
-                          {p.isPurchasedProduct ? (
-                            <span className="inline-flex items-center gap-1 bg-blue-600/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
-                              Outsourced
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 bg-[#7cb518]/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs">
-                              In-House
-                            </span>
-                          )}
-
-                          {isOut ? (
-                            <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
-                              Out of Stock
-                            </span>
-                          ) : isLow ? (
-                            <span className="inline-flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
-                              <AlertTriangle className="w-2.5 h-2.5" /> Low Stock
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {/* Category Pill & SKU */}
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <span className="inline-block bg-emerald-50 text-emerald-800 font-semibold text-[10px] px-2 py-0.5 rounded-md">
-                          {p.category}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {p.expiryDate && <ExpiryDateBadge date={p.expiryDate} />}
-                          <span className="font-mono text-[10px] text-stone-400">
-                            {p.sku}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Product Name */}
-                      <h4
-                        className="font-bold text-stone-900 text-sm leading-snug line-clamp-1 group-hover:text-[#7cb518] transition-colors cursor-pointer"
-                        title={p.name}
-                        onClick={() => setViewProductDetails(p)}
-                      >
-                        {p.name}
-                      </h4>
-
-                      {/* Size / Unit & Available Stock */}
-                      <div className="flex items-center justify-between text-xs text-stone-500 mt-1">
-                        <span>
-                          {sizeLabel ? `${sizeLabel} • ` : ''}
-                          <strong className="text-stone-700">{p.unit}</strong>
-                        </span>
-                        <span
-                          className={`font-bold ${
-                            isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-stone-800'
-                          }`}
-                        >
-                          {p.quantity} {p.unit}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Bottom Pricing Bar */}
-                    <div className="mt-3.5 pt-3 border-t border-stone-100 flex items-end justify-between">
-                      <div>
-                        <span className="text-[10px] text-stone-400 uppercase font-bold tracking-wider block">
-                          Cost / Retail
-                        </span>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-xs text-stone-500 font-medium">
-                            {formatPKR(p.costPrice)}
-                          </span>
-                          <span className="text-stone-300 font-light">/</span>
-                          <span className="text-sm font-extrabold text-stone-900">
-                            {formatPKR(p.retailPrice)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setViewProductDetails(p)}
-                        className="text-[11px] font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-0.5 hover:underline"
-                      >
-                        <Eye className="w-3 h-3" /> View
+              {filteredProducts.map((p) => (
+                <div key={p.id} className="raw-material-card group" id={`product-card-${p.id}`}>
+                  <button type="button" className="raw-material-card-image"
+                    aria-label={`View ${p.name} details`} onClick={() => setViewProductDetails(p)}>
+                    <CatalogPhoto item={p} src={p.imageUrl} alt={p.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy" />
+                  </button>
+                  <div className="raw-material-card-body">
+                    <h4 className="raw-material-card-name" title={p.name}>{p.name}</h4>
+                    <div className="raw-material-card-footer">
+                      <span className="raw-material-card-price">{formatPKR(p.retailPrice)}</span>
+                      <button data-ui="button" type="button" className="raw-material-card-view"
+                        aria-label={`View ${p.name}`} onClick={() => setViewProductDetails(p)}>
+                        <Eye className="w-3.5 h-3.5" /> View
                       </button>
                     </div>
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -659,7 +532,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       {activeSubView === 'raw-materials' && (
         <div className="panel table-panel" id="raw-materials-panel">
           <div className="table-scroll">
-            <table>
+            <table data-ui="table">
               <thead>
                 <tr>
                   <th>Material SKU & Name</th>
@@ -715,7 +588,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button
+                        <button data-ui="button"
                           className="row-action text-purple-600"
                           title="Quick Stock Adjust"
                           onClick={() =>
@@ -729,14 +602,14 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                         >
                           <ArrowUpCircle />
                         </button>
-                        <button
+                        <button data-ui="button"
                           className="row-action"
                           title="Edit material"
                           onClick={() => setSelectedRawMaterial(r)}
                         >
                           <Edit />
                         </button>
-                        <button
+                        <button data-ui="button"
                           className="row-action danger"
                           title="Delete material"
                           onClick={() => handleDeleteRaw(r.id)}
@@ -764,7 +637,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
               </div>
             </div>
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Product</th>
@@ -812,7 +685,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                         </span>
                       </td>
                       <td className="text-right">
-                        <button
+                        <button data-ui="button"
                           className="button secondary text-xs py-1 h-auto"
                           onClick={() =>
                             setStockAdjustmentItem({
@@ -841,7 +714,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
               </div>
             </div>
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Raw Material</th>
@@ -875,7 +748,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                         </span>
                       </td>
                       <td className="text-right">
-                        <button
+                        <button data-ui="button"
                           className="button secondary text-xs py-1 h-auto"
                           onClick={() =>
                             setStockAdjustmentItem({
@@ -1095,7 +968,7 @@ function ProductEditorModal({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -1149,6 +1022,7 @@ function ProductEditorModal({
       updatedAt: now,
     }
 
+    if (product && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(saved)
   }
 
@@ -1160,7 +1034,7 @@ function ProductEditorModal({
             <p className="eyebrow">Product Management</p>
             <h2>{product ? `Edit Product: ${product.name}` : 'Add New Product'}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1174,14 +1048,14 @@ function ProductEditorModal({
 
         <div className="space-y-5">
           {/* SECTION 1: ESSENTIAL IDENTIFIERS */}
-          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
+          <div data-ui="surface" className="gradient-card bg-stone-50/80 p-4 rounded-xl border border-stone-200">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Package className="w-3.5 h-3.5 text-[#7cb518]" /> 1. Essential Product Information
             </h3>
             <div className="form-grid">
               <label className="col-span-2">
                 Product Name *
-                <input
+                <input data-ui="input"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Al-Farooq Mineral Water 500ml (24-pack)"
@@ -1192,7 +1066,7 @@ function ProductEditorModal({
 
               <label>
                 SKU / Item Code * <span className="text-[11px] text-stone-400">(Must be unique)</span>
-                <input
+                <input data-ui="input"
                   value={sku}
                   onChange={(e) => setSku(e.target.value)}
                   placeholder="e.g. AFW-500-24"
@@ -1204,7 +1078,7 @@ function ProductEditorModal({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="mb-0 text-xs font-semibold text-stone-700">Category *</label>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     className="text-[11px] text-[#7cb518] hover:underline font-semibold"
                     onClick={onOpenCategoryManager}
@@ -1212,7 +1086,7 @@ function ProductEditorModal({
                     + Manage Categories
                   </button>
                 </div>
-                <select
+                <select data-ui="select"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -1232,7 +1106,7 @@ function ProductEditorModal({
                   <label className="text-xs font-semibold text-stone-700 mb-1 block">
                     Product Size / Volume <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
                   </label>
-                  <input
+                  <input data-ui="input"
                     value={size}
                     onChange={(e) => setSize(e.target.value)}
                     placeholder="e.g. 500, 1.5, 250, 100, 19"
@@ -1245,7 +1119,7 @@ function ProductEditorModal({
                     Size Unit <span className="text-[11px] text-stone-400 font-normal">(Dropdown)</span>
                   </label>
                   <div className="flex gap-2">
-                    <select
+                    <select data-ui="select"
                       value={sizeUnit}
                       onChange={(e) => setSizeUnit(e.target.value)}
                       className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 w-full focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -1265,7 +1139,7 @@ function ProductEditorModal({
 
               <label>
                 Packaging / Dispatch Unit *
-                <select
+                <select data-ui="select"
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   className="w-full border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -1284,7 +1158,7 @@ function ProductEditorModal({
 
               <label>
                 Reorder Threshold Limit (Alert)
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={reorderLevel}
@@ -1295,7 +1169,7 @@ function ProductEditorModal({
 
               <label className="col-span-2">
                 Description & Specifications <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
-                <input
+                <input data-ui="input"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="e.g. 24 x 500ml shrink-wrapped bottles, pure mineral source, shelf life 12 months."
@@ -1309,7 +1183,7 @@ function ProductEditorModal({
                   <label className="text-xs font-semibold text-stone-700 mb-1 block">
                     Manufacturing Date <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
                   </label>
-                  <input
+                  <input data-ui="input"
                     type="date"
                     value={manufacturingDate}
                     onChange={(e) => setManufacturingDate(e.target.value)}
@@ -1326,7 +1200,7 @@ function ProductEditorModal({
                     </label>
                     {expiryDate && <ExpiryDateBadge date={expiryDate} />}
                   </div>
-                  <input
+                  <input data-ui="input"
                     type="date"
                     value={expiryDate}
                     onChange={(e) => setExpiryDate(e.target.value)}
@@ -1340,16 +1214,16 @@ function ProductEditorModal({
           </div>
 
           {/* SECTION 2: STOCK & PRICING TIERS */}
-          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
+          <div data-ui="surface" className="gradient-card bg-stone-50/80 p-4 rounded-xl border border-stone-200">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-[#7cb518]" /> 2. Stock Quantities & Wholesale Pricing Structure
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
+              <div data-ui="surface" className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Current Stock in Warehouse *
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={quantity}
@@ -1360,11 +1234,11 @@ function ProductEditorModal({
                 <span className="text-[11px] text-stone-500 mt-1 block">Unit: {unit}</span>
               </div>
 
-              <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
+              <div data-ui="surface" className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Actual / Base Cost Price (Rs) *
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={costPrice}
@@ -1375,11 +1249,11 @@ function ProductEditorModal({
                 <span className="text-[11px] text-stone-500 mt-1 block">Production / Base unit cost</span>
               </div>
 
-              <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
+              <div data-ui="surface" className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Retail Selling Price (Rs) *
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={retailPrice}
@@ -1394,12 +1268,12 @@ function ProductEditorModal({
             </div>
 
             {/* Wholesale Price & Minimum Limit */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-3.5 bg-white p-3.5 rounded-xl border border-stone-200">
+            <div data-ui="surface" className="gradient-card grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-3.5 bg-white p-3.5 rounded-xl border border-stone-200">
               <div>
                 <label className="text-xs font-semibold text-stone-800 mb-1 block">
                   Wholesale Price (Rs) *
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={wholesalePrice}
@@ -1416,7 +1290,7 @@ function ProductEditorModal({
                 <label className="text-xs font-semibold text-stone-800 mb-1 block">
                   Wholesale Minimum Quantity Limit <span className="text-[11px] text-stone-400 font-normal">(Threshold)</span>
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="1"
                   value={wholesaleMinQty}
@@ -1431,7 +1305,7 @@ function ProductEditorModal({
             </div>
 
             {/* Total Cost: Auto vs Manual */}
-            <div className="mt-3.5 bg-white p-3.5 rounded-xl border border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div data-ui="toolbar" className="gradient-card mt-3.5 bg-white p-3.5 rounded-xl border border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-bold text-stone-850">
                   Total Valuation: {formatPKR(finalTotalCost)}
@@ -1443,7 +1317,7 @@ function ProductEditorModal({
 
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-1.5 text-xs text-stone-700 cursor-pointer font-medium select-none">
-                  <input
+                  <input data-ui="checkbox"
                     type="checkbox"
                     checked={isManualTotalCost}
                     onChange={(e) => {
@@ -1456,7 +1330,7 @@ function ProductEditorModal({
                 </label>
 
                 {isManualTotalCost && (
-                  <input
+                  <input data-ui="input"
                     type="number"
                     min="0"
                     value={manualTotalCost}
@@ -1470,18 +1344,14 @@ function ProductEditorModal({
           </div>
 
           {/* SECTION 3: PRODUCT IMAGE (OFFLINE PERSISTED) */}
-          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
+          <div data-ui="surface" className="gradient-card bg-stone-50/80 p-4 rounded-xl border border-stone-200">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <ImageIcon className="w-3.5 h-3.5 text-[#7cb518]" /> 3. Product Image <span className="text-[11px] text-stone-400 font-normal">(Offline Stored)</span>
             </h3>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 rounded-xl border border-stone-200">
-              <div className="w-24 h-24 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center overflow-hidden relative flex-shrink-0">
-                {imageUrl ? (
-                  <img src={imageUrl} alt="Product Preview" className="w-full h-full object-cover" />
-                ) : (
-                  <ImageIcon className="w-8 h-8 text-stone-300" />
-                )}
+            <div data-ui="surface" className="gradient-card flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 rounded-xl border border-stone-200">
+              <div className="gradient-card w-24 h-24 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center overflow-hidden relative flex-shrink-0">
+                <CatalogPhoto item={{ name, category }} src={imageUrl} className="w-full h-full object-cover" />
               </div>
 
               <div className="flex-1 space-y-2 text-center sm:text-left">
@@ -1496,14 +1366,14 @@ function ProductEditorModal({
                 </div>
 
                 <div className="flex items-center gap-2 justify-center sm:justify-start">
-                  <input
+                  <input data-ui="file"
                     type="file"
                     ref={imageFileInputRef}
                     accept="image/*"
                     className="hidden"
                     onChange={handleImageFileChange}
                   />
-                  <button
+                  <button data-ui="button"
                     type="button"
                     className="button secondary text-xs py-1.5"
                     onClick={() => imageFileInputRef.current?.click()}
@@ -1511,7 +1381,7 @@ function ProductEditorModal({
                     <UploadCloud className="w-3.5 h-3.5" /> {imageUrl ? 'Change Image' : 'Select Image File'}
                   </button>
                   {imageUrl && (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="button secondary text-xs py-1.5 text-rose-600 hover:text-rose-700"
                       onClick={() => setImageUrl('')}
@@ -1525,13 +1395,13 @@ function ProductEditorModal({
           </div>
 
           {/* SECTION 4: SOURCING & PURCHASE INVOICE */}
-          <div className="bg-stone-50/80 p-4 rounded-xl border border-stone-200">
+          <div data-ui="surface" className="gradient-card bg-stone-50/80 p-4 rounded-xl border border-stone-200">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Receipt className="w-3.5 h-3.5 text-[#7cb518]" /> 4. Sourcing & Purchase Invoice Attachment
               </h3>
               <label className="flex items-center gap-2 text-xs font-semibold text-stone-900 cursor-pointer bg-white px-3 py-1 rounded-lg border border-stone-300 select-none">
-                <input
+                <input data-ui="checkbox"
                   type="checkbox"
                   checked={isPurchasedProduct}
                   onChange={(e) => setIsPurchasedProduct(e.target.checked)}
@@ -1543,13 +1413,13 @@ function ProductEditorModal({
             </div>
 
             {isPurchasedProduct ? (
-              <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-200/80 space-y-4">
+              <div data-ui="surface" className="gradient-card bg-blue-50/60 p-4 rounded-xl border border-blue-200/80 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-semibold text-blue-900 mb-1 block">
                       Purchase Cost from Supplier (Rs)
                     </label>
-                    <input
+                    <input data-ui="input"
                       type="number"
                       min="0"
                       value={purchaseCost}
@@ -1567,14 +1437,14 @@ function ProductEditorModal({
                     <label className="text-xs font-semibold text-blue-900 mb-1 block">
                       Attach Purchase Invoice / Receipt Image
                     </label>
-                    <input
+                    <input data-ui="file"
                       type="file"
                       ref={invoiceFileInputRef}
                       accept="image/*"
                       className="hidden"
                       onChange={handleInvoiceFileChange}
                     />
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="button secondary text-xs w-full py-2 bg-white flex items-center justify-center gap-2"
                       onClick={() => invoiceFileInputRef.current?.click()}
@@ -1586,7 +1456,7 @@ function ProductEditorModal({
                 </div>
 
                 {purchaseInvoiceImage && (
-                  <div className="bg-white p-3 rounded-xl border border-blue-200 flex items-center justify-between">
+                  <div data-ui="toolbar" className="gradient-card bg-white p-3 rounded-xl border border-blue-200 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-lg bg-stone-100 overflow-hidden border border-stone-200">
                         <img src={purchaseInvoiceImage} alt="Invoice" className="w-full h-full object-cover" />
@@ -1596,7 +1466,7 @@ function ProductEditorModal({
                         <div className="text-[11px] text-emerald-700">Offline document copy verified</div>
                       </div>
                     </div>
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="text-xs text-rose-600 hover:underline font-semibold"
                       onClick={() => setPurchaseInvoiceImage('')}
@@ -1615,10 +1485,10 @@ function ProductEditorModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary" id="btn-save-product-submit">
+          <button data-ui="button" type="submit" className="button primary" id="btn-save-product-submit">
             {product ? 'Update Product' : 'Create Product SKU'}
           </button>
         </div>
@@ -1648,18 +1518,31 @@ function ProductDetailsModal({
   const totalVal = product.totalCost !== undefined ? product.totalCost : product.quantity * product.costPrice
   const retailMarginPct = product.costPrice > 0 ? Math.round(((product.retailPrice - product.costPrice) / product.costPrice) * 100) : 0
   const wholesaleMarginPct = product.costPrice > 0 ? Math.round(((product.wholesalePrice - product.costPrice) / product.costPrice) * 100) : 0
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null
+    dialogRef.current?.focus()
+    return () => previousFocus?.focus()
+  }, [])
 
   return (
     <div className="editor-overlay">
-      <div className="editor-modal large" id="product-details-modal">
+      <div className="editor-modal large" id="product-details-modal" ref={dialogRef}
+        role="dialog" aria-modal="true" aria-labelledby="product-details-title" tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.stopPropagation(); onClose() }
+          if (event.key === 'Tab') {
+            const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, [href], [tabindex="0"]'))
+            const first = controls[0]
+            const last = controls[controls.length - 1]
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last?.focus() }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+          }
+        }}>
         <div className="editor-header">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center flex-shrink-0">
-              {product.imageUrl ? (
-                <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-              ) : (
-                <Package className="w-6 h-6 text-[#7cb518]" />
-              )}
+            <div className="material-details-photo product-details-photo">
+              <CatalogPhoto item={product} src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
             </div>
             <div>
               <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded mr-2">
@@ -1668,17 +1551,25 @@ function ProductDetailsModal({
               <span className="text-xs bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded">
                 {product.category}
               </span>
-              <h2 className="text-lg font-bold text-gray-900 mt-1">{product.name}</h2>
+              <h2 id="product-details-title">{product.name}</h2>
+              <span className={`material-details-status ${isOut ? 'is-out' : isLow ? 'is-low' : ''}`}>
+                <span aria-hidden="true" />{isOut ? 'Out of stock' : isLow ? 'Low stock' : 'In stock'}
+              </span>
+              <div className="product-details-hero-price">
+                <span>Retail price</span>
+                <strong>{formatPKR(product.retailPrice)}</strong>
+                <small>per {product.unit}</small>
+              </div>
             </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" aria-label="Close product details" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-5">
+        <div className="material-details-body space-y-5">
           {/* Main Specs Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="material-details-metrics grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
               <div className="text-[11px] text-gray-500 font-medium">Available Stock</div>
               <div className={`text-lg font-bold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-gray-900'}`}>
@@ -1722,7 +1613,7 @@ function ProductDetailsModal({
 
           {/* Details & Sourcing Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-xl border border-gray-200 space-y-3">
               <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Product Specifications</h3>
               
               <div className="space-y-2 text-xs">
@@ -1757,18 +1648,14 @@ function ProductDetailsModal({
             </div>
 
             {/* Image / Invoice Preview */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
-              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Attached Media & Invoices</h3>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-xl border border-gray-200 space-y-3">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Media & Documents</h3>
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 text-center">
                   <div className="text-[11px] font-semibold text-gray-600 mb-1">Product Photo</div>
                   <div className="w-full h-28 rounded bg-gray-100 overflow-hidden flex items-center justify-center border border-gray-200">
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-[11px] text-gray-400">No Image</span>
-                    )}
+                    <CatalogPhoto item={product} src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                   </div>
                 </div>
 
@@ -1794,7 +1681,7 @@ function ProductDetailsModal({
         </div>
 
         <div className="editor-actions justify-between">
-          <button
+          <button data-ui="button"
             type="button"
             className="button secondary text-rose-600 hover:text-rose-700"
             onClick={onDelete}
@@ -1803,14 +1690,14 @@ function ProductDetailsModal({
           </button>
           
           <div className="flex items-center gap-2">
-            <button
+            <button data-ui="button"
               type="button"
               className="button secondary"
               onClick={onStockAdjust}
             >
               <ArrowUpCircle className="w-4 h-4" /> Adjust Stock
             </button>
-            <button
+            <button data-ui="button"
               type="button"
               className="button primary"
               onClick={onEdit}
@@ -1860,7 +1747,7 @@ function CategoryManagerModal({
   }
 
   // Save new / edited category
-  const handleSaveCategory = (e: React.FormEvent) => {
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     if (!catName.trim()) {
@@ -1868,6 +1755,7 @@ function CategoryManagerModal({
       return
     }
 
+    if (editingCatId && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     if (isAddingNew) {
       // Check duplicate name
       if (categories.some((c) => c.name.toLowerCase() === catName.trim().toLowerCase())) {
@@ -1917,7 +1805,7 @@ function CategoryManagerModal({
   }
 
   // Delete category
-  const handleDeleteCategory = (cat: CategoryItem) => {
+  const handleDeleteCategory = async (cat: CategoryItem) => {
     const pCount = counts[cat.name] || 0
     if (categories.length <= 1) {
       alert('You must keep at least one category in the database.')
@@ -1925,12 +1813,12 @@ function CategoryManagerModal({
     }
 
     if (pCount > 0) {
-      const proceed = window.confirm(
+      const proceed = await confirmAction(
         `Category "${cat.name}" is currently assigned to ${pCount} product(s).\n\nIf you delete this category, these products will be reassigned to "General". Do you want to proceed?`
       )
       if (!proceed) return
     } else {
-      if (!window.confirm(`Are you sure you want to delete category "${cat.name}"?`)) return
+      if (!await confirmAction(`Are you sure you want to delete category "${cat.name}"?`)) return
     }
 
     const fallbackCat = categories.find((c) => c.id !== cat.id)?.name || 'General'
@@ -1952,7 +1840,7 @@ function CategoryManagerModal({
               Create, rename, and organize categories for your finished products.
             </p>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1974,7 +1862,7 @@ function CategoryManagerModal({
               <span className="text-xs font-bold text-stone-800 uppercase tracking-wider">
                 {isAddingNew ? 'New Category' : 'Edit Category'}
               </span>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="text-xs text-stone-400 hover:text-stone-700"
                 onClick={() => {
@@ -1991,7 +1879,7 @@ function CategoryManagerModal({
               <label className="text-xs font-semibold text-stone-700 mb-1 block">
                 Category Name *
               </label>
-              <input
+              <input data-ui="input"
                 value={catName}
                 onChange={(e) => setCatName(e.target.value)}
                 placeholder="e.g. Mineral Water, Juices, Confectionery"
@@ -2005,7 +1893,7 @@ function CategoryManagerModal({
               <label className="text-xs font-semibold text-stone-700 mb-1 block">
                 Description / Notes <span className="text-stone-400 font-normal">(Optional)</span>
               </label>
-              <input
+              <input data-ui="input"
                 value={catDesc}
                 onChange={(e) => setCatDesc(e.target.value)}
                 placeholder="Brief description or packaging notes"
@@ -2014,7 +1902,7 @@ function CategoryManagerModal({
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary text-xs py-1.5 px-3"
                 onClick={() => {
@@ -2025,7 +1913,7 @@ function CategoryManagerModal({
               >
                 Cancel
               </button>
-              <button type="submit" className="button primary text-xs py-1.5 px-4">
+              <button data-ui="button" type="submit" className="button primary text-xs py-1.5 px-4">
                 {isAddingNew ? 'Create Category' : 'Save Changes'}
               </button>
             </div>
@@ -2038,7 +1926,7 @@ function CategoryManagerModal({
               </span>
               <p className="text-[11px] text-stone-500">Available in product creation dropdowns</p>
             </div>
-            <button
+            <button data-ui="button"
               type="button"
               className="button primary text-xs py-1.5 px-3"
               onClick={() => {
@@ -2080,7 +1968,7 @@ function CategoryManagerModal({
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="p-1.5 text-stone-500 hover:text-blue-600 rounded-md hover:bg-stone-100 transition-colors"
                       title="Edit Category Name"
@@ -2088,7 +1976,7 @@ function CategoryManagerModal({
                     >
                       <Edit className="w-3.5 h-3.5" />
                     </button>
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="p-1.5 text-stone-500 hover:text-rose-600 rounded-md hover:bg-stone-100 transition-colors"
                       title="Delete Category"
@@ -2104,7 +1992,7 @@ function CategoryManagerModal({
         </div>
 
         <div className="editor-actions mt-5">
-          <button type="button" className="button secondary w-full py-2 text-xs" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary w-full py-2 text-xs" onClick={onClose}>
             Done
           </button>
         </div>
@@ -2139,7 +2027,7 @@ function RawMaterialEditorModal({
   const [unitCost, setUnitCost] = useState(material?.unitCost || 150)
   const [supplierId, setSupplierId] = useState(material?.supplierId || suppliers[0]?.id || '')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
 
@@ -2161,6 +2049,7 @@ function RawMaterialEditorModal({
       status,
       updatedAt: now,
     }
+    if (material && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(saved)
   }
 
@@ -2172,7 +2061,7 @@ function RawMaterialEditorModal({
             <p className="eyebrow">Factory Raw Materials</p>
             <h2>{material ? 'Edit Raw Material' : 'Add New Raw Material'}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2180,17 +2069,17 @@ function RawMaterialEditorModal({
         <div className="form-grid">
           <label>
             SKU Code *
-            <input value={sku} onChange={(e) => setSku(e.target.value)} required />
+            <input data-ui="input" value={sku} onChange={(e) => setSku(e.target.value)} required />
           </label>
 
           <label>
             Raw Material Name *
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Refined Sugar" required />
+            <input data-ui="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Refined Sugar" required />
           </label>
 
           <label>
             Category *
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select data-ui="select" value={category} onChange={(e) => setCategory(e.target.value)}>
               {catList.map((c) => (
                 <option key={c.id} value={c.name}>
                   {c.name}
@@ -2201,27 +2090,27 @@ function RawMaterialEditorModal({
 
           <label>
             Measurement Unit *
-            <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. Kg, Pieces, Liters, Bags" required />
+            <input data-ui="input" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="e.g. Kg, Pieces, Liters, Bags" required />
           </label>
 
           <label>
             Stock Quantity
-            <input type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+            <input data-ui="input" type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
           </label>
 
           <label>
             Reorder Alert Threshold
-            <input type="number" min="1" value={reorderLevel} onChange={(e) => setReorderLevel(Number(e.target.value))} />
+            <input data-ui="input" type="number" min="1" value={reorderLevel} onChange={(e) => setReorderLevel(Number(e.target.value))} />
           </label>
 
           <label>
             Purchase Unit Cost (Rs)
-            <input type="number" min="0" step="any" value={unitCost} onChange={(e) => setUnitCost(Number(e.target.value))} />
+            <input data-ui="input" type="number" min="0" step="any" value={unitCost} onChange={(e) => setUnitCost(Number(e.target.value))} />
           </label>
 
           <label>
             Primary Supplier
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <select data-ui="select" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.category})
@@ -2232,10 +2121,10 @@ function RawMaterialEditorModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Save Material
           </button>
         </div>
@@ -2260,9 +2149,10 @@ function StockAdjustmentModal({
   const [qty, setQty] = useState(10)
   const [reason, setReason] = useState('Manual physical count adjustment / audit')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const delta = adjustmentType === 'add' ? qty : -qty
+    if (!(await confirmAction({"title":"Apply stock adjustment?","message":"Update the inventory quantity with this adjustment?","confirmLabel":"Apply adjustment","destructive":false}))) return
     onApply(delta, reason)
   }
 
@@ -2274,7 +2164,7 @@ function StockAdjustmentModal({
             <p className="eyebrow">Warehouse Adjustment</p>
             <h2>Adjust Stock: {item.name}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2286,7 +2176,7 @@ function StockAdjustmentModal({
         <div className="form-grid single">
           <label>
             Adjustment Action
-            <select value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as any)}>
+            <select data-ui="select" value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as any)}>
               <option value="add">Add Inflow Stock (+ In)</option>
               <option value="remove">Deduct Stock / Damaged (- Out)</option>
             </select>
@@ -2294,20 +2184,20 @@ function StockAdjustmentModal({
 
           <label>
             Quantity
-            <input type="number" min="1" value={qty} onChange={(e) => setQty(Number(e.target.value))} required />
+            <input data-ui="input" type="number" min="1" value={qty} onChange={(e) => setQty(Number(e.target.value))} required />
           </label>
 
           <label>
             Reason / Reference Note
-            <input value={reason} onChange={(e) => setReason(e.target.value)} required />
+            <input data-ui="input" value={reason} onChange={(e) => setReason(e.target.value)} required />
           </label>
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Apply Stock Adjustment
           </button>
         </div>

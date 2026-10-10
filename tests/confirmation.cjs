@@ -1,0 +1,20 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+const Module = require('node:module');
+const compiled = ts.transpileModule(fs.readFileSync('lib/confirmation.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const loaded = new Module('confirmation'); loaded._compile(compiled, 'confirmation.js');
+const { confirmAction, registerConfirmationReceiver } = loaded.exports;
+(async () => {
+  assert.equal(await confirmAction('Delete?'), false, 'No popup host must fail closed');
+  let request; const unregister = registerConfirmationReceiver(next => { request = next; });
+  let changes = 0;
+  const canceled = confirmAction('Delete?').then(accepted => { if(accepted) changes++; });
+  assert.equal(changes,0,'No change before user decision');
+  request.resolve(false); await canceled; assert.equal(changes,0,'Cancel must not change data');
+  const accepted = confirmAction({ title:'Save?', message:'Apply edits?', confirmLabel:'Save changes' }).then(result=>{if(result)changes++;});
+  assert.equal(request.title,'Save?'); assert.equal(changes,0);
+  request.resolve(true); await accepted; assert.equal(changes,1,'Confirm applies action');
+  unregister(); assert.equal(await confirmAction('Delete?'),false);
+  console.log('Confirmation tests passed: fail-closed, waits for decision, cancel prevents mutations, accept proceeds, cleanup.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,5 +1,7 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import { useState, useMemo, useRef } from 'react'
 import {
   Receipt,
@@ -400,7 +402,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
   }
 
   // Save Expense Record with Universal Auto-Linking
-  const handleSaveExpense = (e: React.FormEvent) => {
+  const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault()
     const numericAmount = Number(amount)
     if (isNaN(numericAmount) || numericAmount <= 0) {
@@ -563,6 +565,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
     }
 
     // Save entire state
+    if (editingExpense && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSaveDatabase({
       ...db,
       expenses: updatedExpenses,
@@ -657,7 +660,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
+      <div data-ui="toolbar" className="page-title-banner gradient-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
         <div>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-lime-100 flex items-center justify-center text-lime-700">
@@ -670,7 +673,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <button data-ui="button"
             onClick={() => setIsManagingCategories(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
             title="Manage expense category names and colors"
@@ -678,7 +681,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
             <FolderTree className="w-4 h-4 text-stone-500" />
             Manage Categories
           </button>
-          <button
+          <button data-ui="button"
             onClick={handleExportCSV}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
             title="Export filtered list to Excel/CSV"
@@ -686,7 +689,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
             <Download className="w-4 h-4" />
             Export CSV
           </button>
-          <button
+          <button data-ui="button"
             onClick={() => handleOpenCreate()}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-lime-600 hover:bg-lime-700 text-white shadow-sm transition"
             id="btn-add-expense"
@@ -700,7 +703,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       {/* Monthly Summary & KPI Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total This Month */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs text-stone-500 font-medium uppercase tracking-wider">Expenses (This Month)</span>
             <div className="text-2xl font-bold text-stone-900 mt-1">{formatPKR(stats.totalThisMonth)}</div>
@@ -712,7 +715,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
         </div>
 
         {/* Card 2: Today's Expenses */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs text-stone-500 font-medium uppercase tracking-wider">Today&apos;s Expenses</span>
             <div className="text-2xl font-bold text-stone-900 mt-1">{formatPKR(stats.totalToday)}</div>
@@ -724,7 +727,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
         </div>
 
         {/* Card 3: Salaries Disbursed */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs text-stone-500 font-medium uppercase tracking-wider">Salaries Paid (This Month)</span>
             <div className="text-2xl font-bold text-stone-900 mt-1">{formatPKR(stats.salariesThisMonth)}</div>
@@ -736,7 +739,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
         </div>
 
         {/* Card 4: Loans & Advances */}
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs text-stone-500 font-medium uppercase tracking-wider">Loans / Advances</span>
             <div className="text-2xl font-bold text-stone-900 mt-1">{formatPKR(stats.loansThisMonth)}</div>
@@ -750,7 +753,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
       {/* Category Breakdown Badges */}
       {stats.sortedCategories.length > 0 && (
-        <div className="bg-stone-50 border border-stone-200/80 p-4 rounded-2xl">
+        <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200/80 p-4 rounded-2xl">
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-bold text-stone-700 uppercase tracking-wider">This Month&apos;s Expense Distribution</span>
             <span className="text-xs text-stone-500 font-medium">{stats.sortedCategories.length} active categories</span>
@@ -759,7 +762,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
             {stats.sortedCategories.map(([cat, total]) => {
               const percent = stats.totalThisMonth > 0 ? Math.round((total / stats.totalThisMonth) * 100) : 0
               return (
-                <button
+                <button data-ui="button"
                   key={cat}
                   onClick={() => setSelectedCategoryFilter(selectedCategoryFilter === cat ? 'All' : cat)}
                   className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
@@ -780,12 +783,12 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       )}
 
       {/* Search & Filter Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
+      <div data-ui="surface" className="gradient-card bg-white p-4 rounded-2xl border border-stone-200 shadow-sm space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search */}
           <div className="relative lg:col-span-2">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-            <input
+            <input data-ui="input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -793,7 +796,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+              <button data-ui="button" onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -801,7 +804,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
           {/* Category Filter */}
           <div>
-            <select
+            <select data-ui="select"
               value={selectedCategoryFilter}
               onChange={(e) => setSelectedCategoryFilter(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
@@ -817,7 +820,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
           {/* Date Range Filter */}
           <div>
-            <select
+            <select data-ui="select"
               value={dateRangeFilter}
               onChange={(e) => setDateRangeFilter(e.target.value as any)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
@@ -831,7 +834,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
           {/* Payment Method Filter */}
           <div>
-            <select
+            <select data-ui="select"
               value={paymentMethodFilter}
               onChange={(e) => setPaymentMethodFilter(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
@@ -848,7 +851,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       </div>
 
       {/* Expense List Table */}
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+      <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-stone-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold text-stone-800">Expense Vouchers & Ledger</h2>
@@ -869,7 +872,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
             <Receipt className="w-12 h-12 text-stone-300 mx-auto mb-3" />
             <p className="text-sm font-medium text-stone-700">No expenses found</p>
             <p className="text-xs text-stone-400 mt-1">Try adjusting your filters or click below to record an expense</p>
-            <button
+            <button data-ui="button"
               onClick={() => handleOpenCreate()}
               className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-lime-600 hover:bg-lime-700 text-white text-xs font-semibold transition"
             >
@@ -879,7 +882,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table data-ui="table" className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-stone-50 text-stone-600 font-semibold border-b border-stone-200">
                   <th className="py-3 px-4">Voucher / Date</th>
@@ -968,7 +971,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                     {/* Receipt Image / Proof */}
                     <td className="py-3 px-4 text-center">
                       {exp.receiptImage || exp.paymentScreenshot ? (
-                        <button
+                        <button data-ui="button"
                           onClick={() =>
                             setPreviewImage({
                               src: exp.receiptImage || exp.paymentScreenshot || '',
@@ -989,21 +992,21 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
+                        <button data-ui="button"
                           onClick={() => generateExpenseVoucherPDF(exp)}
                           className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 hover:bg-stone-100 transition"
                           title="Print / Download PDF Voucher"
                         >
                           <Printer className="w-4 h-4" />
                         </button>
-                        <button
+                        <button data-ui="button"
                           onClick={() => handleOpenEdit(exp)}
                           className="p-1.5 rounded-lg text-stone-500 hover:text-blue-600 hover:bg-blue-50 transition"
                           title="Edit expense"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button
+                        <button data-ui="button"
                           onClick={() => setDeletingExpense(exp)}
                           className="p-1.5 rounded-lg text-stone-500 hover:text-red-600 hover:bg-red-50 transition"
                           title="Delete expense"
@@ -1023,7 +1026,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       {/* CREATE / EDIT EXPENSE MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8">
+          <div data-ui="surface" className="gradient-card bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8">
             {/* Modal Header */}
             <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1033,7 +1036,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                   <p className="text-xs text-stone-400">Post operational expenses, utilities, and auto-linked payroll vouchers</p>
                 </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-stone-400 hover:text-white p-1 rounded-lg">
+              <button data-ui="button" onClick={() => setIsModalOpen(false)} className="text-stone-400 hover:text-white p-1 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1044,7 +1047,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                 {/* Voucher # */}
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Voucher / Expense #</label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     required
                     value={expenseNumber}
@@ -1056,7 +1059,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                 {/* Date */}
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Payment Date</label>
-                  <input
+                  <input data-ui="input"
                     type="date"
                     required
                     value={expenseDate}
@@ -1072,7 +1075,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                   <label className="block text-xs font-bold text-stone-700">
                     Expense Category / Type <span className="text-red-500">*</span>
                   </label>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     onClick={() => setIsManagingCategories(true)}
                     className="text-[11px] font-semibold text-lime-700 hover:text-lime-800 hover:underline inline-flex items-center gap-1"
@@ -1080,7 +1083,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                     <FolderTree className="w-3 h-3" /> Manage Categories
                   </button>
                 </div>
-                <select
+                <select data-ui="select"
                   value={expenseCategory}
                   onChange={(e) => {
                     setExpenseCategory(e.target.value)
@@ -1112,7 +1115,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               {expenseCategory === 'Other' && (
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Custom Category Name</label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     required
                     value={customCategoryInput}
@@ -1125,7 +1128,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
               {/* SPECIAL EMPLOYEE LINKAGE BOX IF SALARIES OR LOANS */}
               {(isSalaryCategory(expenseCategory) || isLoanCategory(expenseCategory)) && (
-                <div className="p-4 rounded-xl bg-lime-50 border border-lime-200 space-y-3">
+                <div data-ui="surface" className="gradient-card p-4 rounded-xl bg-lime-50 border border-lime-200 space-y-3">
                   <div className="flex items-center gap-2">
                     <UserCheck className="w-4 h-4 text-lime-700" />
                     <span className="text-xs font-bold text-lime-900">
@@ -1140,7 +1143,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                       <label className="block text-[11px] font-bold text-lime-800 mb-1">
                         Employee Profile <span className="text-red-500">*</span>
                       </label>
-                      <select
+                      <select data-ui="select"
                         required
                         value={selectedEmployeeId}
                         onChange={(e) => handleEmployeeSelect(e.target.value)}
@@ -1158,7 +1161,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                     {isSalaryCategory(expenseCategory) && (
                       <div>
                         <label className="block text-[11px] font-bold text-lime-800 mb-1">Salary Month</label>
-                        <input
+                        <input data-ui="input"
                           type="text"
                           value={salaryMonth}
                           onChange={(e) => setSalaryMonth(e.target.value)}
@@ -1195,7 +1198,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                             </span>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer text-[11px] text-amber-800">
-                            <input
+                            <input data-ui="checkbox"
                               type="checkbox"
                               checked={markRemainingAsPending}
                               onChange={(e) => setMarkRemainingAsPending(e.target.checked)}
@@ -1226,7 +1229,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                 <label className="block text-xs font-bold text-stone-700 mb-1">
                   Description / Particulars <span className="text-red-500">*</span>
                 </label>
-                <input
+                <input data-ui="input"
                   type="text"
                   required
                   value={description}
@@ -1244,7 +1247,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-stone-400">Rs.</span>
-                    <input
+                    <input data-ui="input"
                       type="number"
                       min="1"
                       step="any"
@@ -1259,7 +1262,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Paid To (Vendor / Person / Dept)</label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={paidTo}
                     onChange={(e) => setPaidTo(e.target.value)}
@@ -1271,7 +1274,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
               {/* Recurring Monthly Expense Option */}
               <label className="flex items-center gap-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer hover:bg-stone-100/70 transition">
-                <input
+                <input data-ui="checkbox"
                   type="checkbox"
                   checked={isRecurring}
                   onChange={(e) => setIsRecurring(e.target.checked)}
@@ -1292,7 +1295,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Payment Method</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as any)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
@@ -1307,7 +1310,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Deduct From Account</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentAccount}
                     onChange={(e) => setPaymentAccount(e.target.value as any)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
@@ -1325,7 +1328,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               {(paymentMethod === 'Bank Transfer' || paymentMethod === 'Online' || paymentMethod === 'Cheque') && (
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Transaction Ref # / Cheque #</label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={transactionRef}
                     onChange={(e) => setTransactionRef(e.target.value)}
@@ -1340,7 +1343,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                 {/* Bill / Receipt Image */}
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Attached Receipt / Bill Image (Optional)</label>
-                  <input
+                  <input data-ui="file"
                     type="file"
                     ref={receiptInputRef}
                     accept="image/*"
@@ -1354,20 +1357,20 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                         <span className="text-xs text-stone-700 font-medium truncate">Receipt Attached</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() => setPreviewImage({ src: receiptImage, title: 'Bill / Receipt' })}
                           className="p-1 text-stone-500 hover:text-stone-800"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button type="button" onClick={() => setReceiptImage('')} className="p-1 text-red-500 hover:text-red-700">
+                        <button data-ui="button" type="button" onClick={() => setReceiptImage('')} className="p-1 text-red-500 hover:text-red-700">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       onClick={() => receiptInputRef.current?.click()}
                       className="w-full border border-dashed border-stone-300 hover:border-lime-500 rounded-xl p-3 text-center bg-stone-50 hover:bg-lime-50/50 transition flex flex-col items-center justify-center gap-1"
@@ -1381,7 +1384,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                 {/* Online Screenshot */}
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Online Payment Screenshot (Optional)</label>
-                  <input
+                  <input data-ui="file"
                     type="file"
                     ref={screenshotInputRef}
                     accept="image/*"
@@ -1395,20 +1398,20 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
                         <span className="text-xs text-stone-700 font-medium truncate">Screenshot Attached</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() => setPreviewImage({ src: paymentScreenshot, title: 'Payment Screenshot' })}
                           className="p-1 text-stone-500 hover:text-stone-800"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button type="button" onClick={() => setPaymentScreenshot('')} className="p-1 text-red-500 hover:text-red-700">
+                        <button data-ui="button" type="button" onClick={() => setPaymentScreenshot('')} className="p-1 text-red-500 hover:text-red-700">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       onClick={() => screenshotInputRef.current?.click()}
                       className="w-full border border-dashed border-stone-300 hover:border-lime-500 rounded-xl p-3 text-center bg-stone-50 hover:bg-lime-50/50 transition flex flex-col items-center justify-center gap-1"
@@ -1423,7 +1426,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               {/* Notes */}
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">Internal Notes (Optional)</label>
-                <textarea
+                <textarea data-ui="textarea"
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -1434,14 +1437,14 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
 
               {/* Modal Footer */}
               <div className="pt-4 border-t border-stone-100 flex items-center justify-end gap-2.5">
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
                 >
                   Cancel
                 </button>
-                <button
+                <button data-ui="button"
                   type="submit"
                   className="px-5 py-2 text-xs font-semibold rounded-xl bg-lime-600 hover:bg-lime-700 text-white shadow-sm transition"
                 >
@@ -1456,7 +1459,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       {/* DELETE CONFIRMATION MODAL */}
       {deletingExpense && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl border border-stone-200 space-y-4">
+          <div data-ui="surface" className="gradient-card bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl border border-stone-200 space-y-4">
             <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
@@ -1472,13 +1475,13 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               </p>
             </div>
             <div className="flex items-center justify-center gap-3 pt-2">
-              <button
+              <button data-ui="button"
                 onClick={() => setDeletingExpense(null)}
                 className="px-4 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700"
               >
                 Keep Record
               </button>
-              <button
+              <button data-ui="button"
                 onClick={handleConfirmDelete}
                 className="px-4 py-2 text-xs font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-sm"
               >
@@ -1492,10 +1495,10 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
       {/* IMAGE ZOOM / PREVIEW MODAL */}
       {previewImage && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-2xl max-w-2xl w-full p-4 overflow-hidden shadow-2xl border border-stone-200">
+          <div data-ui="surface" className="gradient-card relative bg-white rounded-2xl max-w-2xl w-full p-4 overflow-hidden shadow-2xl border border-stone-200">
             <div className="flex items-center justify-between pb-3 border-b border-stone-100">
               <h4 className="font-bold text-sm text-stone-900">{previewImage.title}</h4>
-              <button onClick={() => setPreviewImage(null)} className="text-stone-400 hover:text-stone-700 p-1">
+              <button data-ui="button" onClick={() => setPreviewImage(null)} className="text-stone-400 hover:text-stone-700 p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1503,7 +1506,7 @@ export default function ExpensesView({ db, onSaveDatabase, onNavigate }: Expense
               <img src={previewImage.src} alt={previewImage.title} className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-sm" />
             </div>
             <div className="flex justify-end">
-              <button
+              <button data-ui="button"
                 onClick={() => setPreviewImage(null)}
                 className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700"
               >
@@ -1609,7 +1612,7 @@ function ManageExpenseCategoriesModal({
     setEditDescription(cat.description || '')
   }
 
-  const handleSaveEdit = (catId: string) => {
+  const handleSaveEdit = async (catId: string) => {
     const trimmed = editName.trim()
     if (!trimmed) return
 
@@ -1635,26 +1638,27 @@ function ManageExpenseCategoriesModal({
     })
 
     setCatList(updated)
+    if (!(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(updated)
     setEditingId(null)
   }
 
-  const handleDeleteCategory = (catId: string, catName: string) => {
+  const handleDeleteCategory = async (catId: string, catName: string) => {
     const usage = categoryUsageCounts[catName.toLowerCase()] || 0
     let msg = `Are you sure you want to delete category "${catName}"?`
     if (usage > 0) {
       msg = `Category "${catName}" is currently used in ${usage} expense record(s).\n\nAre you sure you want to delete it from the categories list? Existing expense records will retain their text.`
     }
 
-    if (confirm(msg)) {
+    if (await confirmAction(msg)) {
       const updated = catList.filter((c) => c.id !== catId)
       setCatList(updated)
       onSave(updated)
     }
   }
 
-  const handleResetDefaults = () => {
-    if (confirm('Reset all expense categories to factory defaults? Any custom added categories will be reset.')) {
+  const handleResetDefaults = async () => {
+    if (await confirmAction('Reset all expense categories to factory defaults? Any custom added categories will be reset.')) {
       setCatList([...defaultExpenseCategories])
       onSave([...defaultExpenseCategories])
     }
@@ -1671,7 +1675,7 @@ function ManageExpenseCategoriesModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6">
+      <div data-ui="surface" className="gradient-card bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6">
         {/* Header */}
         <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -1685,14 +1689,14 @@ function ManageExpenseCategoriesModal({
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-white p-1 rounded-lg">
+          <button data-ui="button" onClick={onClose} className="text-stone-400 hover:text-white p-1 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           {/* Add New Category Box */}
-          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+          <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-4">
             <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Plus className="w-4 h-4 text-lime-600" />
               Add New Expense Category
@@ -1703,7 +1707,7 @@ function ManageExpenseCategoriesModal({
                   <label className="block text-xs font-bold text-stone-700 mb-1">
                     Category Name <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     required
                     value={newName}
@@ -1715,7 +1719,7 @@ function ManageExpenseCategoriesModal({
 
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Description (Optional)</label>
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
@@ -1732,7 +1736,7 @@ function ManageExpenseCategoriesModal({
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {EXPENSE_CATEGORY_COLORS.map((c) => (
-                    <button
+                    <button data-ui="button"
                       key={c.id}
                       type="button"
                       onClick={() => setNewColor(c.id)}
@@ -1751,7 +1755,7 @@ function ManageExpenseCategoriesModal({
               </div>
 
               <div className="pt-2 flex justify-end">
-                <button
+                <button data-ui="button"
                   type="submit"
                   disabled={!newName.trim()}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-lime-600 hover:bg-lime-700 disabled:opacity-50 text-white text-xs font-semibold shadow-xs transition"
@@ -1773,7 +1777,7 @@ function ManageExpenseCategoriesModal({
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
-                  <input
+                  <input data-ui="input"
                     type="text"
                     value={searchFilter}
                     onChange={(e) => setSearchFilter(e.target.value)}
@@ -1781,7 +1785,7 @@ function ManageExpenseCategoriesModal({
                     className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-1 focus:ring-lime-500"
                   />
                 </div>
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={handleResetDefaults}
                   className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 hover:underline px-2 py-1"
@@ -1791,7 +1795,7 @@ function ManageExpenseCategoriesModal({
               </div>
             </div>
 
-            <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden bg-white">
+            <div className="gradient-card divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden bg-white">
               {filteredCategories.length === 0 ? (
                 <div className="p-8 text-center text-stone-400 text-xs">No categories match your search.</div>
               ) : (
@@ -1805,7 +1809,7 @@ function ManageExpenseCategoriesModal({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-[11px] font-bold text-stone-700 mb-1">Category Name</label>
-                            <input
+                            <input data-ui="input"
                               type="text"
                               value={editName}
                               onChange={(e) => setEditName(e.target.value)}
@@ -1814,7 +1818,7 @@ function ManageExpenseCategoriesModal({
                           </div>
                           <div>
                             <label className="block text-[11px] font-bold text-stone-700 mb-1">Description</label>
-                            <input
+                            <input data-ui="input"
                               type="text"
                               value={editDescription}
                               onChange={(e) => setEditDescription(e.target.value)}
@@ -1827,7 +1831,7 @@ function ManageExpenseCategoriesModal({
                           <label className="block text-[11px] font-bold text-stone-700 mb-1">Badge Color</label>
                           <div className="flex flex-wrap gap-1.5">
                             {EXPENSE_CATEGORY_COLORS.map((c) => (
-                              <button
+                              <button data-ui="button"
                                 key={c.id}
                                 type="button"
                                 onClick={() => setEditColor(c.id)}
@@ -1845,14 +1849,14 @@ function ManageExpenseCategoriesModal({
                         </div>
 
                         <div className="flex justify-end gap-2 pt-1">
-                          <button
+                          <button data-ui="button"
                             type="button"
                             onClick={() => setEditingId(null)}
                             className="px-3 py-1 text-xs rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium"
                           >
                             Cancel
                           </button>
-                          <button
+                          <button data-ui="button"
                             type="button"
                             onClick={() => handleSaveEdit(cat.id)}
                             className="px-3 py-1 text-xs rounded-lg bg-lime-600 hover:bg-lime-700 text-white font-semibold shadow-xs"
@@ -1884,7 +1888,7 @@ function ManageExpenseCategoriesModal({
                         <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded-md">
                           {usage} voucher{usage === 1 ? '' : 's'}
                         </span>
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() => handleStartEdit(cat)}
                           className="p-1.5 rounded-lg text-stone-400 hover:text-blue-600 hover:bg-blue-50 transition"
@@ -1892,7 +1896,7 @@ function ManageExpenseCategoriesModal({
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() => handleDeleteCategory(cat.id, cat.name)}
                           className="p-1.5 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition"
@@ -1910,7 +1914,7 @@ function ManageExpenseCategoriesModal({
         </div>
 
         <div className="bg-stone-50 p-4 border-t border-stone-200 flex justify-end">
-          <button
+          <button data-ui="button"
             type="button"
             onClick={onClose}
             className="px-4 py-2 text-xs font-semibold rounded-xl bg-stone-900 hover:bg-stone-800 text-white shadow-xs transition"

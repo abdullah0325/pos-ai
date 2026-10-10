@@ -1,12 +1,26 @@
 // Service Worker for AL FAROOQ FOODS - 100% Offline PWA
-const CACHE_NAME = 'al-farooq-foods-v1'
+const CACHE_NAME = 'al-farooq-foods-v2-catalog-photos'
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.webmanifest',
   '/al-farooq-foods-logo.png',
   '/icon-light-32x32.png',
   '/apple-icon.png',
-  '/icon.svg'
+  '/icon.svg',
+  '/images/catalog/apple.jpg',
+  '/images/catalog/candy.jpg',
+  '/images/catalog/chemicals.jpg',
+  '/images/catalog/chips.jpg',
+  '/images/catalog/guava.jpg',
+  '/images/catalog/juice.jpg',
+  '/images/catalog/mango.jpg',
+  '/images/catalog/oil.jpg',
+  '/images/catalog/packaging.jpg',
+  '/images/catalog/potatoes.jpg',
+  '/images/catalog/snacks.jpg',
+  '/images/catalog/spices.jpg',
+  '/images/catalog/sugar.jpg',
+  '/images/catalog/water.jpg'
 ]
 
 self.addEventListener('install', (event) => {

@@ -1,35 +1,13 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import { useState, useRef, useEffect, useMemo } from 'react'
-import {
-  Bell,
-  AlertTriangle,
-  AlertCircle,
-  Clock,
-  DollarSign,
-  Package,
-  Boxes,
-  Users,
-  ChevronRight,
-  X,
-  CheckCircle2,
-  Calendar,
-  Sparkles,
-  Layers,
-  ArrowRight,
-  TrendingDown,
-  Building2,
-  FileText,
-} from 'lucide-react'
+import { Bell, AlertCircle, Clock, Boxes, Users, ChevronRight, X, CheckCircle2, FileText, DollarSign } from 'lucide-react'
 import {
   formatPKR,
   type AppDatabase,
   type ModuleKey,
-  type ProductItem,
-  type RawMaterialItem,
-  type InvoiceItem,
-  type PurchaseItem,
-  type EmployeeItem,
 } from '@/lib/db'
 
 interface NotificationsPopoverProps {
@@ -59,6 +37,12 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
   const [activeFilter, setActiveFilter] = useState<'all' | AlertType>('all')
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const bellRef = useRef<HTMLButtonElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (isOpen) closeRef.current?.focus()
+  }, [isOpen])
 
   // Close on outside click
   useEffect(() => {
@@ -80,6 +64,7 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape' && isOpen) {
         setIsOpen(false)
+        bellRef.current?.focus()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -368,13 +353,15 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
     }
   }, [activeAlerts])
 
-  const handleDismiss = (id: string, e: React.MouseEvent) => {
+  const handleDismiss = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!(await confirmAction({"title":"Dismiss notification?","message":"This hides the notification for this session. The underlying record will remain unchanged.","confirmLabel":"Dismiss","destructive":true}))) return
     setDismissedIds((prev) => new Set([...prev, id]))
   }
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     const allIds = activeAlerts.map((a) => a.id)
+    if (!(await confirmAction({"title":"Clear all notifications?","message":"Hide all current notifications for this session? Business records will remain unchanged.","confirmLabel":"Clear notifications","destructive":true}))) return
     setDismissedIds((prev) => new Set([...prev, ...allIds]))
   }
 
@@ -383,304 +370,118 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
     onNavigate(alert.targetModule, alert.targetSubTab)
   }
 
+  const filters: { value: 'all' | AlertType; label: string; count: number }[] = [
+    { value: 'all', label: 'All notifications', count: counts.all },
+    { value: 'low_stock', label: 'Stock', count: counts.lowStock },
+    { value: 'payment_due_sales', label: 'Sales payments', count: counts.salesDue },
+    { value: 'payment_due_purchases', label: 'Supplier payments', count: counts.purchasesDue },
+    { value: 'salary', label: 'Salaries', count: counts.salaries },
+    { value: 'expiry', label: 'Expiry & freshness', count: counts.expiry },
+  ]
+
+  const alertIcons = { low_stock: Boxes, payment_due_sales: FileText, payment_due_purchases: DollarSign, salary: Users, expiry: Clock }
+
+  // Keep the original alert data; shorten only its presentation.
+  const compactTitle = (title: string) => title
+    .replace(' is Out of Stock', ' · Out of stock')
+    .replace(/^Critical: (.*) Depleted$/, '$1 · Out of stock')
+    .replace(/^Low Stock: |^Low Material: /, 'Low stock · ')
+    .replace('Batch Nearing Expiry: ', 'Expiry check · ')
+    .replace('Ingredient Freshness Check: ', 'Freshness check · ')
+    .replace('Invoice Payment Due: ', 'Payment due · ')
+    .replace('Overdue Invoice: ', 'Overdue · ')
+    .replace('Payment Due Soon: ', 'Due soon · ')
+    .replace('Upcoming Invoice Payment: ', 'Upcoming · ')
+    .replace('Credit Limit Exceeded: ', 'Credit limit exceeded · ')
+    .replace('Supplier Bill Due: ', 'Bill due · ')
+    .replace('Supplier Bill Overdue: ', 'Bill overdue · ')
+    .replace('Supplier Bill Due Soon: ', 'Bill due soon · ')
+    .replace('Upcoming Supplier Bill: ', 'Upcoming bill · ')
+    .replace('Pending Salary: ', 'Salary pending · ')
+
+  const compactSummary = (text: string) => text
+    .replace(/ remaining in finished goods warehouse \(SKU: .*\)/, ' left')
+    .replace(/ left for factory production lines \(SKU: .*\)/, ' left')
+    .replace('Only ', '')
+    .replace(' remaining (Reorder point: ', ' left · reorder at ')
+    .replace(' (Below reorder level of ', ' · reorder at ')
+    .replace(' has ', ' · ')
+    .replace(' unpaid balance', ' due')
+    .replace('Payable to ', '')
+    .replace(' owes ', ' · ')
+    .replace(' (Overdue by ', ' · overdue ')
+    .replace(' (Due in Today)', ' · due today')
+    .replace(' (Due in ', ' · due in ')
+    .replace('Base wage: ', '')
+    .replace(/(reorder at [^)]*| · overdue [^)]*| · due in [^)]*)\)/, '$1')
+
   return (
-    <div className="relative inline-block" ref={dropdownRef}>
-      {/* Bell Button Trigger in Topbar */}
-      <button
+    <div className="notifications" ref={dropdownRef}>
+      <button data-ui="button"
+        ref={bellRef}
         type="button"
         id="topbar-notification-bell"
         onClick={() => setIsOpen(!isOpen)}
-        className={`icon-button relative transition-all duration-200 ${
-          isOpen ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-100' : ''
-        }`}
-        title={`Action Alerts & Notifications (${counts.all} active)`}
-        aria-label="Action Alerts"
+        className={'icon-button notification-trigger ' + (isOpen ? 'notification-trigger-active' : '')}
+        aria-label={'Notifications, ' + counts.all + ' active' + (counts.critical ? ', ' + counts.critical + ' urgent' : '')}
         aria-expanded={isOpen}
+        aria-controls={isOpen ? 'notification-alerts-popover' : undefined}
+        aria-haspopup="dialog"
       >
-        <Bell className={`w-4 h-4 ${counts.critical > 0 ? 'text-rose-600 animate-pulse' : 'text-stone-700'}`} />
-
-        {/* Badge Count */}
-        {counts.all > 0 && (
-          <span
-            className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-xs ${
-              counts.critical > 0
-                ? 'bg-rose-600 text-white animate-pulse'
-                : 'bg-emerald-600 text-white'
-            }`}
-          >
-            {counts.all > 99 ? '99+' : counts.all}
-          </span>
-        )}
+        <Bell aria-hidden="true" />
+        {counts.all > 0 && <span className={'notification-count ' + (counts.critical ? 'notification-count-urgent' : '')} aria-hidden="true">{counts.all > 99 ? '99+' : counts.all}</span>}
       </button>
 
-      {/* Popover Dropdown Drawer */}
       {isOpen && (
-        <div
-          className="absolute right-0 mt-2 w-[390px] sm:w-[460px] max-w-[calc(100vw-24px)] bg-white rounded-2xl shadow-xl border border-stone-200/90 z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-150"
-          id="notification-alerts-popover"
-        >
-          {/* Header */}
-          <div className="px-4 py-3.5 bg-stone-50/90 border-b border-stone-200/80 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center">
-                <Bell className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-stone-900 text-sm">Action Alerts</h3>
-                  <span className="text-[11px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
-                    {counts.all} Active
-                  </span>
-                </div>
-                <p className="text-[11px] text-stone-500 font-medium">
-                  Real-time operational & financial notifications
-                </p>
-              </div>
+        <section className="notification-popover" id="notification-alerts-popover" role="dialog" aria-labelledby="notification-heading">
+          <header className="notification-header">
+            <h3 id="notification-heading">Notifications <span>{counts.all}</span></h3>
+            <div className="notification-header-actions">
+              {counts.all > 0 && <button data-ui="button" type="button" className="notification-text-action" onClick={handleClearAll}>Clear all</button>}
+              <button data-ui="button" ref={closeRef} type="button" className="icon-button" aria-label="Close notifications" onClick={() => { setIsOpen(false); bellRef.current?.focus() }}><X aria-hidden="true" /></button>
             </div>
+          </header>
 
-            <div className="flex items-center gap-1">
-              {counts.all > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearAll}
-                  className="text-[11px] font-medium text-stone-500 hover:text-stone-800 px-2 py-1 rounded-md hover:bg-stone-200/60 transition-colors"
-                  title="Dismiss all current alerts"
-                >
-                  Clear all
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-200/60 transition-colors"
-                title="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="notification-filter">
+            <label htmlFor="notification-filter" className="sr-only">Filter notifications</label>
+            <select data-ui="select" id="notification-filter" value={activeFilter} onChange={(event) => setActiveFilter(event.target.value as 'all' | AlertType)}>
+              {filters.map((filter) => <option key={filter.value} value={filter.value}>{filter.label} ({filter.count})</option>)}
+            </select>
           </div>
 
-          {/* Filter Pills */}
-          <div className="px-3 py-2 bg-stone-50/40 border-b border-stone-100 flex items-center gap-1 overflow-x-auto no-scrollbar text-xs">
-            <button
-              type="button"
-              onClick={() => setActiveFilter('all')}
-              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors ${
-                activeFilter === 'all'
-                  ? 'bg-stone-900 text-white shadow-2xs'
-                  : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/70'
-              }`}
-            >
-              All ({counts.all})
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter('low_stock')}
-              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
-                activeFilter === 'low_stock'
-                  ? 'bg-amber-700 text-white shadow-2xs'
-                  : 'bg-white text-amber-800 hover:bg-amber-50 border border-amber-200/80'
-              }`}
-            >
-              <Boxes className="w-3 h-3" />
-              <span>Stock ({counts.lowStock})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter('payment_due_sales')}
-              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
-                activeFilter === 'payment_due_sales'
-                  ? 'bg-blue-700 text-white shadow-2xs'
-                  : 'bg-white text-blue-800 hover:bg-blue-50 border border-blue-200/80'
-              }`}
-            >
-              <FileText className="w-3 h-3" />
-              <span>Sales Due ({counts.salesDue})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter('payment_due_purchases')}
-              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
-                activeFilter === 'payment_due_purchases'
-                  ? 'bg-purple-700 text-white shadow-2xs'
-                  : 'bg-white text-purple-800 hover:bg-purple-50 border border-purple-200/80'
-              }`}
-            >
-              <DollarSign className="w-3 h-3" />
-              <span>Purchases Due ({counts.purchasesDue})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter('salary')}
-              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
-                activeFilter === 'salary'
-                  ? 'bg-emerald-700 text-white shadow-2xs'
-                  : 'bg-white text-emerald-800 hover:bg-emerald-50 border border-emerald-200/80'
-              }`}
-            >
-              <Users className="w-3 h-3" />
-              <span>Salaries ({counts.salaries})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter('expiry')}
-              className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
-                activeFilter === 'expiry'
-                  ? 'bg-rose-700 text-white shadow-2xs'
-                  : 'bg-white text-rose-800 hover:bg-rose-50 border border-rose-200/80'
-              }`}
-            >
-              <Clock className="w-3 h-3" />
-              <span>Expiry ({counts.expiry})</span>
-            </button>
-          </div>
-
-          {/* Alert List Container */}
-          <div className="max-h-[380px] overflow-y-auto divide-y divide-stone-100 p-1.5" id="notification-alerts-list">
+          <div className="notification-list" id="notification-alerts-list">
             {displayedAlerts.length === 0 ? (
-              <div className="py-12 px-4 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <h4 className="text-sm font-bold text-stone-800">All Clear!</h4>
-                <p className="text-xs text-stone-500 max-w-[260px] mx-auto mt-1">
-                  {activeFilter === 'all'
-                    ? 'No pending critical alerts, low stock warnings, or overdue payments.'
-                    : `No active alerts under the "${activeFilter.replace(/_/g, ' ')}" category.`}
-                </p>
+              <div className="notification-empty" role="status">
+                <CheckCircle2 aria-hidden="true" />
+                <p>{activeFilter === 'all' ? "You're all caught up" : 'No notifications here'}</p>
               </div>
             ) : (
-              displayedAlerts.map((alert) => {
-                // Icon & Theme mapping
-                let icon = <AlertTriangle className="w-4 h-4" />
-                let avatarClass = 'bg-amber-100 text-amber-800 border-amber-200'
-                let badgeClass = 'bg-amber-50 text-amber-800 border-amber-200'
-
-                if (alert.type === 'low_stock') {
-                  icon = alert.severity === 'critical' ? <AlertCircle className="w-4 h-4" /> : <Boxes className="w-4 h-4" />
-                  avatarClass = alert.severity === 'critical' ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-amber-100 text-amber-800 border-amber-200'
-                  badgeClass = alert.severity === 'critical' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                } else if (alert.type === 'payment_due_sales') {
-                  icon = <FileText className="w-4 h-4" />
-                  avatarClass =
-                    alert.severity === 'critical'
-                      ? 'bg-rose-100 text-rose-800 border-rose-200'
-                      : alert.severity === 'warning'
-                      ? 'bg-amber-100 text-amber-800 border-amber-200'
-                      : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                  badgeClass =
-                    alert.severity === 'critical'
-                      ? 'bg-rose-50 text-rose-700 border-rose-200'
-                      : alert.severity === 'warning'
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                } else if (alert.type === 'payment_due_purchases') {
-                  icon = <DollarSign className="w-4 h-4" />
-                  avatarClass =
-                    alert.severity === 'critical'
-                      ? 'bg-rose-100 text-rose-800 border-rose-200'
-                      : alert.severity === 'warning'
-                      ? 'bg-purple-100 text-purple-800 border-purple-200'
-                      : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                  badgeClass =
-                    alert.severity === 'critical'
-                      ? 'bg-rose-50 text-rose-700 border-rose-200'
-                      : alert.severity === 'warning'
-                      ? 'bg-purple-50 text-purple-700 border-purple-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                } else if (alert.type === 'salary') {
-                  icon = <Users className="w-4 h-4" />
-                  avatarClass = 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                  badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                } else if (alert.type === 'expiry') {
-                  icon = <Clock className="w-4 h-4" />
-                  avatarClass = 'bg-rose-100 text-rose-800 border-rose-200'
-                  badgeClass = 'bg-rose-50 text-rose-700 border-rose-200'
-                }
-
-                return (
-                  <div
-                    key={alert.id}
-                    onClick={() => handleAlertClick(alert)}
-                    className="p-2.5 rounded-xl hover:bg-stone-50/90 transition-all cursor-pointer group flex items-start gap-3 relative border border-transparent hover:border-stone-200/80"
-                    role="button"
-                    tabIndex={0}
-                  >
-                    {/* Category Avatar */}
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs mt-0.5 ${avatarClass}`}
-                    >
-                      {icon}
-                    </div>
-
-                    {/* Alert Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1.5">
-                        <h4 className="font-bold text-stone-900 text-xs group-hover:text-emerald-800 transition-colors truncate">
-                          {alert.title}
-                        </h4>
-                        {alert.value && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${badgeClass}`}>
-                            {alert.value}
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-[11.5px] text-stone-600 font-medium leading-snug mt-0.5">
-                        {alert.subtitle}
-                      </p>
-
-                      {alert.details && (
-                        <p className="text-[10.5px] text-stone-400 font-normal truncate mt-0.5">
-                          {alert.details}
-                        </p>
-                      )}
-
-                      <div className="flex items-center justify-between mt-2 pt-1 border-t border-stone-100/80 text-[10.5px]">
-                        <span className="text-emerald-700 font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                          <span>Resolve in {String(alert.targetModule).replace('-', ' ')}</span>
-                          <ArrowRight className="w-2.5 h-2.5" />
+              <ul>
+                {displayedAlerts.map((alert) => {
+                  const Icon = alert.severity === 'critical' ? AlertCircle : alertIcons[alert.type]
+                  return (
+                    <li key={alert.id} className={'notification-row notification-' + alert.severity}>
+                      <button data-ui="button" type="button" className="notification-open" onClick={() => handleAlertClick(alert)} title={alert.details}>
+                        <span className="notification-icon"><Icon aria-hidden="true" /></span>
+                        <span className="notification-copy">
+                          <span className="notification-title">{compactTitle(alert.title)}</span>
+                          <span className="notification-summary">{compactSummary(alert.subtitle)}</span>
+                          <span className="sr-only">{alert.severity === 'critical' ? 'Urgent. ' : ''}{alert.details}. Open related record.</span>
                         </span>
-
-                        <button
-                          type="button"
-                          onClick={(e) => handleDismiss(alert.id, e)}
-                          className="text-stone-400 hover:text-stone-600 p-0.5 rounded hover:bg-stone-200/60 transition-colors"
-                          title="Dismiss this notification"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
+                        <ChevronRight className="notification-arrow" aria-hidden="true" />
+                      </button>
+                      <button data-ui="button" type="button" className="notification-dismiss" onClick={(event) => handleDismiss(alert.id, event)} aria-label={'Dismiss: ' + compactTitle(alert.title)}><X aria-hidden="true" /></button>
+                    </li>
+                  )
+                })}
+              </ul>
             )}
           </div>
 
-          {/* Footer Quick Links */}
-          <div className="px-4 py-2.5 bg-stone-50/80 border-t border-stone-200/70 flex items-center justify-between text-xs">
-            <span className="text-[11px] text-stone-500 font-medium">
-              {activeAlerts.length} total active issues detected
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(false)
-                onNavigate('dashboard')
-              }}
-              className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1"
-            >
-              <span>View Dashboard</span>
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
+          <footer className="notification-footer">
+            <button data-ui="button" type="button" className="notification-text-action" onClick={() => { setIsOpen(false); onNavigate('dashboard') }}>Dashboard <ChevronRight aria-hidden="true" /></button>
+          </footer>
+        </section>
       )}
     </div>
   )

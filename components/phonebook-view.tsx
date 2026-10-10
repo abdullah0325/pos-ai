@@ -1,6 +1,9 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Phone,
   MessageSquare,
@@ -22,7 +25,6 @@ import {
   LayoutGrid,
   List,
   ArrowUpDown,
-  Filter,
   ExternalLink,
   AlertTriangle,
   Sparkles,
@@ -36,6 +38,7 @@ import {
 } from '@/lib/db'
 
 interface PhonebookViewProps {
+  headerTarget?: HTMLElement | null
   db: AppDatabase
   onSaveDatabase: (updated: AppDatabase) => void
 }
@@ -71,7 +74,7 @@ const COMMON_CITIES = [
   'Sheikhupura',
 ]
 
-export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps) {
+export default function PhonebookView({ db, onSaveDatabase, headerTarget }: PhonebookViewProps) {
   // Ensure we have current contacts and categories
   const contacts: PhonebookContactItem[] = useMemo(() => {
     if (db.phonebookContacts && Array.isArray(db.phonebookContacts) && db.phonebookContacts.length > 0) {
@@ -88,12 +91,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
   }, [db])
 
   // Filter & Search states
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('All')
-  const [selectedCity, setSelectedCity] = useState<string>('All')
-  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false)
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
-  const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'category' | 'recent'>('name-asc')
 
   // Feedback states
   const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null)
@@ -224,7 +222,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
   }
 
   // Save Contact (Create or Update)
-  const handleSaveContact = (e: React.FormEvent) => {
+  const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!contactForm.name.trim()) {
       alert('Please provide contact person name.')
@@ -333,6 +331,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
       showToast(`Added "${contactForm.name.trim()}" to phonebook`)
     }
 
+    if (editingContact && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSaveDatabase({
       ...db,
       phonebookContacts: updatedContacts,
@@ -379,7 +378,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
   }
 
   // Category Manager: save category (create or update)
-  const handleSaveCategory = (e: React.FormEvent) => {
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     const trimmedName = categoryForm.name.trim()
     if (!trimmedName) {
@@ -430,6 +429,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
       showToast(`Created new category "${trimmedName}"`)
     }
 
+    if (editingCategory && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSaveDatabase({
       ...db,
       phonebookCategories: updatedCats,
@@ -461,9 +461,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
 
     showToast(`Deleted category "${categoryToDelete.name}". Reassigned contacts to "${fallbackCategory}".`)
     setCategoryToDelete(null)
-    if (selectedCategory === categoryToDelete.name) {
-      setSelectedCategory('All')
-    }
+
   }
 
   // Helper to get styling for category badge
@@ -573,7 +571,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
       'Last Updated',
     ]
 
-    const rows = filteredContacts.map((c) => [
+    const rows = sortedContacts.map((c) => [
       `"${(c.name || '').replace(/"/g, '""')}"`,
       `"${(c.businessName || '').replace(/"/g, '""')}"`,
       `"${(c.category || '').replace(/"/g, '""')}"`,
@@ -600,45 +598,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
     showToast('Exported phonebook to CSV')
   }
 
-  // Filter and sort contacts
-  const filteredContacts = useMemo(() => {
-    let result = contacts.filter((c) => {
-      const q = searchQuery.toLowerCase().trim()
-      const matchSearch =
-        !q ||
-        c.name.toLowerCase().includes(q) ||
-        (c.businessName && c.businessName.toLowerCase().includes(q)) ||
-        c.phone.replace(/[^0-9]/g, '').includes(q.replace(/[^0-9]/g, '')) ||
-        (c.altPhone && c.altPhone.replace(/[^0-9]/g, '').includes(q.replace(/[^0-9]/g, ''))) ||
-        (c.city && c.city.toLowerCase().includes(q)) ||
-        (c.address && c.address.toLowerCase().includes(q)) ||
-        (c.category && c.category.toLowerCase().includes(q)) ||
-        (c.notes && c.notes.toLowerCase().includes(q))
-
-      const matchCat = selectedCategory === 'All' || c.category.toLowerCase() === selectedCategory.toLowerCase()
-      const matchCity = selectedCity === 'All' || (c.city && c.city.toLowerCase() === selectedCity.toLowerCase())
-      const matchFav = !favoritesOnly || !!c.isFavorite
-
-      return matchSearch && matchCat && matchCity && matchFav
-    })
-
-    // Sorting
-    result.sort((a, b) => {
-      // Starred items can optionally be pinned or sorted standard
-      if (sortBy === 'name-asc') {
-        return a.name.localeCompare(b.name)
-      } else if (sortBy === 'name-desc') {
-        return b.name.localeCompare(a.name)
-      } else if (sortBy === 'category') {
-        return (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name)
-      } else if (sortBy === 'recent') {
-        return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '')
-      }
-      return 0
-    })
-
-    return result
-  }, [contacts, searchQuery, selectedCategory, selectedCity, favoritesOnly, sortBy])
+  const sortedContacts = useMemo(() => [...contacts].sort((a, b) => a.name.localeCompare(b.name)), [contacts])
 
   // Aggregate category counts
   const categoryCounts = useMemo(() => {
@@ -664,28 +624,9 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
   // Favorite contacts count
   const favoritesCount = useMemo(() => contacts.filter((c) => c.isFavorite).length, [contacts])
 
-  return (
-    <div className="space-y-4" id="phonebook-main-container">
-      {/* Toast notification */}
-      {toastMessage && (
-        <div
-          id="phonebook-toast-alert"
-          className="fixed bottom-5 right-5 z-50 bg-gray-900 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-medium flex items-center gap-2 animate-fade-in border border-gray-700"
-        >
-          <Sparkles className="w-4 h-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Top Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs" id="phonebook-action-bar">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-stone-800">Phone Directory Actions:</span>
-          <span className="text-xs text-stone-500 font-mono">({filteredContacts.length} of {contacts.length} contacts shown)</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
+  const actionBar = (
+    <div className="flex flex-wrap items-center gap-2" id="phonebook-action-bar">
+          <button data-ui="button"
             type="button"
             id="btn-add-new-contact"
             onClick={() => handleOpenNewContact()}
@@ -695,7 +636,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             <span>Add Contact</span>
           </button>
 
-          <button
+          <button data-ui="button"
             type="button"
             id="btn-manage-categories"
             onClick={() => {
@@ -711,7 +652,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             </span>
           </button>
 
-          <button
+          <button data-ui="button"
             type="button"
             id="btn-sync-erp-contacts"
             onClick={handleSyncFromERP}
@@ -722,7 +663,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             <span className="hidden sm:inline">Sync ERP Data</span>
           </button>
 
-          <button
+          <button data-ui="button"
             type="button"
             id="btn-export-phonebook-csv"
             onClick={handleExportCSV}
@@ -733,7 +674,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             <span className="hidden sm:inline">Export</span>
           </button>
 
-          <button
+          <button data-ui="button"
             type="button"
             id="btn-print-phonebook"
             onClick={() => window.print()}
@@ -743,8 +684,23 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             <Printer className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Print</span>
           </button>
-        </div>
       </div>
+  )
+
+  return (
+    <div className="space-y-4" id="phonebook-main-container">
+      {/* Toast notification */}
+      {toastMessage && (
+        <div
+          id="phonebook-toast-alert"
+          className="fixed bottom-5 right-5 z-50 bg-gray-900 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-medium flex items-center gap-2 animate-fade-in border border-gray-700"
+        >
+          <Sparkles className="w-4 h-4 text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {headerTarget ? createPortal(actionBar, headerTarget) : actionBar}
 
       {/* KPI / Metric Chips Bar — Clean Stat Cards matching app theme */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5" id="phonebook-kpi-stats">
@@ -785,136 +741,10 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
         </div>
       </div>
 
-      {/* Unified Filter, Categories & Search Section */}
-      <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-xs space-y-3" id="phonebook-filter-toolbar">
-        {/* Category Pills Row */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-bold text-stone-600 mr-1 flex items-center gap-1">
-            <Filter className="w-3 h-3 text-stone-400" /> Category:
-          </span>
-
-          <button
-            type="button"
-            id="cat-pill-all"
-            onClick={() => setSelectedCategory('All')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-              selectedCategory === 'All'
-                ? 'bg-stone-900 text-white border-stone-900 shadow-xs'
-                : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
-            }`}
-          >
-            All ({contacts.length})
-          </button>
-
-          {categories.map((cat) => {
-            const count = categoryCounts[cat.name] || 0
-            const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase()
-            const badgeStyle = getCategoryBadgeClass(cat.name)
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                id={`cat-pill-${cat.id}`}
-                onClick={() => setSelectedCategory(cat.name)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 border ${
-                  isSelected
-                    ? 'ring-2 ring-stone-900 bg-white font-bold text-stone-900 border-stone-900 shadow-xs'
-                    : `${badgeStyle} hover:opacity-90`
-                }`}
-              >
-                <span>{cat.name}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    isSelected ? 'bg-stone-900 text-white' : 'bg-white/80 text-stone-800'
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Search, Secondary Filters & View Switcher Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2 border-t border-stone-100">
-          {/* Search Box */}
-          <div className="flex-1 max-w-md relative">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              id="input-phonebook-search"
-              placeholder="Search by contact name, company, phone number, city, or note..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-stone-50 rounded-lg border border-stone-200 text-stone-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-        {/* Filter controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* City Filter */}
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-gray-500 font-medium hidden lg:inline">City:</span>
-            <select
-              id="select-city-filter"
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs bg-white cursor-pointer text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-            >
-              <option value="All">All Cities ({availableCities.length})</option>
-              {availableCities.map((city) => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sort By Dropdown */}
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-gray-500 font-medium hidden lg:inline">Sort:</span>
-            <div className="relative flex items-center">
-              <select
-                id="select-sort-filter"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs bg-white cursor-pointer text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#7cb518]"
-              >
-                <option value="name-asc">Name (A → Z)</option>
-                <option value="name-desc">Name (Z → A)</option>
-                <option value="category">Category</option>
-                <option value="recent">Recently Updated</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Starred Only Toggle */}
-          <button
-            type="button"
-            id="btn-filter-favorites"
-            onClick={() => setFavoritesOnly(!favoritesOnly)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
-              favoritesOnly
-                ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
-                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
-            title="Toggle starred contacts only"
-          >
-            <Star className={`w-3.5 h-3.5 ${favoritesOnly ? 'fill-white text-white' : 'text-amber-500'}`} />
-            <span>Starred ({favoritesCount})</span>
-          </button>
-
-          {/* Grid vs Table View Mode Switcher */}
+      <div className="flex items-center justify-between gap-3 px-1 text-xs text-gray-500">
+        <span>{contacts.length} contacts</span>
           <div className="flex items-center border border-gray-200 rounded-lg p-0.5 bg-gray-50">
-            <button
+            <button data-ui="button"
               type="button"
               id="btn-view-grid"
               onClick={() => setViewMode('grid')}
@@ -925,7 +755,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
-            <button
+            <button data-ui="button"
               type="button"
               id="btn-view-table"
               onClick={() => setViewMode('table')}
@@ -937,63 +767,23 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
               <List className="w-4 h-4" />
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-
-      {/* Result Status Sub-bar */}
-      <div className="flex items-center justify-between px-1 text-xs text-gray-500">
-        <div>
-          Showing <span className="font-semibold text-gray-800">{filteredContacts.length}</span> of{' '}
-          <span className="font-semibold text-gray-800">{contacts.length}</span> contacts
-          {selectedCategory !== 'All' && ` in "${selectedCategory}"`}
-          {selectedCity !== 'All' && ` from ${selectedCity}`}
-          {favoritesOnly && ' (Starred only)'}
-        </div>
-
-        {(searchQuery || selectedCategory !== 'All' || selectedCity !== 'All' || favoritesOnly) && (
-          <button
-            type="button"
-            id="btn-reset-filters"
-            onClick={() => {
-              setSearchQuery('')
-              setSelectedCategory('All')
-              setSelectedCity('All')
-              setFavoritesOnly(false)
-            }}
-            className="text-xs text-[#7cb518] hover:underline font-medium"
-          >
-            Clear Filters
-          </button>
-        )}
       </div>
 
       {/* Empty State */}
-      {filteredContacts.length === 0 && (
-        <div className="bg-white rounded-xl border border-[var(--border)] p-12 text-center shadow-xs">
+      {sortedContacts.length === 0 && (
+        <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-[var(--border)] p-12 text-center shadow-xs">
           <div className="w-12 h-12 rounded-full bg-gray-100 text-gray-400 mx-auto flex items-center justify-center mb-3">
             <Search className="w-6 h-6" />
           </div>
           <h3 className="text-base font-bold text-gray-800">No contacts found</h3>
           <p className="text-xs text-gray-500 max-w-md mx-auto mt-1 mb-4">
-            No contacts matched your search query or selected category filter. Try clearing your filters or create a new contact.
+            Your directory is empty. Create a contact to get started.
           </p>
           <div className="flex items-center justify-center gap-2">
-            <button
+
+            <button data-ui="button"
               type="button"
-              onClick={() => {
-                setSearchQuery('')
-                setSelectedCategory('All')
-                setSelectedCity('All')
-                setFavoritesOnly(false)
-              }}
-              className="button secondary text-xs py-1.5 px-3"
-            >
-              Reset Filters
-            </button>
-            <button
-              type="button"
-              onClick={() => handleOpenNewContact(selectedCategory !== 'All' ? selectedCategory : undefined)}
+              onClick={() => handleOpenNewContact()}
               className="button primary text-xs py-1.5 px-3"
             >
               + Create Contact
@@ -1003,9 +793,9 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
       )}
 
       {/* VIEW 1: GRID CARDS VIEW */}
-      {viewMode === 'grid' && filteredContacts.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredContacts.map((item) => {
+      {viewMode === 'grid' && sortedContacts.length > 0 && (
+        <div className="phonebook-card-grid">
+          {sortedContacts.map((item) => {
             const badgeClass = getCategoryBadgeClass(item.category)
             const initials = item.name
               .split(' ')
@@ -1016,40 +806,23 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
               .toUpperCase() || 'CP'
 
             return (
-              <div
+              <div data-ui="toolbar"
                 key={item.id}
                 id={`contact-card-${item.id}`}
-                className="bg-white rounded-xl border border-[var(--border)] shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between p-4 relative group"
+                className="phonebook-contact-card gradient-card bg-white rounded-xl border border-[var(--border)] shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between p-4 relative group"
               >
                 <div>
-                  {/* Card Header: Avatar, Name, Category badge, Star, and Actions */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-[#f0f7e8] text-[#7cb518] font-bold text-xs flex items-center justify-center shrink-0 border border-[#d6ebb8]">
-                        {initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <h3 className="text-sm font-bold text-gray-900 truncate" title={item.name}>
-                            {item.name}
-                          </h3>
-                        </div>
-                        {item.businessName && (
-                          <div className="text-[11px] text-gray-500 truncate flex items-center gap-1 mt-0.5" title={item.businessName}>
-                            <Building2 className="w-3 h-3 text-gray-400 shrink-0" />
-                            <span className="truncate">{item.businessName}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
+                  <header className="phonebook-card-header">
+                    <div className="phonebook-card-avatar" aria-hidden="true">{initials}</div>
+                    <div className="phonebook-card-record-actions">
                       {/* Star Button */}
-                      <button
+                      <button data-ui="button"
                         type="button"
                         id={`btn-star-${item.id}`}
                         onClick={() => handleToggleFavorite(item.id)}
                         className="p-1 rounded-md text-gray-400 hover:text-amber-500 hover:bg-gray-100 transition-colors"
+                        aria-pressed={Boolean(item.isFavorite)}
+                        aria-label={`${item.isFavorite ? 'Unstar' : 'Star'} ${item.name}`}
                         title={item.isFavorite ? 'Remove from Starred' : 'Star this contact'}
                       >
                         <Star
@@ -1060,49 +833,51 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                       </button>
 
                       {/* Edit Button */}
-                      <button
+                      <button data-ui="button"
                         type="button"
                         id={`btn-edit-${item.id}`}
                         onClick={() => handleOpenEditContact(item)}
                         className="p-1 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        aria-label={`Edit ${item.name}`}
                         title="Edit this contact"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
 
                       {/* Delete Button */}
-                      <button
+                      <button data-ui="button"
                         type="button"
                         id={`btn-delete-${item.id}`}
                         onClick={() => setContactToDelete(item)}
                         className="p-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        aria-label={`Delete ${item.name}`}
                         title="Delete contact"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>
 
-                  {/* Category Pill */}
-                  <div className="mb-2.5">
-                    <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border ${badgeClass}`}>
-                      {item.category || 'General & Personal'}
-                    </span>
+                  </header>
+                  <div className="phonebook-card-identity">
+                    <span className={`phonebook-card-category ${badgeClass}`}>{item.category || 'General & Personal'}</span>
+                    <h3>{item.name}</h3>
+                    {item.businessName && <p><Building2 size={13} aria-hidden="true" /><span>{item.businessName}</span></p>}
                   </div>
 
                   {/* Contact Info: Phone, Alt, City, Address */}
-                  <div className="space-y-1.5 my-3 text-xs text-gray-600 bg-gray-50/80 p-2.5 rounded-lg border border-gray-100">
+                  <div className="phonebook-card-info space-y-1.5 my-3 text-xs text-gray-600 bg-gray-50/80 p-2.5 rounded-lg border border-gray-100">
                     {/* Primary Phone */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 font-mono font-bold text-gray-900">
                         <Phone className="w-3.5 h-3.5 text-[#7cb518] shrink-0" />
                         <span>{item.phone}</span>
                       </div>
-                      <button
+                      <button data-ui="button"
                         type="button"
                         id={`btn-copy-${item.id}`}
                         onClick={() => handleCopyPhone(item.phone, item.id)}
                         className="text-[10px] font-medium text-gray-500 hover:text-gray-800 flex items-center gap-1 p-0.5"
+                        aria-label={`Copy phone number for ${item.name}`}
                         title="Copy phone number"
                       >
                         {copiedPhoneId === item.id ? (
@@ -1145,7 +920,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                 </div>
 
                 {/* Card Action Buttons: Direct Call and WhatsApp */}
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                <div className="phonebook-card-actions flex gap-2 pt-2 border-t border-gray-100">
                   <a
                     href={`tel:${item.phone.replace(/[^0-9+]/g, '')}`}
                     id={`btn-call-${item.id}`}
@@ -1161,7 +936,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                     id={`btn-whatsapp-${item.id}`}
                     className="button primary flex-1 text-xs py-1.5 h-auto text-center flex items-center justify-center gap-1.5 bg-[#25D366] text-white border-0 shadow-none hover:bg-[#1EBE5D] font-semibold"
                   >
-                    <MessageSquare className="w-3.5 h-3.5 fill-white" /> WhatsApp
+                    <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
                   </a>
                 </div>
               </div>
@@ -1171,10 +946,10 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
       )}
 
       {/* VIEW 2: DENSE TABLE LIST VIEW */}
-      {viewMode === 'table' && filteredContacts.length > 0 && (
-        <div className="bg-white rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
+      {viewMode === 'table' && sortedContacts.length > 0 && (
+        <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse" id="table-phonebook-list">
+            <table data-ui="table" className="w-full text-left text-xs border-collapse" id="table-phonebook-list">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider text-[10px]">
                   <th className="py-2.5 px-3 w-8 text-center">★</th>
@@ -1187,13 +962,13 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredContacts.map((item) => {
+                {sortedContacts.map((item) => {
                   const badgeClass = getCategoryBadgeClass(item.category)
                   return (
                     <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
                       {/* Favorite Toggle */}
                       <td className="py-2.5 px-3 text-center">
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() => handleToggleFavorite(item.id)}
                           className="text-gray-300 hover:text-amber-500"
@@ -1237,7 +1012,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                       <td className="py-2.5 px-3 font-mono font-medium text-gray-800">
                         <div className="flex items-center gap-1.5">
                           <span>{item.phone}</span>
-                          <button
+                          <button data-ui="button"
                             type="button"
                             onClick={() => handleCopyPhone(item.phone, item.id)}
                             className="text-gray-400 hover:text-gray-700"
@@ -1282,7 +1057,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                             <MessageSquare className="w-3.5 h-3.5 fill-white" />
                           </a>
 
-                          <button
+                          <button data-ui="button"
                             type="button"
                             onClick={() => handleOpenEditContact(item)}
                             className="p-1 rounded-md hover:bg-blue-50 text-gray-400 hover:text-blue-600"
@@ -1291,7 +1066,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
 
-                          <button
+                          <button data-ui="button"
                             type="button"
                             onClick={() => setContactToDelete(item)}
                             className="p-1 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-600"
@@ -1318,7 +1093,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
           id="modal-contact-form"
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
         >
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
             {/* Modal Header */}
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-2">
@@ -1336,7 +1111,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   </p>
                 </div>
               </div>
-              <button
+              <button data-ui="button"
                 type="button"
                 id="btn-close-contact-modal"
                 onClick={() => setIsContactModalOpen(false)}
@@ -1354,7 +1129,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Contact Full Name <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <input data-ui="input"
                     id="input-contact-name"
                     required
                     placeholder="e.g. Haji Muhammad Farooq"
@@ -1368,7 +1143,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Business / Shop / Company
                   </label>
-                  <input
+                  <input data-ui="input"
                     id="input-contact-business"
                     placeholder="e.g. Farooq Trading Corporation"
                     value={contactForm.businessName}
@@ -1384,7 +1159,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   <label className="block text-xs font-semibold text-gray-700">
                     Category Group <span className="text-red-500">*</span>
                   </label>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     onClick={() => {
                       handleOpenNewCategory()
@@ -1395,7 +1170,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                     <Plus className="w-3 h-3" /> New Category
                   </button>
                 </div>
-                <select
+                <select data-ui="select"
                   id="select-contact-category"
                   required
                   value={contactForm.category}
@@ -1417,7 +1192,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                     Primary Phone Number <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <input
+                    <input data-ui="input"
                       id="input-contact-phone"
                       required
                       placeholder="e.g. 0300-1234567"
@@ -1433,7 +1208,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Alternate Phone / Mobile
                   </label>
-                  <input
+                  <input data-ui="input"
                     id="input-contact-alt-phone"
                     placeholder="e.g. 0321-7654321 / 042-3512345"
                     value={contactForm.altPhone}
@@ -1445,14 +1220,14 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
               </div>
 
               {/* WhatsApp Configuration */}
-              <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 space-y-2">
+              <div data-ui="surface" className="gradient-card bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" />
                     WhatsApp Number
                   </span>
                   <label className="flex items-center gap-1.5 text-xs text-emerald-900 cursor-pointer">
-                    <input
+                    <input data-ui="checkbox"
                       type="checkbox"
                       checked={contactForm.whatsappSameAsPhone}
                       onChange={(e) =>
@@ -1470,7 +1245,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
 
                 {!contactForm.whatsappSameAsPhone && (
                   <div>
-                    <input
+                    <input data-ui="input"
                       id="input-contact-whatsapp"
                       placeholder="Custom WhatsApp Number e.g. 0301-9876543"
                       value={contactForm.whatsapp}
@@ -1485,7 +1260,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">City / Region</label>
-                  <select
+                  <select data-ui="select"
                     id="select-contact-city"
                     value={contactForm.city}
                     onChange={(e) => setContactForm({ ...contactForm, city: e.target.value })}
@@ -1500,7 +1275,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   </select>
 
                   {contactForm.city === 'Other' && (
-                    <input
+                    <input data-ui="input"
                       placeholder="Type city name..."
                       value={contactForm.customCity}
                       onChange={(e) => setContactForm({ ...contactForm, customCity: e.target.value })}
@@ -1511,7 +1286,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Email Address</label>
-                  <input
+                  <input data-ui="input"
                     id="input-contact-email"
                     type="email"
                     placeholder="e.g. farooq@gmail.com"
@@ -1527,7 +1302,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Shop / Factory Address / Area
                 </label>
-                <input
+                <input data-ui="input"
                   id="input-contact-address"
                   placeholder="e.g. Shop #12, Wholesale Grain Market, Badami Bagh"
                   value={contactForm.address}
@@ -1541,7 +1316,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Notes & Special Instructions
                 </label>
-                <textarea
+                <textarea data-ui="textarea"
                   id="textarea-contact-notes"
                   rows={2}
                   placeholder="e.g. Key distributor for 500ml water bottles. Best time to call is 11 AM - 3 PM."
@@ -1554,7 +1329,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
               {/* Starred / Favorite Checkbox */}
               <div className="pt-1">
                 <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-800 select-none">
-                  <input
+                  <input data-ui="checkbox"
                     type="checkbox"
                     id="checkbox-contact-favorite"
                     checked={contactForm.isFavorite}
@@ -1570,7 +1345,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
 
               {/* Form Buttons */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100">
-                <button
+                <button data-ui="button"
                   type="button"
                   id="btn-cancel-contact-form"
                   onClick={() => setIsContactModalOpen(false)}
@@ -1578,7 +1353,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                 >
                   Cancel
                 </button>
-                <button
+                <button data-ui="button"
                   type="submit"
                   id="btn-submit-contact-form"
                   className="button primary text-xs py-2 px-5 font-semibold"
@@ -1599,7 +1374,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
           id="modal-category-manager"
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
         >
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
             {/* Header */}
             <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-2">
@@ -1613,7 +1388,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   </p>
                 </div>
               </div>
-              <button
+              <button data-ui="button"
                 type="button"
                 id="btn-close-category-manager"
                 onClick={() => {
@@ -1628,7 +1403,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
 
             <div className="p-5 space-y-6 max-h-[75vh] overflow-y-auto">
               {/* Category Form: Create or Edit */}
-              <div className="bg-gray-50/90 p-4 rounded-xl border border-gray-200">
+              <div data-ui="surface" className="gradient-card bg-gray-50/90 p-4 rounded-xl border border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
                     {editingCategory ? (
@@ -1645,7 +1420,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   </h4>
 
                   {editingCategory && (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       onClick={handleOpenNewCategory}
                       className="text-[11px] text-gray-500 hover:text-gray-800 underline"
@@ -1661,7 +1436,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
                         Category Name <span className="text-red-500">*</span>
                       </label>
-                      <input
+                      <input data-ui="input"
                         id="input-category-name"
                         required
                         placeholder="e.g. Transporters & Logistics"
@@ -1675,7 +1450,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
                         Color Theme / Badge
                       </label>
-                      <select
+                      <select data-ui="select"
                         id="select-category-color"
                         value={categoryForm.color}
                         onChange={(e) => setCategoryForm({ ...categoryForm, color: e.target.value })}
@@ -1694,7 +1469,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
                       Description / Roles Included
                     </label>
-                    <input
+                    <input data-ui="input"
                       id="input-category-description"
                       placeholder="e.g. Goods transport addas, Mazdas, truck dispatchers"
                       value={categoryForm.description}
@@ -1704,7 +1479,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
+                    <button data-ui="button"
                       type="submit"
                       id="btn-save-category-submit"
                       className="button primary text-xs py-1.5 px-4 font-semibold"
@@ -1724,7 +1499,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                   </span>
                 </h4>
 
-                <div className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden bg-white">
+                <div className="gradient-card divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden bg-white">
                   {categories.map((cat) => {
                     const count = categoryCounts[cat.name] || 0
                     const badgeStyle = getCategoryBadgeClass(cat.name)
@@ -1750,7 +1525,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          <button
+                          <button data-ui="button"
                             type="button"
                             id={`btn-edit-cat-${cat.id}`}
                             onClick={() => handleOpenEditCategory(cat)}
@@ -1760,7 +1535,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
 
-                          <button
+                          <button data-ui="button"
                             type="button"
                             id={`btn-del-cat-${cat.id}`}
                             onClick={() => setCategoryToDelete(cat)}
@@ -1779,7 +1554,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
 
             {/* Footer */}
             <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-              <button
+              <button data-ui="button"
                 type="button"
                 onClick={() => {
                   setIsCategoryManagerOpen(false)
@@ -1802,7 +1577,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
           id="modal-delete-contact"
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
         >
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden p-5 animate-in fade-in zoom-in-95 duration-150">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden p-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
               <AlertTriangle className="w-5 h-5" />
             </div>
@@ -1829,7 +1604,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button
+              <button data-ui="button"
                 type="button"
                 id="btn-cancel-delete-contact"
                 onClick={() => setContactToDelete(null)}
@@ -1837,7 +1612,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
               >
                 Cancel
               </button>
-              <button
+              <button data-ui="button"
                 type="button"
                 id="btn-confirm-delete-contact"
                 onClick={handleConfirmDeleteContact}
@@ -1858,7 +1633,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
           id="modal-delete-category"
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
         >
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden p-5 animate-in fade-in zoom-in-95 duration-150">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-sm overflow-hidden p-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mb-3">
               <AlertTriangle className="w-5 h-5" />
             </div>
@@ -1876,7 +1651,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button
+              <button data-ui="button"
                 type="button"
                 id="btn-cancel-delete-cat"
                 onClick={() => setCategoryToDelete(null)}
@@ -1884,7 +1659,7 @@ export default function PhonebookView({ db, onSaveDatabase }: PhonebookViewProps
               >
                 Cancel
               </button>
-              <button
+              <button data-ui="button"
                 type="button"
                 id="btn-confirm-delete-cat"
                 onClick={handleConfirmDeleteCategory}

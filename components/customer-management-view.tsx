@@ -1,5 +1,7 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import React, { useState, useMemo, useEffect } from 'react'
 import {
   Users,
@@ -31,6 +33,7 @@ import {
   AlertCircle,
   Upload,
   ChevronRight,
+  ArrowUpRight,
   FolderTree,
   AlertTriangle,
   ShoppingBag,
@@ -74,6 +77,7 @@ export default function CustomerManagementView({
   onNavigate,
 }: CustomerManagementViewProps) {
   // Main Tab State (Customers & Accounts vs Phone Book Directory)
+  const [phonebookHeaderTarget, setPhonebookHeaderTarget] = useState<HTMLDivElement | null>(null)
   const [mainTab, setMainTab] = useState<'customers' | 'phonebook'>(initialTab)
 
   // Sync if initialTab prop changes
@@ -510,15 +514,13 @@ export default function CustomerManagementView({
   return (
     <div className="space-y-5" id="customer-management-root">
       {/* Single Clean Header Section */}
-      <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4" id="customer-management-header">
+      <div data-ui="surface" className="page-title-banner gradient-card bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4" id="customer-management-header">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
                 <Users className="w-3.5 h-3.5" /> Customer Management
               </span>
-              <span className="text-xs text-stone-400">·</span>
-              <span className="text-xs text-stone-500 font-medium">AL FAROOQ FOODS</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-stone-900 mt-1">
               {mainTab === 'phonebook' ? 'Phone Book & Directory' : 'Customer Accounts'}
@@ -530,28 +532,12 @@ export default function CustomerManagementView({
             </p>
           </div>
 
-          {mainTab === 'customers' && !selectedCustomer && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                className="button secondary text-xs"
-                onClick={() => setIsManagingCategories(true)}
-                title="Manage Customer Categories & Sub-types"
-              >
-                <FolderTree className="w-3.5 h-3.5 text-stone-600" /> Manage Categories
-              </button>
-              <button className="button secondary text-xs" onClick={handleExportCSV} title="Export CSV">
-                <Download className="w-3.5 h-3.5 text-stone-600" /> Export CSV
-              </button>
-              <button className="button primary text-xs" onClick={() => setIsCreatingCustomer(true)}>
-                <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add New Customer
-              </button>
-            </div>
-          )}
+
         </div>
 
         {/* Two-Tab Switcher directly under header */}
         <div className="flex items-center gap-2 border-t border-stone-100 pt-3">
-          <button
+          <button data-ui="tab"
             onClick={() => setMainTab('customers')}
             className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
               mainTab === 'customers'
@@ -569,7 +555,7 @@ export default function CustomerManagementView({
             </span>
           </button>
 
-          <button
+          <button data-ui="tab"
             onClick={() => {
               setMainTab('phonebook')
               setSelectedCustomerId(null)
@@ -590,11 +576,29 @@ export default function CustomerManagementView({
             </span>
           </button>
         </div>
+          {mainTab === 'customers' && !selectedCustomer && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button data-ui="button"
+                className="button secondary text-xs"
+                onClick={() => setIsManagingCategories(true)}
+                title="Manage Customer Categories & Sub-types"
+              >
+                <FolderTree className="w-3.5 h-3.5 text-stone-600" /> Manage Categories
+              </button>
+              <button data-ui="button" className="button secondary text-xs" onClick={handleExportCSV} title="Export CSV">
+                <Download className="w-3.5 h-3.5 text-stone-600" /> Export CSV
+              </button>
+              <button data-ui="button" className="button primary text-xs" onClick={() => setIsCreatingCustomer(true)}>
+                <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add New Customer
+              </button>
+            </div>
+          )}
+        {mainTab === 'phonebook' && <div ref={setPhonebookHeaderTarget} id="phonebook-header-actions" />}
       </div>
 
       {mainTab === 'phonebook' ? (
         <div id="customer-phonebook-tab-wrapper">
-          <PhonebookView db={db} onSaveDatabase={onSaveDatabase} />
+          <PhonebookView db={db} onSaveDatabase={onSaveDatabase} headerTarget={phonebookHeaderTarget} />
         </div>
       ) : (
         <>
@@ -652,11 +656,11 @@ export default function CustomerManagementView({
           </div>
 
           {/* Unified Filter & Search Toolbar */}
-          <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div data-ui="toolbar" className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
             {/* Search Input */}
             <div className="relative flex-1 max-w-md">
               <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
+              <input data-ui="input"
                 type="text"
                 placeholder="Search by name, business, phone, ID, city, address..."
                 value={searchQuery}
@@ -664,7 +668,7 @@ export default function CustomerManagementView({
                 className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-stone-50 rounded-lg border border-stone-200 text-stone-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
               />
               {searchQuery && (
-                <button
+                <button data-ui="button"
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
                 >
@@ -676,7 +680,7 @@ export default function CustomerManagementView({
             {/* Filter Tabs & Balance Dropdown */}
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-lg border border-stone-200 p-1 bg-stone-50">
-                <button
+                <button data-ui="button"
                   onClick={() => setTypeFilter('all')}
                   className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
                     typeFilter === 'all' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
@@ -684,7 +688,7 @@ export default function CustomerManagementView({
                 >
                   All ({db.customers.length})
                 </button>
-                <button
+                <button data-ui="button"
                   onClick={() => setTypeFilter('Retailer')}
                   className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
                     typeFilter === 'Retailer' ? 'bg-white text-emerald-800 shadow-xs' : 'text-stone-600 hover:text-stone-900'
@@ -692,7 +696,7 @@ export default function CustomerManagementView({
                 >
                   Retailers ({metrics.retailers})
                 </button>
-                <button
+                <button data-ui="button"
                   onClick={() => setTypeFilter('Wholesaler')}
                   className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
                     typeFilter === 'Wholesaler' ? 'bg-white text-blue-800 shadow-xs' : 'text-stone-600 hover:text-stone-900'
@@ -700,7 +704,7 @@ export default function CustomerManagementView({
                 >
                   Wholesalers ({metrics.distributors + metrics.salesMen})
                 </button>
-                <button
+                <button data-ui="button"
                   onClick={() => setTypeFilter('Walk-in')}
                   className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
                     typeFilter === 'Walk-in' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600 hover:text-stone-900'
@@ -710,7 +714,7 @@ export default function CustomerManagementView({
                 </button>
               </div>
 
-              <select
+              <select data-ui="select"
                 value={balanceFilter}
                 onChange={(e) => setBalanceFilter(e.target.value as any)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -725,7 +729,7 @@ export default function CustomerManagementView({
 
           {/* Customers Cards Grid */}
           {filteredCustomers.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
+            <div data-ui="surface" className="gradient-card bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
               <div className="flex flex-col items-center justify-center gap-3 max-w-sm mx-auto">
                 <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
                   <Users className="w-7 h-7" />
@@ -738,7 +742,7 @@ export default function CustomerManagementView({
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   {(searchQuery || typeFilter !== 'all' || balanceFilter !== 'all') && (
-                    <button
+                    <button data-ui="button"
                       className="button secondary text-xs"
                       onClick={() => {
                         setSearchQuery('')
@@ -749,7 +753,7 @@ export default function CustomerManagementView({
                       Reset Filters
                     </button>
                   )}
-                  <button
+                  <button data-ui="button"
                     className="button primary text-xs"
                     onClick={() => setIsCreatingCustomer(true)}
                   >
@@ -772,28 +776,22 @@ export default function CustomerManagementView({
                   .toUpperCase()
 
                 // Category style & icon
-                let catBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 let catAvatarClass = 'bg-emerald-100 text-emerald-800 border-emerald-200'
                 let catIcon = <Store className="w-3 h-3 shrink-0" />
 
                 if (cat.name === 'Distributor') {
-                  catBadgeClass = 'bg-blue-50 text-blue-700 border-blue-200'
                   catAvatarClass = 'bg-blue-100 text-blue-800 border-blue-200'
                   catIcon = <Building2 className="w-3 h-3 shrink-0" />
                 } else if (cat.name === 'Sales Man' || cat.name === 'Sales Representative') {
-                  catBadgeClass = 'bg-purple-50 text-purple-700 border-purple-200'
                   catAvatarClass = 'bg-purple-100 text-purple-800 border-purple-200'
                   catIcon = <UserCheck className="w-3 h-3 shrink-0" />
                 } else if (cat.parentType === 'Wholesaler' || cat.name === 'Wholesaler') {
-                  catBadgeClass = 'bg-sky-50 text-sky-700 border-sky-200'
                   catAvatarClass = 'bg-sky-100 text-sky-800 border-sky-200'
                   catIcon = <Building2 className="w-3 h-3 shrink-0" />
                 } else if (cat.parentType === 'Walk-in' || cat.name === 'Walk-in Customer' || cat.name === 'Counter') {
-                  catBadgeClass = 'bg-stone-100 text-stone-700 border-stone-200'
                   catAvatarClass = 'bg-stone-100 text-stone-700 border-stone-200'
                   catIcon = <Users className="w-3 h-3 shrink-0" />
                 } else if (cat.parentType !== 'Retailer' && cat.name !== 'Retailer') {
-                  catBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200'
                   catAvatarClass = 'bg-amber-100 text-amber-800 border-amber-200'
                   catIcon = <Briefcase className="w-3 h-3 shrink-0" />
                 }
@@ -808,186 +806,33 @@ export default function CustomerManagementView({
                 const waUrl = waRaw ? `https://wa.me/${waFormatted}` : undefined
                 const waDisplay = c.altPhone || c.phone
 
-                const creditPercent = c.creditLimit > 0 ? Math.min(100, Math.round((c.currentBalance / c.creditLimit) * 100)) : 0
 
                 return (
-                  <div
-                    key={c.id}
-                    className="group bg-white rounded-2xl p-4.5 sm:p-5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative border border-stone-200 hover:border-stone-300"
-                    id={`customer-card-${c.id}`}
-                  >
-                    <div className="space-y-3.5">
-                      {/* Top Row: Avatar + Customer Name + Category Badge + ID */}
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`w-11 h-11 rounded-xl font-bold text-xs flex items-center justify-center shadow-2xs border shrink-0 transition-transform group-hover:scale-105 ${catAvatarClass}`}
-                          title={`${c.name} (${cat.name})`}
-                        >
-                          {initials}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1.5">
-                            <h3
-                              className="font-bold text-stone-900 text-sm leading-snug group-hover:text-emerald-700 transition-colors truncate"
-                              title={c.name}
-                            >
-                              {c.name}
-                            </h3>
-                            {c.customerId && (
-                              <span className="text-[9.5px] font-mono font-bold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0 border border-stone-200/60">
-                                {c.customerId}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span
-                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs shrink-0 ${catBadgeClass}`}
-                            >
-                              {catIcon}
-                              <span>{cat.name}</span>
-                            </span>
-                            {c.businessName && (
-                              <span className="text-[11px] text-stone-500 font-medium truncate" title={c.businessName}>
-                                {c.businessName}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                  <article className="customer-card gradient-card" key={c.id} id={`customer-card-${c.id}`}>
+                    <header className="customer-card-header">
+                      <button type="button" className={`customer-card-avatar ${catAvatarClass}`} aria-label={`View ${c.name}'s profile`} onClick={() => setSelectedCustomerId(c.id)}>{initials}</button>
+                      <span className="customer-card-status" data-status={isOverLimit ? 'warning' : c.currentBalance > 0 ? 'due' : 'settled'}><span aria-hidden="true" />{isOverLimit ? 'Over limit' : c.currentBalance > 0 ? 'Outstanding' : 'Settled'}</span>
+                      <div className="customer-card-record-actions">
+                        <button type="button" className="customer-card-icon-action" title="Edit Customer Details" aria-label={`Edit ${c.name}`} onClick={() => setEditingCustomer(c)}><Edit size={14} aria-hidden="true" /></button>
+                        <button type="button" className="customer-card-icon-action customer-card-delete" title="Delete Customer Profile" aria-label={`Delete ${c.name}`} onClick={() => requestDeleteCustomer(c)}><Trash2 size={14} aria-hidden="true" /></button>
                       </div>
-
-                      {/* Location Row */}
-                      <div className="flex items-center gap-1.5 text-stone-500 text-xs">
-                        <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                        <span
-                          className="truncate text-[11.5px]"
-                          title={`${c.city ? c.city + ' · ' : ''}${c.address || 'Address not specified'}`}
-                        >
-                          {c.city && <strong className="text-stone-700">{c.city} · </strong>}
-                          {c.address || 'Address not specified'}
-                        </span>
-                      </div>
-
-                      {/* Financial & Dues Box — Full Width & Structured */}
-                      <div
-                        className={`rounded-xl p-3 border transition-colors ${
-                          c.currentBalance > 0
-                            ? 'bg-rose-50/50 border-rose-200/80 text-rose-950'
-                            : 'bg-stone-50/90 border-stone-200/80 text-stone-800'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                            {c.currentBalance > 0 ? 'Outstanding Due' : 'Balance Settled'}
-                          </span>
-                          {isOverLimit ? (
-                            <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" /> Over Limit
-                            </span>
-                          ) : c.currentBalance > 0 ? (
-                            <span className="text-[10px] text-amber-800 bg-amber-100/90 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold">
-                              Receivable
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-emerald-800 bg-emerald-100/90 border border-emerald-200 px-1.5 py-0.5 rounded-md font-bold">
-                              Clear
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-1">
-                          <strong
-                            className={`text-base sm:text-lg font-black block tracking-tight ${
-                              c.currentBalance > 0 ? 'text-rose-700' : 'text-emerald-700'
-                            }`}
-                          >
-                            {formatPKR(c.currentBalance)}
-                          </strong>
-                        </div>
-
-                        <div className="mt-1.5 pt-1.5 border-t border-stone-200/60 flex items-center justify-between text-[11px] text-stone-500">
-                          <span>
-                            {c.creditLimit > 0 ? (
-                              <span>Limit: <strong className="text-stone-700">{formatPKR(c.creditLimit)}</strong></span>
-                            ) : (
-                              <span>Opening: <strong className="text-stone-700">{formatPKR(c.openingBalance)}</strong></span>
-                            )}
-                          </span>
-                          {c.creditLimit > 0 && (
-                            <span className="font-semibold text-stone-600">
-                              {creditPercent}% used
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Contact Row */}
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={telUrl}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-mono py-1.5 px-2.5 rounded-xl border transition-all truncate ${
-                            c.phone
-                              ? 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100 hover:text-stone-900 active:scale-98'
-                              : 'bg-stone-50/40 text-stone-300 border-stone-100 pointer-events-none'
-                          }`}
-                          title={c.phone ? `Call ${c.name} (${c.phone})` : 'No phone number'}
-                        >
-                          <Phone className="w-3 h-3 text-stone-500 shrink-0" />
-                          <span className="truncate">{c.phone || 'No phone'}</span>
-                        </a>
-
-                        <a
-                          href={waUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className={`inline-flex items-center justify-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-xl border transition-all shrink-0 ${
-                            waUrl
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 active:scale-98'
-                              : 'bg-stone-50/40 text-stone-300 border-stone-100 pointer-events-none'
-                          }`}
-                          title={waDisplay ? `WhatsApp ${c.name} (${waDisplay})` : 'No WhatsApp number'}
-                        >
-                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>WhatsApp</span>
-                        </a>
+                    </header>
+                    <div className="customer-card-identity">
+                      <span className="customer-card-category">{catIcon}{cat.name}</span>
+                      <h3><button type="button" onClick={() => setSelectedCustomerId(c.id)}>{c.name}</button></h3>
+                      {c.businessName && <p className="customer-card-business">{c.businessName}</p>}
+                    </div>
+                    <div className="customer-card-summary">
+                      <div><span>Account balance</span><strong className={c.currentBalance > 0 ? 'customer-card-due' : 'customer-card-amount'}>{formatPKR(c.currentBalance)}</strong></div>
+                      <div className="customer-card-contact">
+                        <a href={telUrl} className="customer-card-phone" aria-disabled={!telUrl} title={c.phone ? `Call ${c.name} (${c.phone})` : 'No phone number'} aria-label={`Call ${c.name}`}><Phone aria-hidden="true" /></a>
+                        <a href={waUrl} className="customer-card-chat" aria-disabled={!waUrl} target="_blank" rel="noopener noreferrer" title={waDisplay ? `WhatsApp ${c.name} (${waDisplay})` : 'No WhatsApp number'} aria-label={`WhatsApp ${c.name}`}><MessageCircle aria-hidden="true" /></a>
                       </div>
                     </div>
-
-                    {/* Bottom Action Row */}
-                    <div
-                      className="pt-3 mt-3.5 border-t border-stone-100 flex items-center justify-between gap-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        className="flex-1 py-1.5 px-3 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-xl border border-emerald-200 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-                        onClick={() => setSelectedCustomerId(c.id)}
-                        title="Open Customer Profile (Ledger, Transactions, Invoices)"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>View Profile</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="p-1.5 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-xl border border-stone-200 transition-colors"
-                        title="Edit Customer Details"
-                        onClick={() => setEditingCustomer(c)}
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl border border-stone-200 hover:border-rose-200 transition-colors"
-                        title="Delete Customer Profile"
-                        onClick={() => requestDeleteCustomer(c)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                    <footer className="customer-card-actions">
+                      <button data-ui="button" type="button" className="customer-card-profile" onClick={() => setSelectedCustomerId(c.id)} title="Open Customer Profile (Ledger, Transactions, Invoices)"><span>View Profile</span><ArrowUpRight aria-hidden="true" /></button>
+                    </footer>
+                  </article>
                 )
               })}
             </div>
@@ -1002,7 +847,7 @@ export default function CustomerManagementView({
         <div className="space-y-6">
           {/* Back Button & Action Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <button
+            <button data-ui="button"
               onClick={() => setSelectedCustomerId(null)}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-700 hover:text-stone-900 bg-white border border-stone-200 px-3.5 py-2 rounded-xl transition-all shadow-2xs hover:bg-stone-50"
             >
@@ -1010,26 +855,26 @@ export default function CustomerManagementView({
             </button>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <button
+              <button data-ui="button"
                 className="button secondary text-xs"
                 onClick={() => generateLedgerPDF(selectedCustomer, customerLedgers, true)}
               >
                 <Download className="w-3.5 h-3.5" /> Download Statement PDF
               </button>
-              <button
+              <button data-ui="button"
                 className="button primary text-xs"
                 onClick={() => setIsRecordingPayment(selectedCustomer)}
               >
                 <CreditCard className="w-3.5 h-3.5 stroke-[2.5]" /> Record Payment / Settlement
               </button>
-              <button
+              <button data-ui="button"
                 className="p-2 bg-white border border-stone-200 rounded-xl text-stone-700 hover:bg-stone-50 shadow-2xs transition-colors"
                 title="Edit Customer Profile"
                 onClick={() => setEditingCustomer(selectedCustomer)}
               >
                 <Edit className="w-4 h-4" />
               </button>
-              <button
+              <button data-ui="button"
                 className="p-2 bg-white border border-stone-200 rounded-xl text-rose-600 hover:bg-rose-50 shadow-2xs transition-colors"
                 title="Delete Customer Profile"
                 onClick={() => requestDeleteCustomer(selectedCustomer)}
@@ -1040,7 +885,7 @@ export default function CustomerManagementView({
           </div>
 
           {/* Profile Header Master Card */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-5 sm:p-6 shadow-xs">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 p-5 sm:p-6 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-5 border-b border-stone-100">
               <div className="flex items-start gap-4">
                 <div
@@ -1097,11 +942,11 @@ export default function CustomerManagementView({
 
               {/* Opening & Credit Limits */}
               <div className="flex items-center gap-3">
-                <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[120px]">
+                <div data-ui="surface" className="gradient-card bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[120px]">
                   <span className="text-[10px] font-bold text-stone-500 block uppercase tracking-wider">Opening Bal</span>
                   <strong className="text-sm font-black text-stone-800">{formatPKR(selectedCustomer.openingBalance)}</strong>
                 </div>
-                <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[130px]">
+                <div data-ui="surface" className="gradient-card bg-stone-50 p-3 rounded-xl border border-stone-200 text-right min-w-[130px]">
                   <div className="flex items-center justify-end gap-1 mb-0.5">
                     <span className="text-[10px] font-bold text-stone-500 block uppercase tracking-wider">Credit Limit</span>
                     {selectedCustomer.creditLimit > 0 && (
@@ -1120,7 +965,7 @@ export default function CustomerManagementView({
 
             {/* 4 Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 pt-5">
-              <div className="p-3.5 rounded-xl bg-stone-50/80 border border-stone-200">
+              <div data-ui="surface" className="gradient-card p-3.5 rounded-xl bg-stone-50/80 border border-stone-200">
                 <span className="text-[11px] text-stone-500 block font-semibold">Total Invoiced (Lifetime)</span>
                 <strong className="text-lg font-black text-stone-900 block mt-0.5">
                   {formatPKR(profileFinancials.totalInvoiced)}
@@ -1128,7 +973,7 @@ export default function CustomerManagementView({
                 <span className="text-[10px] text-stone-400">{customerInvoices.length} POS sales recorded</span>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
+              <div data-ui="surface" className="gradient-card p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80">
                 <span className="text-[11px] text-emerald-800 block font-semibold">Total Paid</span>
                 <strong className="text-lg font-black text-emerald-800 block mt-0.5">
                   {formatPKR(profileFinancials.totalPaid)}
@@ -1136,8 +981,8 @@ export default function CustomerManagementView({
                 <span className="text-[10px] text-emerald-700">Invoices & direct settlements</span>
               </div>
 
-              <div
-                className={`p-3.5 rounded-xl border ${
+              <div data-ui="surface"
+                className={`gradient-card p-3.5 rounded-xl border ${
                   profileFinancials.currentOutstanding > 0
                     ? 'bg-rose-50/70 border-rose-200/80'
                     : 'bg-emerald-50/70 border-emerald-200/80'
@@ -1166,7 +1011,7 @@ export default function CustomerManagementView({
                 </span>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-stone-50/80 border border-stone-200">
+              <div data-ui="surface" className="gradient-card p-3.5 rounded-xl bg-stone-50/80 border border-stone-200">
                 <span className="text-[11px] text-stone-500 block font-semibold">Last Transaction Date</span>
                 <strong className="text-sm font-bold text-stone-900 block mt-1">
                   {profileFinancials.lastTransactionDate}
@@ -1177,8 +1022,8 @@ export default function CustomerManagementView({
           </div>
 
           {/* Sub-Navigation Tabs */}
-          <div className="bg-white rounded-xl border border-stone-200 p-1.5 shadow-2xs flex items-center gap-1.5 overflow-x-auto">
-            <button
+          <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 p-1.5 shadow-2xs flex items-center gap-1.5 overflow-x-auto">
+            <button data-ui="tab"
               onClick={() => setActiveTab('ledger')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'ledger'
@@ -1188,7 +1033,7 @@ export default function CustomerManagementView({
             >
               <FileText className="w-3.5 h-3.5" /> Ledger / Transaction History ({customerLedgers.length})
             </button>
-            <button
+            <button data-ui="tab"
               onClick={() => setActiveTab('invoices')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'invoices'
@@ -1198,7 +1043,7 @@ export default function CustomerManagementView({
             >
               <Receipt className="w-3.5 h-3.5" /> Invoices ({customerInvoices.length})
             </button>
-            <button
+            <button data-ui="tab"
               onClick={() => setActiveTab('products')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'products'
@@ -1208,7 +1053,7 @@ export default function CustomerManagementView({
             >
               <Package className="w-3.5 h-3.5" /> Products Purchased ({productsPurchasedSummary.length})
             </button>
-            <button
+            <button data-ui="tab"
               onClick={() => setActiveTab('payments')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'payments'
@@ -1224,7 +1069,7 @@ export default function CustomerManagementView({
           {/* TAB 1: LEDGER / TRANSACTION HISTORY */}
           {/* ========================================================================= */}
           {activeTab === 'ledger' && (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+            <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
               <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-stone-900 text-sm">Statement of Account & Running Balance</h3>
@@ -1232,7 +1077,7 @@ export default function CustomerManagementView({
                     Chronological audit ledger of all debits (sales invoices) and credits (payments received)
                   </p>
                 </div>
-                <button
+                <button data-ui="button"
                   className="button secondary text-xs"
                   onClick={() => generateLedgerPDF(selectedCustomer, customerLedgers, true)}
                 >
@@ -1241,7 +1086,7 @@ export default function CustomerManagementView({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table data-ui="table" className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
                       <th className="py-3 px-4">#</th>
@@ -1306,7 +1151,7 @@ export default function CustomerManagementView({
           {/* TAB 2: INVOICES LIST (From POS) */}
           {/* ========================================================================= */}
           {activeTab === 'invoices' && (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+            <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
               <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-stone-900 text-sm">Commercial Invoices from POS</h3>
@@ -1315,7 +1160,7 @@ export default function CustomerManagementView({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table data-ui="table" className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
                       <th className="py-3 px-4">Date</th>
@@ -1334,7 +1179,7 @@ export default function CustomerManagementView({
                       <tr key={inv.id} className="hover:bg-stone-50/60 transition-colors">
                         <td className="py-3 px-4 text-stone-800 font-medium">{formatDate(inv.date)}</td>
                         <td className="py-3 px-4 font-mono font-bold text-stone-900">
-                          <button
+                          <button data-ui="button"
                             onClick={() => setViewingInvoice(inv)}
                             className="text-emerald-800 hover:underline font-bold"
                           >
@@ -1365,7 +1210,7 @@ export default function CustomerManagementView({
                         </td>
                         <td className="py-3 px-4">
                           {inv.invoiceImage || inv.paymentScreenshot ? (
-                            <button
+                            <button data-ui="button"
                               onClick={() =>
                                 setPreviewImage({
                                   src: (inv.invoiceImage || inv.paymentScreenshot)!,
@@ -1382,14 +1227,14 @@ export default function CustomerManagementView({
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
+                            <button data-ui="button"
                               className="px-2 py-1 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors flex items-center gap-1"
                               title="View Invoice"
                               onClick={() => setViewingInvoice(inv)}
                             >
                               <Eye className="w-3.5 h-3.5" /> View
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="p-1 text-stone-600 hover:text-stone-900"
                               title="Download PDF"
                               onClick={() => generateInvoicePDF(inv, selectedCustomer)}
@@ -1419,7 +1264,7 @@ export default function CustomerManagementView({
           {/* TAB 3: PRODUCTS PURCHASED (Reorder summary & pattern) */}
           {/* ========================================================================= */}
           {activeTab === 'products' && (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+            <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
               <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-stone-900 text-sm">Product Buying & Reorder Summary</h3>
@@ -1427,7 +1272,7 @@ export default function CustomerManagementView({
                     Aggregated view of products and quantities this customer purchases most
                   </p>
                 </div>
-                <button
+                <button data-ui="button"
                   className="button secondary text-xs"
                   onClick={() => {
                     const headers = ['Product Name', 'Total Qty Bought', 'Unit', 'Total Spend (Rs)', 'Last Unit Price', 'Last Purchased Date', 'Total Orders']
@@ -1448,7 +1293,7 @@ export default function CustomerManagementView({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table data-ui="table" className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
                       <th className="py-3 px-4">#</th>
@@ -1495,13 +1340,13 @@ export default function CustomerManagementView({
           {/* TAB 4: PAYMENTS & MANUAL SETTLEMENTS */}
           {/* ========================================================================= */}
           {activeTab === 'payments' && (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+            <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
               <div className="p-4 bg-stone-50/60 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-stone-900 text-sm">Direct Payment Receipts & Dues Clearance</h3>
                   <p className="text-xs text-stone-500">Record cash / online payments received against outstanding dues</p>
                 </div>
-                <button
+                <button data-ui="button"
                   className="button primary text-xs"
                   onClick={() => setIsRecordingPayment(selectedCustomer)}
                 >
@@ -1510,7 +1355,7 @@ export default function CustomerManagementView({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table data-ui="table" className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
                       <th className="py-3 px-4">Receipt #</th>
@@ -1547,7 +1392,7 @@ export default function CustomerManagementView({
                         <td className="py-3 px-4 font-mono text-stone-800">{pay.transactionRef || '—'}</td>
                         <td className="py-3 px-4">
                           {pay.receiptImage ? (
-                            <button
+                            <button data-ui="button"
                               onClick={() =>
                                 setPreviewImage({
                                   src: pay.receiptImage!,
@@ -1564,7 +1409,7 @@ export default function CustomerManagementView({
                         </td>
                         <td className="py-3 px-4 text-stone-600 max-w-[160px] truncate">{pay.notes || '—'}</td>
                         <td className="py-3 px-4 text-right">
-                          <button
+                          <button data-ui="button"
                             className="p-1 text-stone-600 hover:text-stone-900"
                             title="Download Payment Voucher PDF"
                             onClick={() => generateCustomerPaymentReceiptPDF(selectedCustomer, pay)}
@@ -1689,7 +1534,7 @@ export default function CustomerManagementView({
       {/* ========================================================================= */}
       {deleteWarningCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-stone-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -1702,7 +1547,7 @@ export default function CustomerManagementView({
             </div>
 
             {deleteWarningCustomer.invoiceCount > 0 && (
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+              <div data-ui="surface" className="gradient-card p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
                 <div className="font-bold flex items-center gap-1.5 text-amber-800">
                   <AlertCircle className="w-4 h-4" /> Transaction History Detected
                 </div>
@@ -1714,14 +1559,14 @@ export default function CustomerManagementView({
             )}
 
             <div className="flex gap-3 pt-2">
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary flex-1"
                 onClick={() => setDeleteWarningCustomer(null)}
               >
                 Cancel
               </button>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button bg-rose-600 hover:bg-rose-700 text-white font-bold flex-1"
                 onClick={confirmDeleteCustomer}
@@ -1738,10 +1583,10 @@ export default function CustomerManagementView({
       {/* ========================================================================= */}
       {previewImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-2xs">
-          <div className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl relative">
+          <div data-ui="surface" className="bg-white rounded-2xl p-4 max-w-2xl w-full shadow-2xl relative">
             <div className="flex items-center justify-between pb-3 border-b border-stone-200">
               <h3 className="font-bold text-stone-900 text-sm">{previewImage.title}</h3>
-              <button onClick={() => setPreviewImage(null)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-600">
+              <button data-ui="button" onClick={() => setPreviewImage(null)} className="p-1 rounded-lg hover:bg-stone-100 text-stone-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1749,7 +1594,7 @@ export default function CustomerManagementView({
               <img src={previewImage.src} alt={previewImage.title} className="max-h-[70vh] rounded object-contain" />
             </div>
             <div className="mt-4 flex justify-end">
-              <button className="button primary text-xs" onClick={() => setPreviewImage(null)}>
+              <button data-ui="button" className="button primary text-xs" onClick={() => setPreviewImage(null)}>
                 Close
               </button>
             </div>
@@ -1798,10 +1643,11 @@ function CustomerFormModal({
   const [creditLimit, setCreditLimit] = useState(customer?.creditLimit || 0)
   const [notes, setNotes] = useState(customer?.notes || '')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !phone.trim()) return
 
+    if (customer && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave({
       customerId: customerId.trim() || undefined,
       name: name.trim(),
@@ -1830,14 +1676,14 @@ function CustomerFormModal({
               {customer ? `Edit ${customer.name}` : 'Add New Customer Profile'}
             </h2>
           </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+          <button data-ui="button" type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="space-y-4 text-xs">
           {/* Section 1: Basic Info */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+          <div data-ui="surface" className="gradient-card p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-emerald-700" /> 1. Basic Information
             </h3>
@@ -1845,7 +1691,7 @@ function CustomerFormModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">Full Name *</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -1857,7 +1703,7 @@ function CustomerFormModal({
 
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">Business / Shop Name</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
@@ -1868,7 +1714,7 @@ function CustomerFormModal({
 
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">Customer Type / Category *</label>
-                <select
+                <select data-ui="select"
                   value={type}
                   onChange={(e) => setType(e.target.value)}
                   required
@@ -1906,7 +1752,7 @@ function CustomerFormModal({
 
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">Customer ID (Auto/Manual)</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
@@ -1917,7 +1763,7 @@ function CustomerFormModal({
 
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">Primary Phone *</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -1929,7 +1775,7 @@ function CustomerFormModal({
 
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">WhatsApp / Alt Phone</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={altPhone}
                   onChange={(e) => setAltPhone(e.target.value)}
@@ -1941,14 +1787,14 @@ function CustomerFormModal({
           </div>
 
           {/* Section 2: Location */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+          <div data-ui="surface" className="gradient-card p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5 text-emerald-700" /> 2. Location & Address
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">City *</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
@@ -1959,7 +1805,7 @@ function CustomerFormModal({
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">Address / Market Location *</label>
-                <input
+                <input data-ui="input"
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -1972,7 +1818,7 @@ function CustomerFormModal({
           </div>
 
           {/* Section 3: Financials */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+          <div data-ui="surface" className="gradient-card p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
               <DollarSign className="w-3.5 h-3.5 text-emerald-700" /> 3. Financials & Credit Terms
             </h3>
@@ -1980,7 +1826,7 @@ function CustomerFormModal({
               {!customer && (
                 <div>
                   <label className="text-xs font-semibold text-stone-700 mb-1 block">Opening Balance (Rs)</label>
-                  <input
+                  <input data-ui="input"
                     type="number"
                     min="0"
                     value={openingBalance}
@@ -1993,7 +1839,7 @@ function CustomerFormModal({
               )}
               <div className={customer ? 'sm:col-span-2' : ''}>
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">Credit Limit (Rs - Optional)</label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={creditLimit}
@@ -2009,7 +1855,7 @@ function CustomerFormModal({
           {/* Section 4: Notes */}
           <div>
             <label className="text-xs font-semibold text-stone-700 mb-1 block">Special Notes / Route Info</label>
-            <textarea
+            <textarea data-ui="textarea"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Delivery route, preferred payment days, or van driver instructions"
@@ -2021,10 +1867,10 @@ function CustomerFormModal({
 
         {/* Fixed Footer Actions */}
         <div className="flex items-center justify-end gap-2 pt-4 border-t border-stone-200">
-          <button type="button" onClick={onClose} className="button secondary text-xs">
+          <button data-ui="button" type="button" onClick={onClose} className="button secondary text-xs">
             Cancel
           </button>
-          <button type="submit" className="button primary text-xs">
+          <button data-ui="button" type="submit" className="button primary text-xs">
             {customer ? 'Save Changes' : 'Create Customer Profile'}
           </button>
         </div>
@@ -2086,15 +1932,16 @@ function CategoryManagementModal({
     setEditDesc(cat.description || '')
   }
 
-  const handleSaveEdit = (catId: string) => {
+  const handleSaveEdit = async (catId: string) => {
     if (!editName.trim()) return
     const updated = list.map((c) => (c.id === catId ? { ...c, name: editName.trim(), description: editDesc.trim() || undefined } : c))
+    if (!(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     setList(updated)
     onSaveCategories(updated)
     setEditingCatId(null)
   }
 
-  const handleDeleteCategory = (cat: CustomerCategoryItem) => {
+  const handleDeleteCategory = async (cat: CustomerCategoryItem) => {
     const assignedCount = getCountForCategory(cat.name)
     if (assignedCount > 0) {
       setDeleteWarning(
@@ -2104,31 +1951,32 @@ function CategoryManagementModal({
     }
 
     const updated = list.filter((c) => c.id !== cat.id)
+    if (!(await confirmAction({"title":"Delete this category?","message":"Remove this unassigned category?","confirmLabel":"Delete category","destructive":true}))) return
     setList(updated)
     onSaveCategories(updated)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-stone-200 space-y-5 my-8 animate-in fade-in zoom-in-95 duration-150">
+      <div data-ui="surface" className="gradient-card bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-stone-200 space-y-5 my-8 animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between pb-3 border-b border-stone-200">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Account Classification</span>
             <h2 className="text-lg font-black text-stone-900">Manage Customer Categories</h2>
           </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+          <button data-ui="button" type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {deleteWarning && (
-          <div className="p-3.5 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+          <div data-ui="surface" className="gradient-card p-3.5 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <strong className="block font-bold">Deletion Blocked</strong>
               <span>{deleteWarning}</span>
             </div>
-            <button onClick={() => setDeleteWarning(null)} className="text-rose-600 hover:text-rose-900">
+            <button data-ui="button" onClick={() => setDeleteWarning(null)} className="text-rose-600 hover:text-rose-900">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -2141,27 +1989,27 @@ function CategoryManagementModal({
             const isEditing = editingCatId === cat.id
 
             return (
-              <div
+              <div data-ui="surface"
                 key={cat.id}
-                className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between gap-3 text-xs"
+                className="gradient-card p-3 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between gap-3 text-xs"
               >
                 {isEditing ? (
                   <div className="flex-1 space-y-2">
                     <div className="flex gap-2">
-                      <input
+                      <input data-ui="input"
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         className="px-2.5 py-1 border border-stone-300 rounded-lg text-xs bg-white font-bold flex-1"
                       />
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => handleSaveEdit(cat.id)}
                         className="button primary text-xs py-1 px-3"
                       >
                         Save
                       </button>
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => setEditingCatId(null)}
                         className="button secondary text-xs py-1 px-2"
@@ -2169,7 +2017,7 @@ function CategoryManagementModal({
                         Cancel
                       </button>
                     </div>
-                    <input
+                    <input data-ui="input"
                       type="text"
                       value={editDesc}
                       onChange={(e) => setEditDesc(e.target.value)}
@@ -2193,7 +2041,7 @@ function CategoryManagementModal({
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => handleStartEdit(cat)}
                         className="p-1 text-stone-600 hover:text-stone-900 rounded"
@@ -2201,7 +2049,7 @@ function CategoryManagementModal({
                       >
                         <Edit className="w-3.5 h-3.5" />
                       </button>
-                      <button
+                      <button data-ui="button"
                         type="button"
                         onClick={() => handleDeleteCategory(cat)}
                         className="p-1 text-rose-600 hover:text-rose-800 rounded"
@@ -2225,7 +2073,7 @@ function CategoryManagementModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
               <label className="text-xs font-semibold text-stone-700 mb-1 block">Category Name *</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
@@ -2237,7 +2085,7 @@ function CategoryManagementModal({
 
             <div>
               <label className="text-xs font-semibold text-stone-700 mb-1 block">Main Type Hierarchy *</label>
-              <select
+              <select data-ui="select"
                 value={newCatParent}
                 onChange={(e) => setNewCatParent(e.target.value as any)}
                 className="w-full px-3 py-1.5 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
@@ -2250,7 +2098,7 @@ function CategoryManagementModal({
 
             <div className="sm:col-span-2">
               <label className="text-xs font-semibold text-stone-700 mb-1 block">Description (Optional)</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 value={newCatDescription}
                 onChange={(e) => setNewCatDescription(e.target.value)}
@@ -2261,14 +2109,14 @@ function CategoryManagementModal({
           </div>
 
           <div className="flex justify-end">
-            <button type="submit" className="button primary text-xs">
+            <button data-ui="button" type="submit" className="button primary text-xs">
               <Plus className="w-3.5 h-3.5" /> Add Category
             </button>
           </div>
         </form>
 
         <div className="flex justify-end pt-2 border-t border-stone-200">
-          <button type="button" onClick={onClose} className="button secondary text-xs">
+          <button data-ui="button" type="button" onClick={onClose} className="button secondary text-xs">
             Done
           </button>
         </div>
@@ -2317,10 +2165,11 @@ function RecordPaymentModal({
     reader.readAsDataURL(file)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (amount <= 0) return
 
+    if (!(await confirmAction({"title":"Record this transaction?","message":"Save this transaction and update the associated account balances?","confirmLabel":"Record transaction","destructive":false}))) return
     onSave({
       amount: Number(amount),
       date,
@@ -2343,12 +2192,12 @@ function RecordPaymentModal({
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Payment Collection</span>
             <h2 className="text-lg font-black text-stone-900">Record Payment from {customer.name}</h2>
           </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+          <button data-ui="button" type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 grid grid-cols-2 gap-3 text-xs">
+        <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-3.5 grid grid-cols-2 gap-3 text-xs">
           <div>
             <span className="text-stone-500 block font-semibold">Current Balance Due:</span>
             <strong className="text-base text-rose-700 font-black">{formatPKR(customer.currentBalance)}</strong>
@@ -2363,7 +2212,7 @@ function RecordPaymentModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-stone-700 mb-1 block">Amount Received (Rs) *</label>
-              <input
+              <input data-ui="input"
                 type="number"
                 min="1"
                 value={amount}
@@ -2375,7 +2224,7 @@ function RecordPaymentModal({
 
             <div>
               <label className="text-xs font-semibold text-stone-700 mb-1 block">Payment Date *</label>
-              <input
+              <input data-ui="input"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -2386,7 +2235,7 @@ function RecordPaymentModal({
 
             <div>
               <label className="text-xs font-semibold text-stone-700 mb-1 block">Payment Method *</label>
-              <select
+              <select data-ui="select"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value as any)}
                 className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
@@ -2401,7 +2250,7 @@ function RecordPaymentModal({
 
             <div>
               <label className="text-xs font-semibold text-stone-700 mb-1 block">Deposit Account *</label>
-              <select
+              <select data-ui="select"
                 value={paymentAccount}
                 onChange={(e) => setPaymentAccount(e.target.value as any)}
                 className="w-full px-3 py-2 border border-stone-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
@@ -2419,7 +2268,7 @@ function RecordPaymentModal({
             <label className="text-xs font-semibold text-stone-700 mb-1 block">
               Transaction Reference / Cheque # (Optional)
             </label>
-            <input
+            <input data-ui="input"
               type="text"
               value={transactionRef}
               onChange={(e) => setTransactionRef(e.target.value)}
@@ -2433,7 +2282,7 @@ function RecordPaymentModal({
             <div className="flex items-center gap-3">
               <label className="button secondary cursor-pointer text-xs py-1.5 px-3">
                 <Upload className="w-3.5 h-3.5" /> Choose Image
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                <input data-ui="file" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
               </label>
               {receiptImage && (
                 <div className="flex items-center gap-2">
@@ -2441,7 +2290,7 @@ function RecordPaymentModal({
                   <span className="text-xs text-emerald-700 font-bold flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Slip Attached
                   </span>
-                  <button type="button" onClick={() => setReceiptImage(undefined)} className="text-rose-600 text-xs hover:underline">
+                  <button data-ui="button" type="button" onClick={() => setReceiptImage(undefined)} className="text-rose-600 text-xs hover:underline">
                     Remove
                   </button>
                 </div>
@@ -2451,7 +2300,7 @@ function RecordPaymentModal({
 
           <div>
             <label className="text-xs font-semibold text-stone-700 mb-1 block">Remarks / Notes</label>
-            <input
+            <input data-ui="input"
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -2462,10 +2311,10 @@ function RecordPaymentModal({
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
-          <button type="button" onClick={onClose} className="button secondary text-xs">
+          <button data-ui="button" type="button" onClick={onClose} className="button secondary text-xs">
             Cancel
           </button>
-          <button type="submit" className="button primary text-xs">
+          <button data-ui="button" type="submit" className="button primary text-xs">
             Save Payment Receipt
           </button>
         </div>
@@ -2488,18 +2337,18 @@ function InvoiceReceiptModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-2xs overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-stone-200 space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150">
+      <div data-ui="surface" className="gradient-card bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-stone-200 space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between pb-3 border-b border-stone-200">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Commercial Invoice</span>
             <h2 className="text-lg font-black text-stone-900">Invoice #{invoice.invoiceNumber}</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
+          <button data-ui="button" onClick={onClose} className="p-1 rounded-lg hover:bg-stone-100 text-stone-500">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div>
             <span className="text-stone-500 block font-semibold">Customer</span>
             <strong className="text-stone-900 block font-bold mt-0.5">{invoice.customerName}</strong>
@@ -2528,8 +2377,8 @@ function InvoiceReceiptModal({
           </div>
         </div>
 
-        <div className="border border-stone-200 rounded-xl overflow-hidden">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="gradient-card border border-stone-200 rounded-xl overflow-hidden">
+          <table data-ui="table" className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-stone-50 border-b border-stone-200 text-stone-600 font-semibold uppercase text-[11px]">
                 <th className="py-2.5 px-3">#</th>
@@ -2573,14 +2422,14 @@ function InvoiceReceiptModal({
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t border-stone-200">
-          <button
+          <button data-ui="button"
             type="button"
             className="button secondary text-xs"
             onClick={() => generateInvoicePDF(invoice, customer)}
           >
             <Download className="w-3.5 h-3.5" /> Download Tax Invoice PDF
           </button>
-          <button type="button" className="button primary text-xs" onClick={onClose}>
+          <button data-ui="button" type="button" className="button primary text-xs" onClick={onClose}>
             Close
           </button>
         </div>

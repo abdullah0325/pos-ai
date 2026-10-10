@@ -1,5 +1,11 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
+import ModuleHeading from './module-heading'
+
+import CatalogPhoto from './catalog-photo'
+
 import { useState } from 'react'
 import {
   Plus,
@@ -121,8 +127,8 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
   const otherCount = filteredCustomers.filter((c) => c.type === 'Other').length
 
   // Delete profile
-  const handleDeleteProfile = (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete profile "${name}"? All transaction records will remain in master ledgers.`)) return
+  const handleDeleteProfile = async (id: string, name: string) => {
+    if (!await confirmAction(`Are you sure you want to permanently delete profile "${name}"? All transaction records will remain in master ledgers.`)) return
     const updated = db.customers.filter((c) => c.id !== id)
     onSaveDatabase({ ...db, customers: updated })
     if (activeProfile?.id === id) setActiveProfile(null)
@@ -241,11 +247,11 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
   return (
     <div className="page-stack">
       {/* Top Header */}
-      <div className="page-heading">
+      <ModuleHeading icon="customers">
         <div>
           <div className="flex items-center gap-2">
             {currentActiveProfile && (
-              <button
+              <button data-ui="button"
                 className="button secondary text-xs py-1 px-2.5 flex items-center gap-1 mr-2"
                 onClick={() => setActiveProfile(null)}
               >
@@ -289,10 +295,10 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
         <div className="heading-actions">
           {entityType !== 'counter-sales' && !currentActiveProfile && (
             <>
-              <button className="button secondary" onClick={handleExportProfilesCSV}>
+              <button data-ui="button" className="button secondary" onClick={handleExportProfilesCSV}>
                 <Download /> Export CSV
               </button>
-              <button className="button primary" onClick={() => setIsCreatingProfile(true)}>
+              <button data-ui="button" className="button primary" onClick={() => setIsCreatingProfile(true)}>
                 <Plus /> Add {entityType === 'distributors' ? 'Distributor / Sales Rep' : 'Customer / Shop Profile'}
               </button>
             </>
@@ -300,19 +306,19 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
 
           {currentActiveProfile && (
             <div className="flex items-center gap-2">
-              <button className="button secondary" onClick={() => setIsCreatingInvoiceForParty(currentActiveProfile)}>
+              <button data-ui="button" className="button secondary" onClick={() => setIsCreatingInvoiceForParty(currentActiveProfile)}>
                 <FilePlus className="w-4 h-4" /> + New Delivery / Invoice
               </button>
-              <button className="button secondary" onClick={() => setEditingProfile(currentActiveProfile)}>
+              <button data-ui="button" className="button secondary" onClick={() => setEditingProfile(currentActiveProfile)}>
                 <Edit className="w-4 h-4" /> Edit Profile
               </button>
-              <button className="button primary" onClick={() => setPaymentModalProfile(currentActiveProfile)}>
+              <button data-ui="button" className="button primary" onClick={() => setPaymentModalProfile(currentActiveProfile)}>
                 <CreditCard className="w-4 h-4" /> Record Payment
               </button>
             </div>
           )}
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* VIEW: COUNTER SALES POS SCREEN */}
       {entityType === 'counter-sales' ? (
@@ -326,13 +332,9 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               {db.products.map((prod) => {
                 const prodImg = prod.imageUrl || (prod as any).image
                 return (
-                  <button key={prod.id} className="pos-card" onClick={() => handlePosAddToCart(prod.id)}>
+                  <button data-ui="button" key={prod.id} className="pos-card" onClick={() => handlePosAddToCart(prod.id)}>
                     <div className="w-full h-20 mb-1.5 rounded-lg overflow-hidden bg-stone-100 flex items-center justify-center border border-stone-200/50">
-                      {prodImg ? (
-                        <img src={prodImg} alt={prod.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package className="w-6 h-6 text-stone-300" />
-                      )}
+                      <CatalogPhoto item={prod} src={prodImg} alt={prod.name} className="w-full h-full object-cover" />
                     </div>
                     <strong>{prod.name}</strong>
                     <span>{prod.category}</span>
@@ -355,20 +357,20 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                   <h2>Counter Sale Slip</h2>
                   <p>Cash Counter Checkout</p>
                 </div>
-                <button className="text-xs text-red-600 font-bold" onClick={() => setPosCart([])}>
+                <button data-ui="button" className="text-xs text-red-600 font-bold" onClick={() => setPosCart([])}>
                   Clear
                 </button>
               </div>
 
               <div className="space-y-3 mb-4">
-                <input
+                <input data-ui="input"
                   value={posCustomerName}
                   onChange={(e) => setPosCustomerName(e.target.value)}
                   placeholder="Customer Name (Optional)"
                   className="w-full text-xs border border-gray-300 rounded p-2"
                 />
 
-                <select
+                <select data-ui="select"
                   value={posPaymentAccount}
                   onChange={(e) => setPosPaymentAccount(e.target.value as any)}
                   className="w-full text-xs border border-gray-300 rounded p-2"
@@ -386,11 +388,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                     <div key={idx} className="flex justify-between items-center text-xs gap-2 py-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-9 h-9 rounded bg-stone-100 border border-stone-200 shrink-0 overflow-hidden flex items-center justify-center">
-                          {prodImg ? (
-                            <img src={prodImg} alt={item.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <Package className="w-4 h-4 text-stone-300" />
-                          )}
+                          <CatalogPhoto item={prod} src={prodImg} alt={item.name} className="w-full h-full object-cover" />
                         </div>
                         <div className="truncate">
                           <div className="font-bold text-gray-800 truncate">{item.name}</div>
@@ -400,7 +398,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <button
+                        <button data-ui="button"
                           className="px-1.5 py-0.5 bg-gray-200 rounded font-bold hover:bg-gray-300"
                           onClick={() =>
                             setPosCart(
@@ -413,7 +411,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                           -
                         </button>
                         <span className="font-bold">{item.qty}</span>
-                        <button
+                        <button data-ui="button"
                           className="px-1.5 py-0.5 bg-gray-200 rounded font-bold hover:bg-gray-300"
                           onClick={() =>
                             setPosCart(
@@ -438,7 +436,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               </div>
               <div className="flex justify-between text-xs items-center">
                 <span>Discount (Rs):</span>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={posDiscount}
@@ -453,7 +451,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                 </span>
               </div>
 
-              <button className="button primary w-full mt-3 py-3 h-auto" onClick={handlePosCheckout}>
+              <button data-ui="button" className="button primary w-full mt-3 py-3 h-auto" onClick={handlePosCheckout}>
                 <Check className="w-4 h-4" /> Complete Sale & Receive Cash
               </button>
             </div>
@@ -478,7 +476,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
         <>
           {/* KPI Summary Cards (Auto-wrap 2x2 on smaller screens) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
               <div>
                 <span className="text-xs font-semibold text-stone-500 block">Total Outstanding Receivables</span>
                 <strong className="text-xl font-extrabold text-amber-700 block mt-1 tracking-tight">{formatPKR(totalReceivables)}</strong>
@@ -488,7 +486,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               </span>
             </div>
 
-            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
               <div>
                 <span className="text-xs font-semibold text-stone-500 block">Total Credit Limits Authorized</span>
                 <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">{formatPKR(totalCreditLimits)}</strong>
@@ -496,7 +494,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               <span className="text-[11px] font-medium text-stone-500 mt-2 block">Allocated trade credit limits</span>
             </div>
 
-            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
               <div>
                 <span className="text-xs font-semibold text-stone-500 block">Registered Accounts</span>
                 <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">{filteredCustomers.length}</strong>
@@ -510,7 +508,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               </span>
             </div>
 
-            <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+            <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
               <div>
                 <span className="text-xs font-semibold text-stone-500 block">Zero-Balance (Clear) Accounts</span>
                 <strong className="text-xl font-extrabold text-emerald-700 block mt-1 tracking-tight">
@@ -522,11 +520,11 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
           </div>
 
           {/* Search and Filters Toolbar (Grouped Cohesive Container) */}
-          <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-xs flex flex-col lg:flex-row gap-2.5 items-stretch lg:items-center justify-between">
+          <div data-ui="toolbar" className="gradient-card bg-white p-2.5 rounded-xl border border-stone-200 shadow-xs flex flex-col lg:flex-row gap-2.5 items-stretch lg:items-center justify-between">
             {/* Search Box */}
             <div className="relative flex-1 min-w-[220px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-              <input
+              <input data-ui="input"
                 type="text"
                 placeholder={
                   entityType === 'customers'
@@ -540,7 +538,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                 className="w-full pl-9 pr-8 py-1.5 text-xs bg-stone-50 hover:bg-white focus:bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
               />
               {query && (
-                <button
+                <button data-ui="button"
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
                   onClick={() => setQuery('')}
                 >
@@ -554,7 +552,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               {/* Type Filter Pills */}
               {entityType === 'distributors' ? (
                 <div className="flex items-center bg-stone-100 p-0.5 rounded-lg text-xs font-medium border border-stone-200/60">
-                  <button
+                  <button data-ui="button"
                     className={`px-2.5 py-1 rounded-md transition-all ${
                       typeFilter === 'all' ? 'bg-white shadow-xs font-bold text-stone-900' : 'text-stone-600 hover:text-stone-900'
                     }`}
@@ -562,7 +560,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                   >
                     All Channels ({db.customers.filter((c) => c.type === 'Distributor' || c.type === 'Sales Representative').length})
                   </button>
-                  <button
+                  <button data-ui="button"
                     className={`px-2.5 py-1 rounded-md transition-all ${
                       typeFilter === 'Distributor'
                         ? 'bg-white shadow-xs font-bold text-emerald-700'
@@ -572,7 +570,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                   >
                     Distributors ({db.customers.filter((c) => c.type === 'Distributor').length})
                   </button>
-                  <button
+                  <button data-ui="button"
                     className={`px-2.5 py-1 rounded-md transition-all ${
                       typeFilter === 'Sales Representative'
                         ? 'bg-white shadow-xs font-bold text-teal-700'
@@ -585,7 +583,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                 </div>
               ) : entityType === 'customers' ? (
                 <div className="flex items-center bg-stone-100 p-0.5 rounded-lg text-xs font-medium border border-stone-200/60">
-                  <button
+                  <button data-ui="button"
                     className={`px-2.5 py-1 rounded-md transition-all ${
                       typeFilter === 'all' ? 'bg-white shadow-xs font-bold text-stone-900' : 'text-stone-600 hover:text-stone-900'
                     }`}
@@ -593,7 +591,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                   >
                     All ({retailerCount + otherCount})
                   </button>
-                  <button
+                  <button data-ui="button"
                     className={`px-2.5 py-1 rounded-md transition-all ${
                       typeFilter === 'Retailer'
                         ? 'bg-white shadow-xs font-bold text-blue-700'
@@ -603,7 +601,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                   >
                     Retailers ({retailerCount})
                   </button>
-                  <button
+                  <button data-ui="button"
                     className={`px-2.5 py-1 rounded-md transition-all ${
                       typeFilter === 'Other'
                         ? 'bg-white shadow-xs font-bold text-amber-700'
@@ -619,7 +617,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
               {/* Balance Filter Dropdown */}
               <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1">
                 <Filter className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                <select
+                <select data-ui="select"
                   value={balanceFilter}
                   onChange={(e) => setBalanceFilter(e.target.value as any)}
                   className="text-xs bg-transparent border-0 text-stone-700 font-medium focus:outline-none cursor-pointer pr-1"
@@ -638,9 +636,9 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
           </div>
 
           {/* Profiles Table (Fit within 1440px desktop with no horizontal scroll) */}
-          <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
+          <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table data-ui="table" className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-500 text-[10.5px] uppercase tracking-wider font-bold">
                     <th className="py-2.5 px-3">{entityType === 'customers' ? 'Shop & Owner' : 'Party & Agency Title'}</th>
@@ -676,7 +674,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                               <span className="text-[10px] font-mono text-stone-400 bg-stone-100 px-1.5 py-0.2 rounded font-normal shrink-0">
                                 {c.id}
                               </span>
-                              <ChevronRight className="w-3 h-3 text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <ChevronRight className="w-3 h-3 text-stone-500 opacity-100 transition-opacity" />
                             </div>
                             <div className="text-[11px] text-stone-500 flex items-center gap-1 mt-0.5">
                               <span>Owner: {c.name}</span>
@@ -792,7 +790,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                         {/* Actions */}
                         <td className="py-2.5 px-3 text-right">
                           <div className="row-actions justify-end">
-                            <button
+                            <button data-ui="button"
                               className="row-action text-[#7cb518] hover:bg-emerald-50"
                               title="View Full Profile & Ledger"
                               onClick={() => {
@@ -802,28 +800,28 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="row-action text-emerald-600 hover:bg-emerald-50"
                               title="Create Invoice for this party"
                               onClick={() => setIsCreatingInvoiceForParty(c)}
                             >
                               <FilePlus className="w-3.5 h-3.5" />
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="row-action text-blue-600 hover:bg-blue-50"
                               title="Record Payment / Collection"
                               onClick={() => setPaymentModalProfile(c)}
                             >
                               <CreditCard className="w-3.5 h-3.5" />
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="row-action hover:bg-stone-100"
                               title="Edit Profile"
                               onClick={() => setEditingProfile(c)}
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
-                            <button
+                            <button data-ui="button"
                               className="row-action danger"
                               title="Delete Profile"
                               onClick={() => handleDeleteProfile(c.id, c.businessName || c.name)}
@@ -990,7 +988,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
       {/* LIGHTBOX MODAL FOR SCREENSHOTS & INVOICE IMAGES */}
       {lightboxImage && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setLightboxImage(null)}>
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-4 overflow-hidden shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+          <div data-ui="surface" className="bg-white rounded-2xl max-w-3xl w-full p-4 overflow-hidden shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-3 border-b border-gray-200">
               <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-[#7cb518]" /> {lightboxImage.title}
@@ -1004,7 +1002,7 @@ export default function SalesEntitiesView({ db, entityType, onSaveDatabase }: Sa
                 >
                   <Download className="w-4 h-4" />
                 </a>
-                <button
+                <button data-ui="button"
                   className="p-1.5 text-gray-500 hover:text-gray-800 rounded-lg hover:bg-gray-100"
                   onClick={() => setLightboxImage(null)}
                 >
@@ -1143,7 +1141,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
   return (
     <div className="space-y-6">
       {/* Profile Header & Contact Card */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs">
+      <div data-ui="surface" className="gradient-card bg-white border border-gray-200 rounded-2xl p-6 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-gray-100">
           <div className="flex items-start gap-4">
             <div className="w-16 h-16 rounded-2xl bg-[#7cb518]/10 text-[#7cb518] flex items-center justify-center font-black text-2xl border border-[#7cb518]/20">
@@ -1212,16 +1210,16 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
 
           {/* Header Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
-            <button className="button secondary text-xs" onClick={handleShareWhatsApp}>
+            <button data-ui="button" className="button secondary text-xs" onClick={handleShareWhatsApp}>
               <Share2 className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp Statement
             </button>
-            <button className="button secondary text-xs" onClick={() => generateLedgerPDF(profile, ledgers, true)}>
+            <button data-ui="button" className="button secondary text-xs" onClick={() => generateLedgerPDF(profile, ledgers, true)}>
               <Download className="w-3.5 h-3.5 text-gray-600" /> PDF Ledger
             </button>
-            <button className="button secondary text-xs" onClick={onCreateInvoice}>
+            <button data-ui="button" className="button secondary text-xs" onClick={onCreateInvoice}>
               <FilePlus className="w-3.5 h-3.5 text-[#7cb518]" /> + New Delivery
             </button>
-            <button className="button primary text-xs" onClick={onRecordPayment}>
+            <button data-ui="button" className="button primary text-xs" onClick={onRecordPayment}>
               <CreditCard className="w-3.5 h-3.5" /> + Record Payment
             </button>
           </div>
@@ -1229,25 +1227,25 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
 
         {/* Financial KPI Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-6 text-xs">
-          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+          <div data-ui="surface" className="gradient-card bg-gray-50 p-3.5 rounded-xl border border-gray-100">
             <span className="text-gray-500 block mb-1">Total Products Invoiced</span>
             <strong className="text-base text-gray-900">{formatPKR(totalInvoiced)}</strong>
             <span className="text-[10px] text-gray-400 block mt-0.5">{linkedInvoices.length} shipments delivered</span>
           </div>
 
-          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+          <div data-ui="surface" className="gradient-card bg-gray-50 p-3.5 rounded-xl border border-gray-100">
             <span className="text-gray-500 block mb-1">Total Payments Received</span>
             <strong className="text-base text-emerald-700">{formatPKR(lifetimePaid)}</strong>
             <span className="text-[10px] text-emerald-600 block mt-0.5">Cleared into company accounts</span>
           </div>
 
-          <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200/80">
+          <div data-ui="surface" className="gradient-card bg-amber-50/60 p-3.5 rounded-xl border border-amber-200/80">
             <span className="text-amber-800 font-semibold block mb-1">Current Balance Due</span>
             <strong className="text-base text-amber-900">{formatPKR(profile.currentBalance)}</strong>
             <span className="text-[10px] text-amber-700 block mt-0.5">Total outstanding receivable</span>
           </div>
 
-          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+          <div data-ui="surface" className="gradient-card bg-gray-50 p-3.5 rounded-xl border border-gray-100">
             <span className="text-gray-500 block mb-1">Authorized Credit Limit</span>
             <strong className="text-base text-gray-900">{formatPKR(profile.creditLimit)}</strong>
             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1.5 overflow-hidden">
@@ -1259,7 +1257,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
             <span className="text-[10px] text-gray-500 block mt-1">Available: {formatPKR(availableCredit)}</span>
           </div>
 
-          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+          <div data-ui="surface" className="gradient-card bg-gray-50 p-3.5 rounded-xl border border-gray-100">
             <span className="text-gray-500 block mb-1">Opening Balance</span>
             <strong className="text-base text-gray-700">{formatPKR(profile.openingBalance || 0)}</strong>
             <span className="text-[10px] text-gray-400 block mt-0.5">Brought forward</span>
@@ -1269,7 +1267,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
 
       {/* Sub-Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-gray-200 pb-px font-medium text-xs">
-        <button
+        <button data-ui="tab"
           className={`pb-3 px-4 flex items-center gap-1.5 border-b-2 transition-colors ${
             activeTab === 'products'
               ? 'border-[#7cb518] text-[#7cb518] font-bold'
@@ -1281,7 +1279,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
           <span>Deliveries & Shipments (Products) ({allSuppliedProducts.length})</span>
         </button>
 
-        <button
+        <button data-ui="tab"
           className={`pb-3 px-4 flex items-center gap-1.5 border-b-2 transition-colors ${
             activeTab === 'invoices'
               ? 'border-[#7cb518] text-[#7cb518] font-bold'
@@ -1293,7 +1291,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
           <span>Invoices & Deals ({linkedInvoices.length})</span>
         </button>
 
-        <button
+        <button data-ui="tab"
           className={`pb-3 px-4 flex items-center gap-1.5 border-b-2 transition-colors ${
             activeTab === 'ledger'
               ? 'border-[#7cb518] text-[#7cb518] font-bold'
@@ -1305,7 +1303,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
           <span>Full Ledger / Account Statement ({ledgers.length})</span>
         </button>
 
-        <button
+        <button data-ui="tab"
           className={`pb-3 px-4 flex items-center gap-1.5 border-b-2 transition-colors ${
             activeTab === 'payments'
               ? 'border-[#7cb518] text-[#7cb518] font-bold'
@@ -1323,7 +1321,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
         <div className="space-y-4">
           {/* Aggregated Totals By Product */}
           {Object.keys(productAggregates).length > 0 && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <div data-ui="surface" className="gradient-card bg-gray-50 border border-gray-200 rounded-xl p-4">
               <div className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
                 Cumulative Product Quantities Delivered to this Party / Shop
               </div>
@@ -1349,7 +1347,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
           <div className="flex items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
+              <input data-ui="input"
                 type="text"
                 placeholder="Filter by product name or shipment/invoice #..."
                 value={productSearch}
@@ -1358,10 +1356,10 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
               />
             </div>
             <div className="flex items-center gap-2">
-              <button className="button secondary text-xs py-1.5" onClick={onCreateInvoice}>
+              <button data-ui="button" className="button secondary text-xs py-1.5" onClick={onCreateInvoice}>
                 <FilePlus className="w-3.5 h-3.5 text-[#7cb518]" /> + Dispatch Delivery
               </button>
-              <button className="button secondary text-xs py-1.5" onClick={handleExportProductHistoryCSV}>
+              <button data-ui="button" className="button secondary text-xs py-1.5" onClick={handleExportProductHistoryCSV}>
                 <Download className="w-3.5 h-3.5" /> Export Products CSV
               </button>
             </div>
@@ -1370,7 +1368,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
           {/* Products History Table */}
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Date & Time</th>
@@ -1425,14 +1423,14 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
             <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">
               Linked Delivery Invoices & Deal Settlements
             </span>
-            <button className="button primary text-xs py-1.5" onClick={onCreateInvoice}>
+            <button data-ui="button" className="button primary text-xs py-1.5" onClick={onCreateInvoice}>
               <Plus className="w-3.5 h-3.5" /> Create Delivery Invoice
             </button>
           </div>
 
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Invoice / Deal #</th>
@@ -1483,7 +1481,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
                         </td>
                         <td>
                           {hasImage ? (
-                            <button
+                            <button data-ui="button"
                               className="flex items-center gap-1 text-xs text-[#7cb518] hover:underline font-semibold"
                               onClick={() => onOpenLightbox(imgUrl!, `Invoice ${inv.invoiceNumber}`)}
                             >
@@ -1492,7 +1490,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
                           ) : (
                             <label className="cursor-pointer flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-700">
                               <Upload className="w-3 h-3" /> Attach Photo
-                              <input
+                              <input data-ui="file"
                                 type="file"
                                 accept="image/*"
                                 className="hidden"
@@ -1528,7 +1526,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
                         </td>
                         <td>
                           <div className="row-actions justify-end">
-                            <button
+                            <button data-ui="button"
                               className="row-action text-[#7cb518]"
                               title="Download PDF Invoice"
                               onClick={() => generateInvoicePDF(inv, profile)}
@@ -1562,7 +1560,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
               Chronological Running Balance Statement
             </span>
             <div className="flex items-center gap-2">
-              <button className="button secondary text-xs py-1.5" onClick={() => generateLedgerPDF(profile, ledgers, true)}>
+              <button data-ui="button" className="button secondary text-xs py-1.5" onClick={() => generateLedgerPDF(profile, ledgers, true)}>
                 <Download className="w-3.5 h-3.5" /> Download PDF Statement
               </button>
             </div>
@@ -1570,7 +1568,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
 
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -1625,14 +1623,14 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
             <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">
               Payments & Collections Received Log
             </span>
-            <button className="button primary text-xs py-1.5" onClick={onRecordPayment}>
+            <button data-ui="button" className="button primary text-xs py-1.5" onClick={onRecordPayment}>
               <Plus className="w-3.5 h-3.5" /> Record Payment
             </button>
           </div>
 
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Receipt #</th>
@@ -1672,7 +1670,7 @@ _Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOStrin
                       <td className="text-xs font-mono text-gray-600">{pay.transactionRef || '—'}</td>
                       <td>
                         {pay.receiptImage ? (
-                          <button
+                          <button data-ui="button"
                             className="flex items-center gap-1 text-xs text-blue-600 hover:underline font-semibold"
                             onClick={() => onOpenLightbox(pay.receiptImage!, `Receipt ${pay.receiptNumber}`)}
                           >
@@ -1737,7 +1735,7 @@ function ProfileEditorModal({
   const [status, setStatus] = useState<'Active' | 'Blocked'>(profile?.status || 'Active')
   const [notes, setNotes] = useState(profile?.notes || '')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() && !businessName.trim()) {
       alert('Please enter either a Shop Name or Owner Name.')
@@ -1765,6 +1763,7 @@ function ProfileEditorModal({
       paymentRecords: profile?.paymentRecords || [],
       updatedAt: now,
     }
+    if (profile && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(saved)
   }
 
@@ -1776,7 +1775,7 @@ function ProfileEditorModal({
             <p className="eyebrow">Commerce & Accounts Management</p>
             <h2>{profile ? 'Edit Profile Biodata' : 'Add Customer / Shop Profile'}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -1784,12 +1783,12 @@ function ProfileEditorModal({
         <div className="form-grid">
           <label>
             Profile ID (Auto or Manual) *
-            <input value={id} onChange={(e) => setId(e.target.value)} placeholder="e.g. SHOP-101 or DIST-101" required />
+            <input data-ui="input" value={id} onChange={(e) => setId(e.target.value)} placeholder="e.g. SHOP-101 or DIST-101" required />
           </label>
 
           <label>
             Account / Client Type *
-            <select value={type} onChange={(e) => setType(e.target.value as any)}>
+            <select data-ui="select" value={type} onChange={(e) => setType(e.target.value as any)}>
               <option value="Retailer">Retail Store / Mart / Baker</option>
               <option value="Wholesaler">City Wholesaler / Bulk Buyer</option>
               <option value="Distributor">Exclusive Regional Distributor</option>
@@ -1800,64 +1799,64 @@ function ProfileEditorModal({
 
           <label>
             Shop / Business Title *
-            <input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Gulberg Supermart & Bakers" required />
+            <input data-ui="input" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Gulberg Supermart & Bakers" required />
           </label>
 
           <label>
             Owner / Proprietor Name *
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Haji Noor Muhammad" required />
+            <input data-ui="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Haji Noor Muhammad" required />
           </label>
 
           <label>
             Primary Phone / WhatsApp *
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0344 9549051" required />
+            <input data-ui="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0344 9549051" required />
           </label>
 
           <label>
             Alternate Phone (Optional)
-            <input value={altPhone} onChange={(e) => setAltPhone(e.target.value)} placeholder="0300 XXXXXXX" />
+            <input data-ui="input" value={altPhone} onChange={(e) => setAltPhone(e.target.value)} placeholder="0300 XXXXXXX" />
           </label>
 
           <label>
             City *
-            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Peshawar, Lahore, Rawalpindi" required />
+            <input data-ui="input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Peshawar, Lahore, Rawalpindi" required />
           </label>
 
           <label>
             Market / Area / Territory
-            <input value={territory} onChange={(e) => setTerritory(e.target.value)} placeholder="e.g. Karkhano Wholesale Market" />
+            <input data-ui="input" value={territory} onChange={(e) => setTerritory(e.target.value)} placeholder="e.g. Karkhano Wholesale Market" />
           </label>
 
           <label className="col-span-2">
             Shop / Warehouse / Delivery Address *
-            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Shop #, Market, Street Address" required />
+            <input data-ui="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Shop #, Market, Street Address" required />
           </label>
 
           <label>
             CNIC / Tax NTN (Optional)
-            <input value={cnic} onChange={(e) => setCnic(e.target.value)} placeholder="17301-XXXXXXX-X" />
+            <input data-ui="input" value={cnic} onChange={(e) => setCnic(e.target.value)} placeholder="17301-XXXXXXX-X" />
           </label>
 
           <label>
             Email Address (Optional)
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="shop@gmail.com" />
+            <input data-ui="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="shop@gmail.com" />
           </label>
 
           <label>
             Authorized Trade Credit Limit (Rs)
-            <input type="number" min="0" value={creditLimit} onChange={(e) => setCreditLimit(Number(e.target.value))} />
+            <input data-ui="input" type="number" min="0" value={creditLimit} onChange={(e) => setCreditLimit(Number(e.target.value))} />
           </label>
 
           {!profile && (
             <label>
               Opening Balance (Rs)
-              <input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(Number(e.target.value))} />
+              <input data-ui="input" type="number" value={openingBalance} onChange={(e) => setOpeningBalance(Number(e.target.value))} />
             </label>
           )}
 
           <label>
             Account Status
-            <select value={status} onChange={(e) => setStatus(e.target.value as any)}>
+            <select data-ui="select" value={status} onChange={(e) => setStatus(e.target.value as any)}>
               <option value="Active">Active</option>
               <option value="Blocked">Blocked</option>
             </select>
@@ -1865,7 +1864,7 @@ function ProfileEditorModal({
 
           <label className="col-span-2">
             Commercial Notes / Delivery Instructions
-            <textarea
+            <textarea data-ui="textarea"
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -1876,10 +1875,10 @@ function ProfileEditorModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Save Profile
           </button>
         </div>
@@ -2056,7 +2055,7 @@ function CreateDeliveryInvoiceModal({
             <h2>Dispatch Bulk Delivery / Invoice</h2>
             <p className="text-xs text-gray-500">Party: <strong>{party.businessName || party.name}</strong> ({party.city})</p>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -2065,11 +2064,11 @@ function CreateDeliveryInvoiceModal({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="text-xs font-semibold text-gray-700">
               Delivery Date *
-              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1" />
+              <input data-ui="input" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1" />
             </label>
             <label className="text-xs font-semibold text-gray-700">
               Payment Mode *
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)} className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1">
+              <select data-ui="select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)} className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1">
                 <option value="Cash">Cash (Driver / Counter)</option>
                 <option value="Card">Card</option>
                 <option value="Online">Online IBFT / Raast</option>
@@ -2078,7 +2077,7 @@ function CreateDeliveryInvoiceModal({
             </label>
             <label className="text-xs font-semibold text-gray-700">
               Deposit To Company Account
-              <select value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)} className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1">
+              <select data-ui="select" value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)} className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1">
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>{acc.name}</option>
                 ))}
@@ -2087,12 +2086,12 @@ function CreateDeliveryInvoiceModal({
           </div>
 
           {/* Add Product Row */}
-          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
+          <div data-ui="surface" className="gradient-card bg-gray-50 p-3 rounded-xl border border-gray-200">
             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">Select Products for Shipment</span>
             <div className="flex flex-col sm:flex-row gap-2 items-end">
               <div className="flex-1">
                 <label className="text-[11px] text-gray-500 font-semibold block mb-1">Product</label>
-                <select
+                <select data-ui="select"
                   value={selectedProductId}
                   onChange={(e) => setSelectedProductId(e.target.value)}
                   className="w-full text-xs border border-gray-300 rounded p-1.5 bg-white"
@@ -2106,7 +2105,7 @@ function CreateDeliveryInvoiceModal({
               </div>
               <div className="w-24">
                 <label className="text-[11px] text-gray-500 font-semibold block mb-1">Quantity</label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="1"
                   value={addQty}
@@ -2114,15 +2113,15 @@ function CreateDeliveryInvoiceModal({
                   className="w-full text-xs border border-gray-300 rounded p-1.5"
                 />
               </div>
-              <button type="button" className="button secondary text-xs py-1.5 h-auto whitespace-nowrap" onClick={handleAddItem}>
+              <button data-ui="button" type="button" className="button secondary text-xs py-1.5 h-auto whitespace-nowrap" onClick={handleAddItem}>
                 <Plus className="w-3.5 h-3.5" /> Add Line Item
               </button>
             </div>
           </div>
 
           {/* Items Table */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <table className="w-full text-xs">
+          <div className="gradient-card border border-gray-200 rounded-xl overflow-hidden">
+            <table data-ui="table" className="w-full text-xs">
               <thead className="bg-gray-100 text-gray-600 font-semibold">
                 <tr>
                   <th className="p-2 text-left">Product</th>
@@ -2140,7 +2139,7 @@ function CreateDeliveryInvoiceModal({
                     <td className="p-2 text-right">{formatPKR(it.unitPrice)}</td>
                     <td className="p-2 text-right font-bold text-gray-900">{formatPKR(it.total)}</td>
                     <td className="p-2 text-center">
-                      <button type="button" className="text-red-500 hover:text-red-700" onClick={() => handleRemoveItem(idx)}>
+                      <button data-ui="button" type="button" className="text-red-500 hover:text-red-700" onClick={() => handleRemoveItem(idx)}>
                         <X className="w-4 h-4 mx-auto" />
                       </button>
                     </td>
@@ -2156,15 +2155,15 @@ function CreateDeliveryInvoiceModal({
           </div>
 
           {/* Totals and Payment summary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs">
+          <div data-ui="surface" className="gradient-card grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs">
             <div className="space-y-2">
               <label className="block text-gray-700 font-semibold">
                 Delivery Notes / Vehicle / Driver
-                <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Dispatched via Suzuki Carry # LEB-9021" className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1 bg-white" />
+                <input data-ui="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Dispatched via Suzuki Carry # LEB-9021" className="w-full text-xs border border-gray-300 rounded p-1.5 mt-1 bg-white" />
               </label>
               <div>
                 <label className="block text-gray-700 font-semibold mb-1">Attach Signed Delivery Receipt / Invoice Photo</label>
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs" />
+                <input data-ui="file" type="file" accept="image/*" onChange={handleImageUpload} className="text-xs" />
                 {invoiceImage && <span className="text-emerald-600 font-bold block mt-1">✓ Photo attached</span>}
               </div>
             </div>
@@ -2176,7 +2175,7 @@ function CreateDeliveryInvoiceModal({
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Special Discount (Rs):</span>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={discount}
@@ -2190,7 +2189,7 @@ function CreateDeliveryInvoiceModal({
               </div>
               <div className="flex justify-between items-center border-t border-gray-200 pt-1.5">
                 <span className="text-gray-700 font-bold">Amount Paid on Delivery (Rs):</span>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   value={amountPaid}
@@ -2207,10 +2206,10 @@ function CreateDeliveryInvoiceModal({
         </div>
 
         <div className="editor-actions mt-4">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             <Check className="w-4 h-4" /> Dispatch & Issue Delivery Invoice
           </button>
         </div>
@@ -2252,7 +2251,7 @@ function RecordPaymentModal({
     reader.readAsDataURL(file)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!amount || amount <= 0) {
       alert('Please enter a valid payment amount.')
@@ -2273,6 +2272,7 @@ function RecordPaymentModal({
       createdAt: new Date().toISOString(),
     }
 
+    if (!(await confirmAction({"title":"Record this transaction?","message":"Save this transaction and update the associated account balances?","confirmLabel":"Record transaction","destructive":false}))) return
     onSave(paymentRecord, paymentAccount)
   }
 
@@ -2286,13 +2286,13 @@ function RecordPaymentModal({
             <p className="eyebrow">Financial Settlement & Clearance</p>
             <h2>Record Payment Collection</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
 
         {/* Current Balance Summary Box */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-4 text-xs flex justify-between items-center">
+        <div data-ui="surface" className="gradient-card bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-4 text-xs flex justify-between items-center">
           <div>
             <span className="text-amber-800 font-medium block">Party / Shop Name:</span>
             <strong className="text-gray-900 text-sm">{profile.businessName || profile.name}</strong>
@@ -2306,7 +2306,7 @@ function RecordPaymentModal({
         <div className="form-grid">
           <label>
             Payment Amount Received (Rs) *
-            <input
+            <input data-ui="input"
               type="number"
               min="1"
               value={amount}
@@ -2318,12 +2318,12 @@ function RecordPaymentModal({
 
           <label>
             Payment Date *
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <input data-ui="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </label>
 
           <label>
             Payment Method *
-            <select
+            <select data-ui="select"
               value={paymentMethod}
               onChange={(e) => {
                 const m = e.target.value as any
@@ -2342,7 +2342,7 @@ function RecordPaymentModal({
 
           <label>
             Deposit To Account *
-            <select value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)}>
+            <select data-ui="select" value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)}>
               {accounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
                   {acc.name} (Current: {formatPKR(acc.balance)})
@@ -2353,7 +2353,7 @@ function RecordPaymentModal({
 
           <label className="col-span-2">
             Transaction Reference / Slip / Cheque #
-            <input
+            <input data-ui="input"
               value={transactionRef}
               onChange={(e) => setTransactionRef(e.target.value)}
               placeholder="e.g. RAAST-88219 or MZB-IBFT-889123 or Cheque # 049281"
@@ -2365,14 +2365,14 @@ function RecordPaymentModal({
             <label className="text-xs font-semibold text-gray-700 block">
               Attach Online Transaction Screenshot / Bank Slip Photo (Optional)
             </label>
-            <div className="border-2 border-dashed border-gray-300 hover:border-[#7cb518] rounded-xl p-3 text-center transition-colors bg-gray-50 flex flex-col items-center justify-center">
+            <div data-ui="surface" className="gradient-card border-2 border-dashed border-gray-300 hover:border-[#7cb518] rounded-xl p-3 text-center transition-colors bg-gray-50 flex flex-col items-center justify-center">
               {receiptImage ? (
                 <div className="relative w-full flex items-center justify-between p-2 bg-white rounded-lg border border-gray-200">
                   <div className="flex items-center gap-2">
                     <img src={receiptImage} alt="Receipt Preview" className="w-10 h-10 object-cover rounded" />
                     <span className="text-xs font-medium text-gray-800">Payment Screenshot Attached</span>
                   </div>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     className="text-xs text-red-600 font-bold px-2 py-1 hover:bg-red-50 rounded"
                     onClick={() => setReceiptImage(undefined)}
@@ -2385,7 +2385,7 @@ function RecordPaymentModal({
                   <Upload className="w-5 h-5 text-gray-400" />
                   <span>Click to select or drag transaction receipt photo</span>
                   <span className="text-[10px] text-gray-400">Stored locally in offline storage</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                  <input data-ui="file" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                 </label>
               )}
             </div>
@@ -2393,12 +2393,12 @@ function RecordPaymentModal({
 
           <label className="col-span-2">
             Notes / Voucher Remarks
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Cleared via Raast online app or cash collection." />
+            <input data-ui="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Cleared via Raast online app or cash collection." />
           </label>
         </div>
 
         {/* Balance After Payment Preview */}
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mt-4 flex justify-between items-center text-xs">
+        <div data-ui="surface" className="gradient-card bg-gray-50 border border-gray-200 rounded-xl p-3 mt-4 flex justify-between items-center text-xs">
           <span className="text-gray-600">Remaining Balance After Payment:</span>
           <strong className={newBalance > 0 ? 'text-amber-700 font-black text-sm' : 'text-emerald-700 font-black text-sm'}>
             {formatPKR(newBalance)}
@@ -2406,10 +2406,10 @@ function RecordPaymentModal({
         </div>
 
         <div className="editor-actions mt-4">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             <Check className="w-4 h-4" /> Save & Issue Receipt
           </button>
         </div>

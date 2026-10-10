@@ -1,5 +1,9 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
+import ModuleHeading from './module-heading'
+
 import { useState, useEffect } from 'react'
 import {
   CircleDollarSign,
@@ -155,12 +159,12 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
   return (
     <div className="page-stack">
       {/* Top Accounts Horizontal Navigation Bar */}
-      <div className="bg-white rounded-xl border border-stone-200 p-2 shadow-xs sticky top-[71px] z-20">
+      <div data-ui="surface" className="gradient-card module-tabs bg-white rounded-xl border border-stone-200 p-2 shadow-xs sticky top-[76px] z-[9]">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
           {tabs.map((t) => {
             const isActive = currentView === t.id
             return (
-              <button
+              <button data-ui="tab"
                 key={t.id}
                 id={`accounts-tab-${t.id}`}
                 onClick={() => setTab(t.id)}
@@ -179,7 +183,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
       </div>
 
       {/* Heading */}
-      <div className="page-heading">
+      <ModuleHeading icon="accounts">
         <div>
           <p className="eyebrow">Financial Accounts & Books</p>
           <h1>
@@ -206,20 +210,20 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
         <div className="heading-actions">
           {currentView === 'daily-summary' && (
             <>
-              <input
+              <input data-ui="input"
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white"
               />
-              <button className="button secondary" onClick={exportDailyCSV}>
+              <button data-ui="button" className="button secondary" onClick={exportDailyCSV}>
                 <Download /> Export CSV
               </button>
             </>
           )}
 
           {currentView === 'monthly-summary' && (
-            <input
+            <input data-ui="input"
               type="month"
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
@@ -228,7 +232,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
           )}
 
           {currentView === 'yearly-summary' && (
-            <select
+            <select data-ui="select"
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
               className="border border-[var(--border)] rounded-md px-3 py-1.5 text-xs bg-white"
@@ -239,12 +243,12 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
           )}
 
           {currentView === 'cash-bank' && (
-            <button className="button primary" onClick={() => setShowTransferModal(true)}>
+            <button data-ui="button" className="button primary" onClick={() => setShowTransferModal(true)}>
               <ArrowRightLeft /> Transfer Funds
             </button>
           )}
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* VIEW: DAILY SUMMARY */}
       {currentView === 'daily-summary' && (
@@ -287,7 +291,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
                 </div>
               </div>
               <div className="table-scroll">
-                <table>
+                <table data-ui="table">
                   <thead>
                     <tr>
                       <th>Invoice #</th>
@@ -332,7 +336,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
                 </div>
               </div>
               <div className="table-scroll">
-                <table>
+                <table data-ui="table">
                   <thead>
                     <tr>
                       <th>Voucher #</th>
@@ -403,7 +407,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+              <div data-ui="surface" className="gradient-card bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
                 <h3 className="font-bold text-sm text-gray-900 border-b border-gray-200 pb-2">Revenue & Inflows</h3>
                 <div className="flex justify-between text-gray-700">
                   <span>Gross Finished Goods Invoiced:</span>
@@ -423,7 +427,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
                 </div>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+              <div data-ui="surface" className="gradient-card bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
                 <h3 className="font-bold text-sm text-gray-900 border-b border-gray-200 pb-2">Costs & Expenses</h3>
                 <div className="flex justify-between text-gray-700">
                   <span>Cost of Finished Goods Sold (COGS):</span>
@@ -495,7 +499,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
               <h2>Income & Profit/Loss Statement</h2>
               <p>For Period: All Current Recorded Operations (2026)</p>
             </div>
-            <button
+            <button data-ui="button"
               className="button secondary"
               onClick={() => {
                 const headers = ['Category', 'Particulars', 'Amount (PKR)']
@@ -515,7 +519,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
 
           <div className="space-y-4 text-xs">
             {/* 1. REVENUE */}
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <div data-ui="surface" className="gradient-card bg-gray-50 p-4 rounded-xl border border-gray-200">
               <h3 className="font-bold text-sm text-gray-900 mb-2">1. Operating Revenue</h3>
               <div className="flex justify-between py-1 border-b border-gray-200">
                 <span>Gross Commercial Sales (Water, Juices, Snacks)</span>
@@ -532,7 +536,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
             </div>
 
             {/* 2. COST OF GOODS SOLD */}
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <div data-ui="surface" className="gradient-card bg-gray-50 p-4 rounded-xl border border-gray-200">
               <h3 className="font-bold text-sm text-gray-900 mb-2">2. Cost of Goods Sold (COGS)</h3>
               <div className="flex justify-between py-1 border-b border-gray-200">
                 <span>Raw Materials Consumed in Production (Sugar, Pulp, Preforms)</span>
@@ -553,7 +557,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
             </div>
 
             {/* 3. GROSS PROFIT */}
-            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex justify-between items-center text-sm font-bold text-emerald-950">
+            <div data-ui="surface" className="gradient-card bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex justify-between items-center text-sm font-bold text-emerald-950">
               <span>3. Gross Manufacturing Profit:</span>
               <span className="text-base text-emerald-700">
                 {formatPKR(
@@ -564,7 +568,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
             </div>
 
             {/* 4. OPERATING EXPENSES */}
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <div data-ui="surface" className="gradient-card bg-gray-50 p-4 rounded-xl border border-gray-200">
               <h3 className="font-bold text-sm text-gray-900 mb-2">4. General, Factory & Selling Overheads</h3>
               {['Factory Electricity', 'Labor & Wages', 'Fuel & Diesel', 'Machinery Maintenance', 'Factory Rent', 'Freight & Transport'].map((cat) => {
                 const amt = db.expenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0)
@@ -582,7 +586,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
             </div>
 
             {/* 5. NET PROFIT */}
-            <div className="bg-[#7cb518] text-white p-5 rounded-xl flex justify-between items-center font-bold text-base shadow-lg">
+            <div data-ui="surface" className="bg-[#7cb518] text-white p-5 rounded-xl flex justify-between items-center font-bold text-base shadow-lg">
               <div>
                 <span className="block text-xs uppercase tracking-wider text-lime-100 font-normal">Final Net Yield</span>
                 <span>NET OPERATING PROFIT</span>
@@ -623,13 +627,13 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
                 <h2>Recent Bank & Cash Transfers</h2>
                 <p>Audited inter-account fund shifts</p>
               </div>
-              <button className="button primary" onClick={() => setShowTransferModal(true)}>
+              <button data-ui="button" className="button primary" onClick={() => setShowTransferModal(true)}>
                 <ArrowRightLeft /> Transfer Balance
               </button>
             </div>
 
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -677,7 +681,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
                   Print or save complete finished goods & raw materials warehouse valuation report.
                 </p>
               </div>
-              <button className="button primary w-full" onClick={() => generateStockReportPDF(db.products, db.rawMaterials)}>
+              <button data-ui="button" className="button primary w-full" onClick={() => generateStockReportPDF(db.products, db.rawMaterials)}>
                 <Download /> Download Stock PDF
               </button>
             </div>
@@ -692,7 +696,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
                   Export all distributor, wholesaler and retail account statements to Excel/CSV.
                 </p>
               </div>
-              <button
+              <button data-ui="button"
                 className="button secondary w-full"
                 onClick={() => {
                   const headers = ['Account', 'Type', 'City', 'Phone', 'Credit Limit', 'Current Balance']
@@ -714,7 +718,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
                   Export complete list of utility, wage, and maintenance vouchers to Excel.
                 </p>
               </div>
-              <button
+              <button data-ui="button"
                 className="button secondary w-full"
                 onClick={() => {
                   const headers = ['Voucher', 'Date', 'Title', 'Category', 'Amount', 'Account', 'Paid To']
@@ -756,7 +760,7 @@ function TransferFundsModal({
   const [description, setDescription] = useState('Factory cash deposit to bank account')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (fromAccount === toAccount) {
       alert('Source and destination accounts must be different.')
@@ -768,7 +772,7 @@ function TransferFundsModal({
     if (!fromAccObj || !toAccObj) return
 
     if (fromAccObj.balance < amount) {
-      if (!window.confirm('Warning: Source account balance is less than the transfer amount. Proceed anyway?')) {
+      if (!await confirmAction('Warning: Source account balance is less than the transfer amount. Proceed anyway?')) {
         return
       }
     }
@@ -809,7 +813,7 @@ function TransferFundsModal({
             <p className="eyebrow">Cash & Bank</p>
             <h2>Transfer Funds Between Accounts</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -817,7 +821,7 @@ function TransferFundsModal({
         <div className="form-grid">
           <label>
             Transfer From Account *
-            <select value={fromAccount} onChange={(e) => setFromAccount(e.target.value)} required>
+            <select data-ui="select" value={fromAccount} onChange={(e) => setFromAccount(e.target.value)} required>
               {db.accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name} (Available: {formatPKR(a.balance)})
@@ -828,7 +832,7 @@ function TransferFundsModal({
 
           <label>
             Transfer To Account *
-            <select value={toAccount} onChange={(e) => setToAccount(e.target.value)} required>
+            <select data-ui="select" value={toAccount} onChange={(e) => setToAccount(e.target.value)} required>
               {db.accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name} (Current: {formatPKR(a.balance)})
@@ -839,25 +843,25 @@ function TransferFundsModal({
 
           <label>
             Amount (Rs) *
-            <input type="number" min="1" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
+            <input data-ui="input" type="number" min="1" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
           </label>
 
           <label>
             Transfer Date
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <input data-ui="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </label>
 
           <label className="col-span-2">
             Description / Reason
-            <input value={description} onChange={(e) => setDescription(e.target.value)} required />
+            <input data-ui="input" value={description} onChange={(e) => setDescription(e.target.value)} required />
           </label>
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Execute Fund Transfer
           </button>
         </div>

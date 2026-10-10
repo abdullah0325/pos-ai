@@ -1,5 +1,7 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import React, { useState, useMemo, useEffect } from 'react'
 import {
   FileText,
@@ -74,6 +76,8 @@ export default function SalesView({
   onSaveDatabase,
   onNavigate,
 }: SalesViewProps) {
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
+
   // Filters State
   const [dateRangePreset, setDateRangePreset] = useState<
     'all' | 'today' | 'yesterday' | 'this-week' | 'this-month' | 'last-30-days' | 'custom'
@@ -433,9 +437,9 @@ export default function SalesView({
   }
 
   // Delete / Void Invoice Handler
-  const handleDeleteInvoice = (inv: InvoiceItem) => {
+  const handleDeleteInvoice = async (inv: InvoiceItem) => {
     const confirmMsg = `Are you sure you want to VOID and DELETE record "${inv.invoiceNumber}" for ${inv.customerName}?\n\nAmount: ${formatPKR(inv.grandTotal)}\nBalance: ${formatPKR(inv.balanceDue)}\n\nThis will remove it from the sales transaction ledger and adjust the customer balance if pending.`
-    if (!window.confirm(confirmMsg)) return
+    if (!await confirmAction(confirmMsg)) return
 
     // Update customer balance if pending
     let updatedCustomers = db.customers
@@ -505,7 +509,7 @@ export default function SalesView({
         <div className="fixed bottom-5 right-5 z-50 bg-stone-900 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-medium animate-in fade-in slide-in-from-bottom-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{successToast}</span>
-          <button
+          <button data-ui="button"
             onClick={() => setSuccessToast(null)}
             className="text-stone-400 hover:text-white ml-2"
           >
@@ -515,7 +519,7 @@ export default function SalesView({
       )}
 
       {/* Header Banner - Strictly Reporting & Analytics UI */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div data-ui="toolbar" className="page-title-banner gradient-card bg-white rounded-2xl border border-stone-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-stone-100 text-stone-700 uppercase tracking-wider">
@@ -536,7 +540,7 @@ export default function SalesView({
 
         {/* Header Right Actions - Clear Distinction from POS */}
         <div className="flex items-center flex-wrap gap-2.5 shrink-0 w-full md:w-auto">
-          <button
+          <button data-ui="button"
             id="sales-export-csv-btn"
             onClick={handleExportCSV}
             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
@@ -547,7 +551,7 @@ export default function SalesView({
           </button>
 
           {/* Quick link to POS for selling */}
-          <button
+          <button data-ui="button"
             id="sales-goto-pos-btn"
             onClick={() => onNavigate('pos')}
             className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
@@ -561,9 +565,9 @@ export default function SalesView({
       </div>
 
       {/* Lightweight Summary & Analytics Section */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div className="sales-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Metric 1: Total Sales */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-stone-500">Total Sales Invoiced</span>
@@ -582,7 +586,7 @@ export default function SalesView({
         </div>
 
         {/* Metric 2: Payments Collected */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-stone-500">Payments Collected</span>
@@ -601,7 +605,7 @@ export default function SalesView({
         </div>
 
         {/* Metric 3: Outstanding Receivables */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-stone-500">Outstanding Receivables</span>
@@ -617,7 +621,7 @@ export default function SalesView({
             <span className="text-amber-800 font-medium">
               {filteredInvoices.filter((i) => i.balanceDue > 0).length} parties with pending dues
             </span>
-            <button
+            <button data-ui="button"
               onClick={() => onNavigate('customer-management')}
               className="text-stone-500 hover:text-stone-900 underline text-[10px]"
             >
@@ -627,7 +631,7 @@ export default function SalesView({
         </div>
 
         {/* Metric 4: Channels Active */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-stone-500">Top Revenue Channel</span>
@@ -662,7 +666,7 @@ export default function SalesView({
       {/* Analytics Breakdown & Trend Chart Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Channel Breakdown Card */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-1.5 text-xs font-bold text-stone-900">
@@ -715,7 +719,7 @@ export default function SalesView({
 
           <div className="mt-4 pt-2.5 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
             <span>Filter channel from toolbar below</span>
-            <button
+            <button data-ui="button"
               onClick={() => setChannelFilter('All')}
               className="text-stone-600 hover:text-stone-900 font-medium"
             >
@@ -725,7 +729,7 @@ export default function SalesView({
         </div>
 
         {/* Sales Trend Chart Card */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs lg:col-span-2 flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs lg:col-span-2 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5 text-xs font-bold text-stone-900">
@@ -751,70 +755,55 @@ export default function SalesView({
       </div>
 
       {/* CORE FILTERS SECTION */}
-      <div className="bg-white rounded-xl border border-stone-200 p-3.5 shadow-xs flex flex-col gap-3">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
-          {/* Quick Date Presets */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-            <span className="text-xs font-bold text-stone-500 mr-1 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" /> Date:
-            </span>
-            {[
-              { id: 'all', label: 'All Time' },
-              { id: 'today', label: 'Today' },
-              { id: 'this-week', label: 'This Week' },
-              { id: 'this-month', label: 'This Month' },
-              { id: 'last-30-days', label: 'Last 30 Days' },
-              { id: 'custom', label: 'Custom Range' },
-            ].map((preset) => (
-              <button
-                key={preset.id}
-                onClick={() => setDateRangePreset(preset.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                  dateRangePreset === preset.id
-                    ? 'bg-stone-900 text-white font-bold'
-                    : 'bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200'
-                }`}
+      <div className="sales-filter-panel">
+        <div className="sales-filter-main">
+                    <div className="sales-filter-search relative">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input data-ui="input"
+              type="text"
+              aria-label="Search sales records" placeholder="Search sales records?"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-7 py-1.5 text-xs bg-stone-50 hover:bg-white focus:bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+            />
+            {searchQuery && (
+              <button data-ui="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                aria-label="Clear search" onClick={() => setSearchQuery('')}
               >
-                {preset.label}
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
+            )}
           </div>
 
-          {/* Active Filter Counter & Clear All */}
-          {activeFiltersCount > 0 && (
-            <div className="flex items-center gap-2 self-end md:self-auto">
-              <span className="text-[11px] font-semibold text-primary bg-lime-50 border border-lime-200 px-2 py-0.5 rounded-md">
-                {activeFiltersCount} active {activeFiltersCount === 1 ? 'filter' : 'filters'}
-              </span>
-              <button
-                onClick={resetAllFilters}
-                className="flex items-center gap-1 text-[11px] font-semibold text-stone-500 hover:text-stone-900 cursor-pointer"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Reset All</span>
-              </button>
-            </div>
-          )}
-        </div>
 
-        {/* Custom Date Pickers (if custom selected) */}
-        {dateRangePreset === 'custom' && (
-          <div className="flex items-center gap-3 bg-stone-50 p-2.5 rounded-lg border border-stone-200 text-xs">
+          <label className="sales-filter-date"><span className="sr-only">Date range</span>
+            <select data-ui="select" value={dateRangePreset} onChange={(event) => setDateRangePreset(event.target.value as typeof dateRangePreset)}>
+              <option value="all">All time</option><option value="today">Today</option><option value="this-week">This week</option><option value="this-month">This month</option><option value="last-30-days">Last 30 days</option><option value="custom">Custom range</option>
+            </select>
+          </label>
+          <button type="button" className="sales-filter-toggle" aria-expanded={showMoreFilters} aria-controls="sales-extra-filters" onClick={() => setShowMoreFilters(!showMoreFilters)}>
+            <Filter size={15} /> Filters {(channelFilter !== 'All' || paymentStatusFilter !== 'All' || partyFilter !== 'All' || productFilter !== 'All') && <span>{[channelFilter, paymentStatusFilter, partyFilter, productFilter].filter(value => value !== 'All').length}</span>}
+          </button>
+          {activeFiltersCount > 0 && <button type="button" className="sales-filter-reset" onClick={resetAllFilters}>Reset</button>}
+        </div>
+                {dateRangePreset === 'custom' && (
+          <div className="sales-custom-dates flex flex-wrap items-center gap-3 bg-stone-50 p-2.5 rounded-lg border border-stone-200 text-xs">
             <span className="font-semibold text-stone-700">Custom Date Range:</span>
             <div className="flex items-center gap-1.5">
-              <label className="text-stone-500">From:</label>
-              <input
+              <label htmlFor="sales-date-from" className="text-stone-500">From:</label>
+              <input data-ui="input"
                 type="date"
-                value={customStartDate}
+                id="sales-date-from" value={customStartDate}
                 onChange={(e) => setCustomStartDate(e.target.value)}
                 className="bg-white border border-stone-200 rounded px-2 py-1 text-xs"
               />
             </div>
             <div className="flex items-center gap-1.5">
-              <label className="text-stone-500">To:</label>
-              <input
+              <label htmlFor="sales-date-to" className="text-stone-500">To:</label>
+              <input data-ui="input"
                 type="date"
-                value={customEndDate}
+                id="sales-date-to" value={customEndDate}
                 onChange={(e) => setCustomEndDate(e.target.value)}
                 className="bg-white border border-stone-200 rounded px-2 py-1 text-xs"
               />
@@ -822,31 +811,9 @@ export default function SalesView({
           </div>
         )}
 
-        {/* Secondary Filter Controls Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 pt-2 border-t border-stone-100">
-          {/* Search Box */}
-          <div className="relative md:col-span-2">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input
-              type="text"
-              placeholder="Search invoice #, customer name, phone, item..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-7 py-1.5 text-xs bg-stone-50 hover:bg-white focus:bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
-            />
-            {searchQuery && (
-              <button
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-                onClick={() => setSearchQuery('')}
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
 
-          {/* Channel Filter */}
-          <div>
-            <select
+        {showMoreFilters && <div id="sales-extra-filters" className="sales-extra-filters">
+          <label className="sales-filter-field"><span>Channel</span><select data-ui="select"
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
               className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs bg-stone-50 text-stone-700 font-medium focus:outline-none cursor-pointer"
@@ -857,12 +824,8 @@ export default function SalesView({
               <option value="Wholesaler">Wholesaler</option>
               <option value="Retailer">Retailer</option>
               <option value="Direct / Walk-in">Direct / Walk-in</option>
-            </select>
-          </div>
-
-          {/* Payment Status Filter */}
-          <div>
-            <select
+            </select></label>
+          <label className="sales-filter-field"><span>Payment status</span><select data-ui="select"
               value={paymentStatusFilter}
               onChange={(e) => setPaymentStatusFilter(e.target.value)}
               className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs bg-stone-50 text-stone-700 font-medium focus:outline-none cursor-pointer"
@@ -871,12 +834,8 @@ export default function SalesView({
               <option value="Paid">Paid (Cleared)</option>
               <option value="Partial">Partial (Pending Balance)</option>
               <option value="Unpaid">Unpaid (Full Due)</option>
-            </select>
-          </div>
-
-          {/* Product Filter */}
-          <div>
-            <select
+            </select></label>
+          <label className="sales-filter-field"><span>Product</span><select data-ui="select"
               value={productFilter}
               onChange={(e) => setProductFilter(e.target.value)}
               className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs bg-stone-50 text-stone-700 font-medium focus:outline-none cursor-pointer truncate"
@@ -887,15 +846,8 @@ export default function SalesView({
                   {prod.name}
                 </option>
               ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Customer / Party Dropdown filter row */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 flex-1">
-            <span className="text-stone-500 font-medium whitespace-nowrap">Filter Party:</span>
-            <select
+            </select></label>
+          <label className="sales-filter-field"><span>Customer / party</span><select data-ui="select"
               value={partyFilter}
               onChange={(e) => setPartyFilter(e.target.value)}
               className="flex-1 max-w-xs border border-stone-200 rounded-lg px-2.5 py-1 text-xs bg-stone-50 text-stone-700 font-medium focus:outline-none cursor-pointer truncate"
@@ -906,19 +858,15 @@ export default function SalesView({
                   {p.name} {p.type ? `(${p.type})` : ''}
                 </option>
               ))}
-            </select>
-          </div>
-
-          <div className="text-[11px] font-medium text-stone-400 self-end sm:self-auto">
-            Showing {filteredInvoices.length} of {db.invoices.length} transactions
-          </div>
-        </div>
+            </select></label>
+        </div>}
+        <div className="sales-filter-count" aria-live="polite">Showing {filteredInvoices.length} of {db.invoices.length} transactions{activeFiltersCount > 0 && <span> ? {activeFiltersCount} active {activeFiltersCount === 1 ? 'filter' : 'filters'}</span>}</div>
       </div>
 
       {/* UNIFIED SALES RECORDS TABLE */}
-      <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
+      <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table data-ui="table" className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-500 text-[10.5px] uppercase tracking-wider font-bold">
                 <th className="py-2.5 px-3">Date & Time</th>
@@ -968,7 +916,7 @@ export default function SalesView({
 
                     {/* 2. Invoice ID */}
                     <td className="py-2.5 px-3 whitespace-nowrap">
-                      <button
+                      <button data-ui="button"
                         onClick={() => setDetailInvoice(inv)}
                         className="flex items-center gap-1.5 font-bold text-stone-900 hover:text-primary text-xs transition-colors cursor-pointer"
                         title="Click to view details"
@@ -989,7 +937,7 @@ export default function SalesView({
                       <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-stone-500">
                         <span>{inv.phone || 'No phone'}</span>
                         {linkedCustomer && (
-                          <button
+                          <button data-ui="button"
                             onClick={() => onNavigate('customer-management')}
                             className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline font-medium"
                             title="Jump to customer ledger profile"
@@ -1074,7 +1022,7 @@ export default function SalesView({
                     <td className="py-2.5 px-3 text-right whitespace-nowrap">
                       <div className="row-actions justify-end">
                         {/* 1-click PDF download */}
-                        <button
+                        <button data-ui="button"
                           className="row-action text-[#7cb518] hover:bg-emerald-50"
                           title="Download Tax Invoice PDF"
                           onClick={() => {
@@ -1086,7 +1034,7 @@ export default function SalesView({
                         </button>
 
                         {/* View details */}
-                        <button
+                        <button data-ui="button"
                           className="row-action hover:bg-stone-100"
                           title="View sale transaction details"
                           onClick={() => setDetailInvoice(inv)}
@@ -1095,7 +1043,7 @@ export default function SalesView({
                         </button>
 
                         {/* Edit record */}
-                        <button
+                        <button data-ui="button"
                           className="row-action hover:bg-blue-50 text-blue-600"
                           title="Correct sale information"
                           onClick={() => setEditInvoice(inv)}
@@ -1104,7 +1052,7 @@ export default function SalesView({
                         </button>
 
                         {/* Void / Delete record */}
-                        <button
+                        <button data-ui="button"
                           className="row-action danger"
                           title="Void and delete sale record"
                           onClick={() => handleDeleteInvoice(inv)}
@@ -1130,7 +1078,7 @@ export default function SalesView({
               filters.
             </span>
             {activeFiltersCount > 0 && (
-              <button
+              <button data-ui="button"
                 onClick={resetAllFilters}
                 className="mt-3 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-semibold"
               >
@@ -1191,7 +1139,7 @@ function SalesTrendChart({
   if (data.length === 1) {
     const point = data[0]
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-stone-50 rounded-xl border border-stone-100 p-4">
+      <div data-ui="surface" className="gradient-card w-full h-full flex flex-col items-center justify-center bg-stone-50 rounded-xl border border-stone-100 p-4">
         <span className="text-xs text-stone-500 font-semibold">{formatDate(point.date)}</span>
         <strong className="text-2xl font-black text-stone-900 mt-1">
           {formatPKR(point.amount)}
@@ -1276,7 +1224,7 @@ function SalesTrendChart({
         <path d={areaPath} fill="url(#salesGrad)" />
 
         {/* Line */}
-        <path d={linePath} fill="none" stroke="#7cb518" strokeWidth="2.5" strokeLinecap="round" />
+        <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" />
 
         {/* Data points & Interaction triggers */}
         {points.map((pt, idx) => {
@@ -1292,7 +1240,7 @@ function SalesTrendChart({
                 cx={pt.x}
                 cy={pt.y}
                 r={isHovered ? 6 : 3.5}
-                fill={isHovered ? '#2b2b2b' : '#7cb518'}
+                fill={isHovered ? '#2b2b2b' : 'var(--primary)'}
                 stroke="#ffffff"
                 strokeWidth={isHovered ? 2.5 : 1.5}
                 className="transition-all duration-150"
@@ -1393,13 +1341,13 @@ function InvoiceDetailModal({
             </div>
             <h2 className="text-xl font-bold text-stone-900 mt-1">{invoice.invoiceNumber}</h2>
           </div>
-          <button className="icon-button" onClick={onClose}>
+          <button data-ui="button" className="icon-button" onClick={onClose}>
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Party and Transaction Summary */}
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div>
             <span className="text-stone-500 block">Customer / Buyer</span>
             <strong className="text-sm text-stone-900 block mt-0.5">{invoice.customerName}</strong>
@@ -1430,7 +1378,7 @@ function InvoiceDetailModal({
 
         {/* Line Items Table */}
         <div className="border border-stone-200 rounded-lg overflow-hidden mb-4">
-          <table className="w-full text-xs">
+          <table data-ui="table" className="w-full text-xs">
             <thead className="bg-stone-100 text-stone-600 font-bold border-b border-stone-200">
               <tr>
                 <th className="py-2 px-3 text-left">#</th>
@@ -1508,17 +1456,17 @@ function InvoiceDetailModal({
 
         {/* Modal Actions */}
         <div className="editor-actions flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-stone-200">
-          <button
+          <button data-ui="button"
             className="button secondary text-xs"
             onClick={() => generateInvoicePDF(invoice, customer)}
           >
             <Download className="w-3.5 h-3.5 mr-1" /> Download Tax Invoice PDF
           </button>
           <div className="flex items-center gap-2">
-            <button className="button secondary text-xs" onClick={onEdit}>
+            <button data-ui="button" className="button secondary text-xs" onClick={onEdit}>
               <Edit3 className="w-3.5 h-3.5 mr-1" /> Correct Record
             </button>
-            <button className="button primary text-xs" onClick={onClose}>
+            <button data-ui="button" className="button primary text-xs" onClick={onClose}>
               Close
             </button>
           </div>
@@ -1568,7 +1516,7 @@ function EditSaleModal({
     }
   }
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const effectivePaid =
@@ -1598,6 +1546,7 @@ function EditSaleModal({
       notes: notes.trim() || undefined,
     }
 
+    if (!(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(correctedInvoice)
   }
 
@@ -1613,7 +1562,7 @@ function EditSaleModal({
               Edit {invoice.invoiceNumber}
             </h2>
           </div>
-          <button className="icon-button" onClick={onClose}>
+          <button data-ui="button" className="icon-button" onClick={onClose}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1622,7 +1571,7 @@ function EditSaleModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-stone-600 font-semibold mb-1">Invoice Date</label>
-              <input
+              <input data-ui="input"
                 type="date"
                 required
                 value={date}
@@ -1632,7 +1581,7 @@ function EditSaleModal({
             </div>
             <div>
               <label className="block text-stone-600 font-semibold mb-1">Time Stamp</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 placeholder="e.g. 02:45 PM"
                 value={time}
@@ -1647,7 +1596,7 @@ function EditSaleModal({
               <label className="block text-stone-600 font-semibold mb-1">
                 Customer / Party Name
               </label>
-              <input
+              <input data-ui="input"
                 type="text"
                 required
                 value={customerName}
@@ -1657,7 +1606,7 @@ function EditSaleModal({
             </div>
             <div>
               <label className="block text-stone-600 font-semibold mb-1">Phone Number</label>
-              <input
+              <input data-ui="input"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -1669,7 +1618,7 @@ function EditSaleModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-stone-600 font-semibold mb-1">Sale Channel Type</label>
-              <select
+              <select data-ui="select"
                 value={saleType}
                 onChange={(e) => setSaleType(e.target.value as any)}
                 className="w-full border border-stone-200 rounded-lg p-2 bg-stone-50 focus:bg-white"
@@ -1682,7 +1631,7 @@ function EditSaleModal({
             </div>
             <div>
               <label className="block text-stone-600 font-semibold mb-1">Delivery Status</label>
-              <select
+              <select data-ui="select"
                 value={deliveryStatus}
                 onChange={(e) => setDeliveryStatus(e.target.value as any)}
                 className="w-full border border-stone-200 rounded-lg p-2 bg-stone-50 focus:bg-white"
@@ -1695,7 +1644,7 @@ function EditSaleModal({
           </div>
 
           {/* Payment Status & Accounting */}
-          <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-3">
+          <div data-ui="surface" className="gradient-card bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-3">
             <span className="font-bold text-stone-800 block text-xs">
               Payment & Balance Corrections
             </span>
@@ -1706,7 +1655,7 @@ function EditSaleModal({
               </div>
               <div>
                 <label className="block text-stone-500 font-medium mb-1">Payment Status</label>
-                <select
+                <select data-ui="select"
                   value={paymentStatus}
                   onChange={(e) => handleStatusChange(e.target.value as any)}
                   className="w-full border border-stone-200 rounded p-1.5 bg-white font-semibold"
@@ -1718,7 +1667,7 @@ function EditSaleModal({
               </div>
               <div>
                 <label className="block text-stone-500 font-medium mb-1">Amount Paid (PKR)</label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   max={invoice.grandTotal}
@@ -1743,7 +1692,7 @@ function EditSaleModal({
                   <Calendar className="w-3.5 h-3.5 text-amber-700" />
                   <span>Payment Due Date:</span>
                 </label>
-                <input
+                <input data-ui="input"
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
@@ -1755,7 +1704,7 @@ function EditSaleModal({
             <div className="grid grid-cols-2 gap-2.5 pt-1">
               <div>
                 <label className="block text-stone-500 font-medium mb-1">Payment Method</label>
-                <select
+                <select data-ui="select"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as any)}
                   className="w-full border border-stone-200 rounded p-1.5 bg-white"
@@ -1770,7 +1719,7 @@ function EditSaleModal({
               </div>
               <div>
                 <label className="block text-stone-500 font-medium mb-1">Deposit Account</label>
-                <select
+                <select data-ui="select"
                   value={paymentAccount}
                   onChange={(e) => setPaymentAccount(e.target.value as any)}
                   className="w-full border border-stone-200 rounded p-1.5 bg-white"
@@ -1787,7 +1736,7 @@ function EditSaleModal({
             <label className="block text-stone-600 font-semibold mb-1">
               Correction Notes / Audit Remarks
             </label>
-            <textarea
+            <textarea data-ui="textarea"
               rows={2}
               placeholder="Reason for correction or special instructions..."
               value={notes}
@@ -1797,10 +1746,10 @@ function EditSaleModal({
           </div>
 
           <div className="editor-actions flex justify-end gap-2 pt-3 border-t border-stone-200">
-            <button type="button" className="button secondary text-xs" onClick={onClose}>
+            <button data-ui="button" type="button" className="button secondary text-xs" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="button primary text-xs">
+            <button data-ui="button" type="submit" className="button primary text-xs">
               Save Corrections
             </button>
           </div>

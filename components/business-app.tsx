@@ -10,6 +10,7 @@ import {
   Menu,
   Package,
   Settings,
+  LockKeyhole,
   Shield,
   ShoppingBag,
   TrendingUp,
@@ -17,7 +18,6 @@ import {
   Users,
   UserCheck,
   Building2,
-  WifiOff,
   X,
   FileText,
   Receipt,
@@ -50,8 +50,13 @@ import EmployeesView from './employees-view'
 import SettingsView from './settings-view'
 import NotificationsPopover from './notifications-popover'
 import GlobalSearch from './global-search'
+import { useAppLock } from './pin-gate'
+import ProfileMenu from './profile-menu'
+import CollectionReceipt from './collection-receipt'
+import { confirmAction } from '@/lib/confirmation'
 
 export default function BusinessApp() {
+  const lockApp = useAppLock()
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
   const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard')
   const [salesTab, setSalesTab] = useState<SalesSubTab>('invoices')
@@ -73,9 +78,16 @@ export default function BusinessApp() {
 
   // Sync back to offline localStorage whenever db updates
   const handleSaveDatabase = (updated: AppDatabase) => {
-    setDb(updated)
     saveDatabase(updated)
+    setDb(updated)
   }
+
+  const handleRoleChange = async (owner: boolean) => {
+    if (owner === isOwner) return
+    if (!(await confirmAction({ title: 'Change session view?', message: `Switch to ${owner ? 'owner' : 'staff'} view for this session?`, confirmLabel: 'Switch view' }))) return
+    setIsOwner(owner)
+  }
+
 
   // Smart Navigation Handler: supports core modules + direct routing to subtabs
   const handleNavigate = (key: ModuleKey | string, subTab?: string) => {
@@ -122,7 +134,7 @@ export default function BusinessApp() {
       }
     }
     setSidebarOpen(false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
   }
 
   return (
@@ -138,14 +150,14 @@ export default function BusinessApp() {
             className="brand-logo"
             priority
           />
-          <button className="icon-button close-nav" onClick={() => setSidebarOpen(false)}>
+          <button data-ui="button" aria-label="Close navigation" className="icon-button close-nav" onClick={() => setSidebarOpen(false)}>
             <X />
           </button>
         </div>
 
         <div className="workspace">
           <div className="workspace-avatar">AF</div>
-          <div>
+          <div className="workspace-identity">
             <strong>AL FAROOQ FOODS</strong>
             <span>Food & Beverage Plant</span>
           </div>
@@ -155,7 +167,7 @@ export default function BusinessApp() {
         {/* Core Top-Level Sidebar Nav Items */}
         <nav className="nav-list" aria-label="Core Business Navigation">
           {/* 1. Dashboard */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'dashboard' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('dashboard')}
             id="nav-dashboard"
@@ -165,7 +177,7 @@ export default function BusinessApp() {
           </button>
 
           {/* 2. POS (Standalone Point-of-Sale Page) */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'pos' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('pos')}
             id="nav-pos"
@@ -175,84 +187,77 @@ export default function BusinessApp() {
           </button>
 
           {/* 3. Sales */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'sales' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('sales')}
             id="nav-sales"
           >
             <ShoppingBag />
             <span>Sales</span>
-            <span className="nav-count">{db.invoices.length}</span>
           </button>
 
           {/* 4. Customer Management (Includes Phone Book Directory) */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'customer-management' || activeModule === 'phonebook' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('customer-management', 'customers')}
             id="nav-customer-management"
           >
             <UserCheck />
             <span>Customer Management</span>
-            <span className="nav-count">{db.customers.length}</span>
           </button>
 
           {/* 5. Purchases & Expenses (Unified Module) */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'purchase' || activeModule === 'expenses' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('purchase', 'purchases')}
             id="nav-purchases-expenses"
           >
             <Truck />
             <span>Purchases & Expenses</span>
-            <span className="nav-count">{db.purchases.length + db.expenses.length}</span>
           </button>
 
           {/* 6. Suppliers (Vendor Hub) */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'suppliers-management' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('suppliers-management')}
             id="nav-suppliers"
           >
             <Building2 />
             <span>Suppliers</span>
-            <span className="nav-count">{db.suppliers.length}</span>
           </button>
 
           {/* 7. Products */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'products' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('products')}
             id="nav-products"
           >
             <Package />
             <span>Products</span>
-            <span className="nav-count">{db.products.length}</span>
           </button>
 
           {/* 9. Raw Material */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'raw-materials' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('raw-materials')}
             id="nav-raw-materials"
           >
             <Boxes />
             <span>Raw Material</span>
-            <span className="nav-count">{db.rawMaterials.length}</span>
           </button>
 
           {/* 10. Employees */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'employees' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('employees')}
             id="nav-employees"
           >
             <Users />
             <span>Employees</span>
-            <span className="nav-count">{db.employees?.length || 0}</span>
           </button>
 
           {/* 11. Reports */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'reports' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('reports')}
             id="nav-reports"
@@ -262,7 +267,7 @@ export default function BusinessApp() {
           </button>
 
           {/* 12. Settings */}
-          <button
+          <button data-ui="button"
             className={`nav-item ${activeModule === 'settings' ? 'nav-item-active' : ''}`}
             onClick={() => handleNavigate('settings')}
             id="nav-settings"
@@ -274,24 +279,9 @@ export default function BusinessApp() {
 
         {/* Sidebar Footer */}
         <div className="sidebar-foot">
-          <div className="offline-card">
-            <div className="offline-icon">
-              <WifiOff />
-            </div>
-            <div>
-              <strong>100% Offline App</strong>
-              <span>Fast local database active</span>
-            </div>
-          </div>
-
-          <div className="user-card cursor-pointer" onClick={() => setIsOwner(!isOwner)}>
-            <div className="user-avatar">{isOwner ? 'OM' : 'ST'}</div>
-            <div>
-              <strong>{isOwner ? 'Umar Farooq (Owner)' : 'Floor Supervisor (Staff)'}</strong>
-              <span>{isOwner ? 'Super Admin' : 'Operator Access'}</span>
-            </div>
-            <ChevronDown />
-          </div>
+          <button data-ui="button" type="button" className="sidebar-lock-system" onClick={lockApp}>
+            <LockKeyhole size={17} /><span>Lock system</span>
+          </button>
         </div>
       </aside>
 
@@ -299,7 +289,7 @@ export default function BusinessApp() {
       <main className="main-area">
         {/* Top Navbar */}
         <header className="topbar">
-          <button className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)}>
+          <button data-ui="button" aria-label="Open navigation" aria-expanded={sidebarOpen} className="icon-button mobile-menu" onClick={() => setSidebarOpen(true)}>
             <Menu />
           </button>
 
@@ -313,15 +303,15 @@ export default function BusinessApp() {
           <GlobalSearch db={db} onNavigate={handleNavigate} />
 
           <div className="top-actions">
-            <div className="role-pill" onClick={() => setIsOwner(!isOwner)} title="Click to toggle role">
+            <button data-ui="button" type="button" className="role-pill" onClick={() => handleRoleChange(!isOwner)} aria-pressed={isOwner} title="Click to toggle role">
               <Shield className="w-3.5 h-3.5" />
               <span>{isOwner ? 'Owner View' : 'Staff View'}</span>
-            </div>
+            </button>
 
             {/* Smart Action Alerts Notification Bell */}
             <NotificationsPopover db={db} onNavigate={handleNavigate} />
 
-            <button
+            <button data-ui="button"
               className="icon-button"
               title="Quick Backup JSON"
               onClick={() => exportDatabaseJSON(db)}
@@ -329,11 +319,15 @@ export default function BusinessApp() {
               <Download />
             </button>
 
-            <button className="icon-button" onClick={() => handleNavigate('settings')} title="Settings">
+            <button data-ui="button" type="button" className="icon-button" onClick={lockApp} title="Lock app" aria-label="Lock app">
+              <LockKeyhole />
+            </button>
+
+            <button data-ui="button" className="icon-button" onClick={() => handleNavigate('settings')} title="Settings">
               <Settings />
             </button>
 
-            <div className="top-avatar">{isOwner ? 'AF' : 'ST'}</div>
+            <ProfileMenu db={db} isOwner={isOwner} onSave={handleSaveDatabase} onSettings={() => handleNavigate('settings')} onLock={lockApp} />
           </div>
         </header>
 
@@ -425,59 +419,15 @@ export default function BusinessApp() {
             <SettingsView
               db={db}
               isOwner={isOwner}
-              setIsOwner={setIsOwner}
+              setIsOwner={handleRoleChange}
               onSaveDatabase={handleSaveDatabase}
             />
           )}
         </div>
       </main>
 
-      {/* Payment Receipt Modal */}
-      {showReceiptModal && (
-        <div className="payment-overlay">
-          <div className="receipt-modal">
-            <button className="receipt-close" onClick={() => setShowReceiptModal(false)}>
-              <X />
-            </button>
-            <div className="receipt-success">
-              <div className="receipt-confetti">✦ · ✦ · ✦</div>
-              <div className="receipt-check">✓</div>
-            </div>
-            <p className="receipt-amount">
-              <small>Rs</small>150,000<sup>00</sup>
-            </p>
-            <h2>Payment Received Successfully</h2>
-            <div className="recipient-initials">HN</div>
-            <h3>Haji Noor Muhammad</h3>
-            <p className="recipient-phone">Noor Beverages · 0344 9549051</p>
-            <div className="receipt-actions">
-              <button
-                onClick={() => {
-                  setShowReceiptModal(false)
-                  handleNavigate('sales', 'invoices')
-                }}
-              >
-                <FileText />
-                <span>View Invoice Record</span>
-                <ChevronDown className="rotate-270" />
-              </button>
-              <button onClick={() => setShowReceiptModal(false)}>
-                <CheckCircleIcon />
-                <span>Done / Close</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Payment receipt uses the same record as the dashboard collection card. */}
+      {showReceiptModal && <CollectionReceipt db={db} onClose={() => setShowReceiptModal(false)} onViewCustomer={() => { setShowReceiptModal(false); handleNavigate('customer-management') }} />}
     </div>
-  )
-}
-
-function CheckCircleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-      <path d="m9 11 3 3L22 4"/>
-    </svg>
   )
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import React, { useState, useMemo, useRef } from 'react'
 import {
   Plus,
@@ -422,8 +424,8 @@ export default function PurchasesView({
     exportToCSV(`Purchases_Register_${todayStr}`, headers, rows)
   }
 
-  const handleDeletePurchase = (purchaseId: string) => {
-    if (!confirm('Are you sure you want to delete this purchase order? Associated inventory and ledger balances will be retained.')) {
+  const handleDeletePurchase = async (purchaseId: string) => {
+    if (!await confirmAction('Are you sure you want to delete this purchase order? Associated inventory and ledger balances will be retained.')) {
       return
     }
     const updatedPurchases = db.purchases.filter((p) => p.id !== purchaseId)
@@ -483,8 +485,8 @@ export default function PurchasesView({
     setEditingCatName('')
   }
 
-  const handleDeleteCategory = (catId: string, catName: string) => {
-    if (!confirm(`Delete category "${catName}"? Existing purchases will be marked as Raw Material.`)) return
+  const handleDeleteCategory = async (catId: string, catName: string) => {
+    if (!await confirmAction(`Delete category "${catName}"? Existing purchases will be marked as Raw Material.`)) return
     const updatedCategories = purchaseCategories.filter((c) => c.id !== catId)
     const updatedPurchases = db.purchases.map((p) => (p.category === catName ? { ...p, category: 'Raw Material' } : p))
     const updatedDb: AppDatabase = {
@@ -498,7 +500,7 @@ export default function PurchasesView({
   return (
     <div className="space-y-6 pb-12" id="purchases-module-root">
       {/* 1. SIMPLIFIED HEADER (Clean & Minimal: Page Title + New Purchase CTA) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
+      <div className="page-title-banner purchases-title-banner flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
             <Truck className="w-5 h-5" />
@@ -516,7 +518,7 @@ export default function PurchasesView({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          <button data-ui="button"
             onClick={() => setShowAnalytics(!showAnalytics)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors shadow-sm"
             title="Toggle Analytics & Breakdown Charts"
@@ -526,7 +528,7 @@ export default function PurchasesView({
             {showAnalytics ? <ChevronUp className="w-3 h-3 text-stone-400" /> : <ChevronDown className="w-3 h-3 text-stone-400" />}
           </button>
 
-          <button
+          <button data-ui="button"
             onClick={() => setIsManagingCategories(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors shadow-sm"
             id="btn-manage-categories"
@@ -535,7 +537,7 @@ export default function PurchasesView({
             <span>Manage Categories</span>
           </button>
 
-          <button
+          <button data-ui="button"
             onClick={handleExportPurchasesCSV}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors shadow-sm"
             title="Export filtered records as CSV/Excel spreadsheet"
@@ -544,7 +546,7 @@ export default function PurchasesView({
             <span>Export CSV</span>
           </button>
 
-          <button
+          <button data-ui="button"
             onClick={() => {
               setEditingPurchase(null)
               setIsCreatingPurchase(true)
@@ -561,7 +563,7 @@ export default function PurchasesView({
       {/* 2. VISUAL STAT CARDS (3-4 Key Metrics Max with bold icons & trend indicators) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="purchase-kpi-cards">
         {/* Metric 1: Total Purchases This Month */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
+        <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">This Month's Purchases</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
@@ -585,7 +587,7 @@ export default function PurchasesView({
         </div>
 
         {/* Metric 2: Total Paid */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
+        <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">Total Paid Out</span>
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
@@ -604,7 +606,7 @@ export default function PurchasesView({
         </div>
 
         {/* Metric 3: Pending Payables */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
+        <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">Pending Payables</span>
             <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
@@ -623,8 +625,8 @@ export default function PurchasesView({
         </div>
 
         {/* Metric 4: Overdue Payments */}
-        <div
-          className={`bg-white rounded-xl border p-4 shadow-sm relative overflow-hidden ${
+        <div data-ui="surface"
+          className={`gradient-card bg-white rounded-xl border p-4 shadow-sm relative overflow-hidden ${
             kpis.totalOverdue > 0 ? 'border-rose-300 bg-rose-50/20' : 'border-stone-200'
           }`}
         >
@@ -662,7 +664,7 @@ export default function PurchasesView({
 
       {/* 3. COMPACT CHARTS / ANALYTICS ROW (Collapsible, Glanceable, respects active filters) */}
       {showAnalytics && (
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 shadow-sm transition-all" id="purchase-analytics-row">
+        <div data-ui="surface" className="gradient-card bg-stone-50 border border-stone-200 rounded-xl p-4 shadow-sm transition-all" id="purchase-analytics-row">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Chart 1: Spend by Category */}
             <div className="bg-white p-3.5 rounded-lg border border-stone-200 shadow-2xs">
@@ -790,12 +792,12 @@ export default function PurchasesView({
       )}
 
       {/* 4. CLEAN SINGLE-ROW TOOLBAR FOR FILTERS */}
-      <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm space-y-3" id="purchase-filters-toolbar">
+      <div data-ui="surface" className="gradient-card bg-white p-3 rounded-xl border border-stone-200 shadow-sm space-y-3" id="purchase-filters-toolbar">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
           {/* Search Box */}
           <div className="relative flex-1 min-w-[220px]">
             <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-            <input
+            <input data-ui="input"
               type="text"
               placeholder="Search PO #, supplier name, raw material, or notes..."
               value={searchQuery}
@@ -804,7 +806,7 @@ export default function PurchasesView({
               id="input-purchase-search"
             />
             {searchQuery && (
-              <button
+              <button data-ui="button"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
               >
@@ -815,7 +817,7 @@ export default function PurchasesView({
 
           {/* Supplier Dropdown */}
           <div className="w-full sm:w-48">
-            <select
+            <select data-ui="select"
               value={filterSupplier}
               onChange={(e) => setFilterSupplier(e.target.value)}
               className="w-full py-2 px-2.5 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-700"
@@ -831,7 +833,7 @@ export default function PurchasesView({
 
           {/* Payment Status Dropdown */}
           <div className="w-full sm:w-36">
-            <select
+            <select data-ui="select"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
               className="w-full py-2 px-2.5 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-700"
@@ -846,7 +848,7 @@ export default function PurchasesView({
 
           {/* Date Range Selector */}
           <div className="w-full sm:w-36">
-            <select
+            <select data-ui="select"
               value={filterDateRange}
               onChange={(e) => setFilterDateRange(e.target.value as any)}
               className="w-full py-2 px-2.5 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-700"
@@ -862,7 +864,7 @@ export default function PurchasesView({
           </div>
 
           {/* Returns & Defects Filter Toggle Chip */}
-          <button
+          <button data-ui="button"
             onClick={() => setFilterReturnOrDefect(filterReturnOrDefect === true ? null : true)}
             className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-all shrink-0 ${
               filterReturnOrDefect === true
@@ -880,7 +882,7 @@ export default function PurchasesView({
         {/* Category Filter Pills (Icon + Label Pills) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
           <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mr-1 shrink-0">Category:</span>
-          <button
+          <button data-ui="button"
             onClick={() => setFilterCategory('all')}
             className={`px-2.5 py-1 text-xs rounded-full font-medium transition-all shrink-0 ${
               filterCategory === 'all'
@@ -896,7 +898,7 @@ export default function PurchasesView({
             const Icon = style.icon
             const isSelected = filterCategory.toLowerCase() === cat.name.toLowerCase()
             return (
-              <button
+              <button data-ui="button"
                 key={cat.id}
                 onClick={() => setFilterCategory(isSelected ? 'all' : cat.name)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium transition-all shrink-0 border ${
@@ -916,14 +918,14 @@ export default function PurchasesView({
         {filterDateRange === 'custom' && (
           <div className="flex items-center gap-2 pt-2 border-t border-stone-100">
             <span className="text-xs text-stone-500">From:</span>
-            <input
+            <input data-ui="input"
               type="date"
               value={customStartDate}
               onChange={(e) => setCustomStartDate(e.target.value)}
               className="text-xs py-1 px-2 border border-stone-200 rounded"
             />
             <span className="text-xs text-stone-500">To:</span>
-            <input
+            <input data-ui="input"
               type="date"
               value={customEndDate}
               onChange={(e) => setCustomEndDate(e.target.value)}
@@ -936,7 +938,7 @@ export default function PurchasesView({
       {/* 5. REDESIGNED RECORDS LIST (Card-Style Row Layout) */}
       <div className="space-y-3" id="purchases-records-container">
         {filteredPurchases.length === 0 ? (
-          <div className="bg-white rounded-xl border border-stone-200 p-12 text-center shadow-sm">
+          <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 p-12 text-center shadow-sm">
             <div className="w-12 h-12 rounded-full bg-stone-100 text-stone-400 flex items-center justify-center mx-auto mb-3">
               <Truck className="w-6 h-6" />
             </div>
@@ -945,7 +947,7 @@ export default function PurchasesView({
               No purchase orders match your active search or filter criteria. Create a new purchase order or reset filters.
             </p>
             <div className="mt-4 flex items-center justify-center gap-2">
-              <button
+              <button data-ui="button"
                 onClick={() => {
                   setSearchQuery('')
                   setFilterCategory('all')
@@ -958,7 +960,7 @@ export default function PurchasesView({
               >
                 Reset All Filters
               </button>
-              <button
+              <button data-ui="button"
                 onClick={() => {
                   setEditingPurchase(null)
                   setIsCreatingPurchase(true)
@@ -978,12 +980,13 @@ export default function PurchasesView({
             const isPartial = !isPaid && (purchase.amountPaid || 0) > 0
 
             return (
-              <div
+              <article data-ui="surface"
                 key={purchase.id}
-                className="bg-white rounded-xl border border-stone-200 hover:border-emerald-300 hover:shadow-md transition-all p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group"
+                className="purchase-record-card gradient-card"
+                aria-label={`Purchase ${purchase.poNumber || purchase.purchaseNumber} from ${purchase.supplierName}`}
               >
                 {/* Left: Category Icon + PO # + Date */}
-                <div className="flex items-start gap-3 min-w-[200px]">
+                <div className="purchase-record-meta flex items-start gap-3">
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${style.bg}`}
                     title={purchase.category || 'Raw Material'}
@@ -991,7 +994,7 @@ export default function PurchasesView({
                     <CategoryIcon className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs font-bold text-stone-900">{purchase.poNumber || purchase.purchaseNumber}</span>
                       <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full border ${style.bg}`}>
                         {purchase.category || purchase.purchaseType || 'Raw Material'}
@@ -1008,9 +1011,9 @@ export default function PurchasesView({
                 </div>
 
                 {/* Middle: Supplier Name, Item Chips, and Defect/Return Tags */}
-                <div className="flex-1 min-w-[220px] max-w-xl space-y-1.5">
+                <div className="purchase-record-details space-y-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm text-stone-900">{purchase.supplierName}</span>
+                    <h3 className="purchase-record-supplier">{purchase.supplierName}</h3>
                     {purchase.supplierPhone && (
                       <span className="text-xs text-stone-400 flex items-center gap-1 font-mono">
                         <Phone className="w-3 h-3" />
@@ -1026,7 +1029,7 @@ export default function PurchasesView({
                   </div>
 
                   {/* Line Item Chips */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="purchase-record-items">
                     {(purchase.items && purchase.items.length > 0 ? purchase.items : [
                       {
                         name: purchase.purchaseType || 'Procured Item',
@@ -1037,26 +1040,27 @@ export default function PurchasesView({
                     ]).map((item, idx) => (
                       <span
                         key={idx}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-stone-100 text-stone-700 border border-stone-200"
+                        className="purchase-record-item"
                       >
                         <span className="text-stone-900 font-semibold">{item.name}</span>
                         <span className="text-stone-500 text-[11px]">
-                          ({item.quantity} {item.unit} @ Rs.{item.unitPrice})
+                          {item.quantity.toLocaleString()} {item.unit} @ {formatPKR(item.unitPrice)}
                         </span>
                       </span>
                     ))}
                   </div>
 
                   {purchase.notes && (
-                    <p className="text-xs text-stone-500 truncate max-w-md italic">
-                      "{purchase.notes}"
+                    <p className="purchase-record-note">
+                      {purchase.notes}
                     </p>
                   )}
                 </div>
 
                 {/* Right: Amounts & Payment Status Badge */}
-                <div className="flex flex-col md:items-end gap-1 shrink-0 min-w-[170px]">
+                <div className="purchase-record-payment">
                   <div className="text-right">
+                    <span className="purchase-record-total-label">Order total</span>
                     <span className="text-base font-bold text-stone-900 block font-mono">
                       {formatPKR(purchase.grandTotal)}
                     </span>
@@ -1100,9 +1104,10 @@ export default function PurchasesView({
                 </div>
 
                 {/* Actions: Small Icon Buttons */}
-                <div className="flex items-center gap-1 border-t md:border-t-0 md:border-l border-stone-100 pt-2 md:pt-0 md:pl-3 shrink-0">
+                <div className="purchase-record-actions">
+                  <span>Purchase actions</span>
                   {/* Small Vendor Ledger Icon Button */}
-                  <button
+                  <button data-ui="button"
                     onClick={() => {
                       if (onNavigate) {
                         onNavigate('suppliers-management')
@@ -1115,7 +1120,7 @@ export default function PurchasesView({
                   </button>
 
                   {/* View Details / PDF */}
-                  <button
+                  <button data-ui="button"
                     onClick={() => setViewingPurchase(purchase)}
                     className="p-1.5 text-stone-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                     title="View Purchase Voucher & Details"
@@ -1124,7 +1129,7 @@ export default function PurchasesView({
                   </button>
 
                   {/* Edit */}
-                  <button
+                  <button data-ui="button"
                     onClick={() => {
                       setEditingPurchase(purchase)
                       setIsCreatingPurchase(true)
@@ -1136,7 +1141,7 @@ export default function PurchasesView({
                   </button>
 
                   {/* Delete */}
-                  <button
+                  <button data-ui="button"
                     onClick={() => handleDeletePurchase(purchase.id)}
                     className="p-1.5 text-stone-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
                     title="Delete Purchase"
@@ -1144,7 +1149,7 @@ export default function PurchasesView({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-              </div>
+              </article>
             )
           })
         )}
@@ -1299,7 +1304,7 @@ export default function PurchasesView({
       {/* ========================================================================= */}
       {isManagingCategories && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
@@ -1310,7 +1315,7 @@ export default function PurchasesView({
                   <p className="text-xs text-stone-500">Create, rename, or merge procurement categories</p>
                 </div>
               </div>
-              <button
+              <button data-ui="button"
                 onClick={() => setIsManagingCategories(false)}
                 className="text-stone-400 hover:text-stone-600 p-1"
               >
@@ -1319,17 +1324,17 @@ export default function PurchasesView({
             </div>
 
             {/* Add New Category Input */}
-            <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2">
+            <div data-ui="surface" className="gradient-card bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2">
               <span className="text-xs font-semibold text-stone-700 block">Add New Category</span>
               <div className="flex gap-2">
-                <input
+                <input data-ui="input"
                   type="text"
                   placeholder="e.g. Laboratory Supplies, Boiler Fuel..."
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
                   className="flex-1 px-3 py-1.5 text-xs bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
-                <button
+                <button data-ui="button"
                   onClick={handleAddCategory}
                   disabled={!newCatName.trim()}
                   className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors shrink-0"
@@ -1357,20 +1362,20 @@ export default function PurchasesView({
                   >
                     {isEditing ? (
                       <div className="flex items-center gap-2 flex-1 mr-2">
-                        <input
+                        <input data-ui="input"
                           type="text"
                           value={editingCatName}
                           onChange={(e) => setEditingCatName(e.target.value)}
                           className="px-2 py-1 bg-white border border-stone-300 rounded text-xs w-full"
                           autoFocus
                         />
-                        <button
+                        <button data-ui="button"
                           onClick={() => handleRenameCategory(cat.id, cat.name)}
                           className="px-2 py-1 bg-emerald-600 text-white rounded text-[11px] font-semibold"
                         >
                           Save
                         </button>
-                        <button
+                        <button data-ui="button"
                           onClick={() => setEditingCatId(null)}
                           className="px-2 py-1 bg-stone-200 text-stone-700 rounded text-[11px]"
                         >
@@ -1386,7 +1391,7 @@ export default function PurchasesView({
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <button
+                          <button data-ui="button"
                             onClick={() => {
                               setEditingCatId(cat.id)
                               setEditingCatName(cat.name)
@@ -1396,7 +1401,7 @@ export default function PurchasesView({
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
-                          <button
+                          <button data-ui="button"
                             onClick={() => handleDeleteCategory(cat.id, cat.name)}
                             className="p-1 text-stone-400 hover:text-rose-600"
                             title="Delete"
@@ -1412,7 +1417,7 @@ export default function PurchasesView({
             </div>
 
             <div className="flex justify-end pt-2 border-t border-stone-100">
-              <button
+              <button data-ui="button"
                 onClick={() => setIsManagingCategories(false)}
                 className="px-4 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
               >
@@ -1428,7 +1433,7 @@ export default function PurchasesView({
       {/* ========================================================================= */}
       {viewingPurchase && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-2xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-2xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-stone-200 pb-4">
               <div>
@@ -1442,7 +1447,7 @@ export default function PurchasesView({
                   Issued on {formatDate(viewingPurchase.date)} {viewingPurchase.time ? `at ${viewingPurchase.time}` : ''}
                 </p>
               </div>
-              <button
+              <button data-ui="button"
                 onClick={() => setViewingPurchase(null)}
                 className="text-stone-400 hover:text-stone-600 p-1"
               >
@@ -1451,7 +1456,7 @@ export default function PurchasesView({
             </div>
 
             {/* Supplier & Financial Overview */}
-            <div className="grid grid-cols-2 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200 text-xs">
+            <div data-ui="surface" className="gradient-card grid grid-cols-2 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200 text-xs">
               <div>
                 <span className="text-stone-400 block uppercase tracking-wider text-[10px] font-bold">Supplier Information</span>
                 <span className="text-sm font-bold text-stone-900 block mt-1">{viewingPurchase.supplierName}</span>
@@ -1477,8 +1482,8 @@ export default function PurchasesView({
             {/* Line Items Table */}
             <div>
               <span className="text-xs font-semibold text-stone-700 block mb-2">Procured Line Items</span>
-              <div className="border border-stone-200 rounded-xl overflow-hidden text-xs">
-                <table className="w-full text-left">
+              <div className="gradient-card border border-stone-200 rounded-xl overflow-hidden text-xs">
+                <table data-ui="table" className="w-full text-left">
                   <thead className="bg-stone-100 text-stone-600 border-b border-stone-200">
                     <tr>
                       <th className="py-2 px-3">Item Description</th>
@@ -1540,7 +1545,7 @@ export default function PurchasesView({
 
             {/* Actions */}
             <div className="flex items-center justify-between pt-4 border-t border-stone-200">
-              <button
+              <button data-ui="button"
                 onClick={() => {
                   const sup = db.suppliers.find((s) => s.id === viewingPurchase.supplierId || s.name === viewingPurchase.supplierName)
                   generatePurchaseVoucherPDF(viewingPurchase, sup)
@@ -1552,7 +1557,7 @@ export default function PurchasesView({
               </button>
 
               <div className="flex items-center gap-2">
-                <button
+                <button data-ui="button"
                   onClick={() => {
                     const toEdit = viewingPurchase
                     setViewingPurchase(null)
@@ -1563,7 +1568,7 @@ export default function PurchasesView({
                 >
                   Edit Order
                 </button>
-                <button
+                <button data-ui="button"
                   onClick={() => setViewingPurchase(null)}
                   className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 hover:bg-black rounded-lg transition-colors"
                 >
@@ -1578,10 +1583,10 @@ export default function PurchasesView({
       {/* Image Zoom Preview Modal */}
       {previewImage && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl p-4 max-w-2xl w-full text-center space-y-3">
+          <div data-ui="surface" className="bg-white rounded-2xl p-4 max-w-2xl w-full text-center space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-stone-100">
               <span className="font-semibold text-sm text-stone-800">{previewImage.title}</span>
-              <button onClick={() => setPreviewImage(null)} className="text-stone-400 hover:text-stone-600">
+              <button data-ui="button" onClick={() => setPreviewImage(null)} className="text-stone-400 hover:text-stone-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1854,7 +1859,7 @@ function PurchaseOrderModal({
 
   const balanceDue = Math.max(0, grandTotal - (paymentStatusType === 'Pending' ? 0 : amountPaid))
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!supplierName.trim()) {
       alert('Please select or enter a supplier name.')
@@ -1900,12 +1905,13 @@ function PurchaseOrderModal({
       createdAt: editingPurchase?.createdAt || new Date().toISOString(),
     }
 
+    if (editingPurchase && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(saved, { syncInventory })
   }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8" id="purchase-order-modal">
+      <div data-ui="surface" className="gradient-card bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8" id="purchase-order-modal">
         {/* Modal Header - Identical styling to Expense Form */}
         <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -1924,7 +1930,7 @@ function PurchaseOrderModal({
               <p className="text-xs text-stone-400">Record supplier procurement, inventory replenishment & payment terms</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-white p-1 rounded-lg transition-colors">
+          <button data-ui="button" onClick={onClose} className="text-stone-400 hover:text-white p-1 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1935,7 +1941,7 @@ function PurchaseOrderModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">PO / Order #</label>
-              <input
+              <input data-ui="input"
                 type="text"
                 required
                 value={poNumber}
@@ -1946,7 +1952,7 @@ function PurchaseOrderModal({
 
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">Purchase Date</label>
-              <input
+              <input data-ui="input"
                 type="date"
                 required
                 value={date}
@@ -1962,7 +1968,7 @@ function PurchaseOrderModal({
               <label className="block text-xs font-bold text-stone-700">
                 Procurement Category <span className="text-red-500">*</span>
               </label>
-              <button
+              <button data-ui="button"
                 type="button"
                 onClick={() => setIsCustomCategory(!isCustomCategory)}
                 className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
@@ -1971,7 +1977,7 @@ function PurchaseOrderModal({
               </button>
             </div>
             {isCustomCategory ? (
-              <input
+              <input data-ui="input"
                 type="text"
                 placeholder="Type custom procurement category (e.g. Laboratory Chemicals)..."
                 value={customCategoryLabel}
@@ -1980,7 +1986,7 @@ function PurchaseOrderModal({
                 required
               />
             ) : (
-              <select
+              <select data-ui="select"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -2000,7 +2006,7 @@ function PurchaseOrderModal({
               <label className="block text-xs font-bold text-stone-700">
                 Supplier / Vendor <span className="text-red-500">*</span>
               </label>
-              <button
+              <button data-ui="button"
                 type="button"
                 onClick={() => setShowInlineSupplierForm(!showInlineSupplierForm)}
                 className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
@@ -2010,10 +2016,10 @@ function PurchaseOrderModal({
             </div>
 
             {showInlineSupplierForm ? (
-              <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2.5 mb-2">
+              <div data-ui="surface" className="gradient-card p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2.5 mb-2">
                 <span className="text-xs font-bold text-emerald-900 block">Quick Register New Supplier</span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <input
+                  <input data-ui="input"
                     type="text"
                     placeholder="Company / Vendor Name *"
                     value={inlineSupplierName}
@@ -2021,14 +2027,14 @@ function PurchaseOrderModal({
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                   />
-                  <input
+                  <input data-ui="input"
                     type="text"
                     placeholder="Phone (0300...)"
                     value={inlineSupplierPhone}
                     onChange={(e) => setInlineSupplierPhone(e.target.value)}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-emerald-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
-                  <input
+                  <input data-ui="input"
                     type="text"
                     placeholder="City (e.g. Faisalabad)"
                     value={inlineSupplierCity}
@@ -2037,14 +2043,14 @@ function PurchaseOrderModal({
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-1">
-                  <button
+                  <button data-ui="button"
                     type="button"
                     onClick={() => setShowInlineSupplierForm(false)}
                     className="px-3 py-1 text-xs text-stone-600 hover:text-stone-800 font-medium"
                   >
                     Cancel
                   </button>
-                  <button
+                  <button data-ui="button"
                     type="button"
                     onClick={handleSaveInlineSupplier}
                     className="px-3 py-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs"
@@ -2054,7 +2060,7 @@ function PurchaseOrderModal({
                 </div>
               </div>
             ) : (
-              <select
+              <select data-ui="select"
                 value={supplierId}
                 onChange={(e) => handleSupplierSelect(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -2092,7 +2098,7 @@ function PurchaseOrderModal({
               <label className="block text-xs font-bold text-stone-700">
                 Items & Quantities <span className="text-stone-400 font-normal">({isCustomCategory ? customCategoryLabel || 'Custom' : category})</span>
               </label>
-              <button
+              <button data-ui="button"
                 type="button"
                 onClick={handleAddItem}
                 className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline inline-flex items-center gap-1"
@@ -2108,13 +2114,13 @@ function PurchaseOrderModal({
                   .find((i) => i.name.toLowerCase() === item.name.toLowerCase())
 
                 return (
-                  <div key={index} className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
+                  <div data-ui="surface" key={index} className="gradient-card p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
                     <div className="grid grid-cols-12 gap-2.5 items-center">
                       <div className="col-span-12 sm:col-span-5">
                         <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
                           Item / Material Name
                         </label>
-                        <input
+                        <input data-ui="input"
                           type="text"
                           placeholder="Material description..."
                           value={item.name}
@@ -2134,7 +2140,7 @@ function PurchaseOrderModal({
                         <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
                           Quantity
                         </label>
-                        <input
+                        <input data-ui="input"
                           type="number"
                           min="0.1"
                           step="any"
@@ -2149,7 +2155,7 @@ function PurchaseOrderModal({
                         <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
                           Unit
                         </label>
-                        <select
+                        <select data-ui="select"
                           value={item.unit}
                           onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
                           className="w-full px-2 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -2169,7 +2175,7 @@ function PurchaseOrderModal({
                         <label className="block text-[10px] font-bold text-stone-500 mb-1 uppercase tracking-wider">
                           Rate (PKR)
                         </label>
-                        <input
+                        <input data-ui="input"
                           type="number"
                           min="0"
                           step="any"
@@ -2181,7 +2187,7 @@ function PurchaseOrderModal({
                       </div>
 
                       <div className="col-span-1 flex justify-center items-end pt-5">
-                        <button
+                        <button data-ui="button"
                           type="button"
                           onClick={() => handleRemoveItem(index)}
                           disabled={items.length <= 1}
@@ -2210,7 +2216,7 @@ function PurchaseOrderModal({
           </div>
 
           {/* Grand Total & Payment Terms */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+          <div data-ui="surface" className="gradient-card p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
             <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-stone-200">
               <span className="text-xs font-bold text-stone-700">Total Purchase Amount</span>
               <span className="text-base font-bold text-stone-900 font-mono">{formatPKR(grandTotal)}</span>
@@ -2219,7 +2225,7 @@ function PurchaseOrderModal({
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1.5">Payment Terms</label>
               <div className="grid grid-cols-3 gap-2">
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => handleStatusTypeChange('Paid')}
                   className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
@@ -2230,7 +2236,7 @@ function PurchaseOrderModal({
                 >
                   ✓ Paid in Full
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => handleStatusTypeChange('Partial')}
                   className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
@@ -2241,7 +2247,7 @@ function PurchaseOrderModal({
                 >
                   ◑ Partial Paid
                 </button>
-                <button
+                <button data-ui="button"
                   type="button"
                   onClick={() => handleStatusTypeChange('Pending')}
                   className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
@@ -2261,7 +2267,7 @@ function PurchaseOrderModal({
                   <label className="block text-xs font-bold text-stone-700 mb-1">Amount Paid Now (PKR)</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-stone-400">Rs.</span>
-                    <input
+                    <input data-ui="input"
                       type="number"
                       min="0"
                       max={grandTotal}
@@ -2281,7 +2287,7 @@ function PurchaseOrderModal({
                   </label>
                   {dueDate && <DueDateBadge dueDate={dueDate} balanceDue={balanceDue} />}
                 </div>
-                <input
+                <input data-ui="input"
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
@@ -2294,7 +2300,7 @@ function PurchaseOrderModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Payment Method</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as any)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -2309,7 +2315,7 @@ function PurchaseOrderModal({
 
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Deduct From Account</label>
-                  <select
+                  <select data-ui="select"
                     value={paymentAccount}
                     onChange={(e) => setPaymentAccount(e.target.value as any)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -2328,7 +2334,7 @@ function PurchaseOrderModal({
           {/* Notes & Defect Flag */}
           <div>
             <label className="block text-xs font-bold text-stone-700 mb-1">Notes / Challan Ref (Optional)</label>
-            <input
+            <input data-ui="input"
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -2339,14 +2345,14 @@ function PurchaseOrderModal({
 
           {/* Modal Footer */}
           <div className="pt-4 border-t border-stone-100 flex items-center justify-end gap-2.5">
-            <button
+            <button data-ui="button"
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 transition"
             >
               Cancel
             </button>
-            <button
+            <button data-ui="button"
               type="submit"
               className="px-5 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition"
               id="btn-save-purchase-order"

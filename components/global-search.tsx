@@ -346,22 +346,16 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
   }
 
   return (
-    <div className="relative flex-1 max-w-md mx-2 sm:mx-4" ref={containerRef}>
+    <div className="global-search relative w-full max-w-[360px] mx-2 sm:mx-4" ref={containerRef}>
       {/* Search Bar Input in Topbar */}
       <div
-        onClick={() => {
-          setIsOpen(true)
-          setTimeout(() => inputRef.current?.focus(), 50)
-        }}
-        className={`flex items-center gap-2.5 h-9 sm:h-10 px-3 rounded-xl border transition-all cursor-text text-xs ${
+        className={`flex items-center h-11 rounded-xl border bg-white transition-all ${
           isOpen
-            ? 'bg-white border-emerald-500 ring-2 ring-emerald-100 shadow-sm'
-            : 'bg-stone-50/80 hover:bg-stone-100/90 border-stone-200/90 text-stone-600'
+            ? 'border-emerald-500'
+            : 'border-stone-200 hover:border-stone-300'
         }`}
       >
-        <Search className={`w-4 h-4 shrink-0 ${isOpen ? 'text-emerald-700' : 'text-stone-400'}`} />
-
-        <input
+        <input data-ui="input"
           ref={inputRef}
           type="text"
           value={query}
@@ -371,41 +365,36 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleInputKeyDown}
-          placeholder="Search customers, products, suppliers, invoices, staff..."
-          className="w-full bg-transparent border-0 outline-none text-xs text-stone-900 placeholder:text-stone-400 p-0 font-medium"
+          onClick={() => setIsOpen(true)}
+          aria-label="Search across the workspace"
+          placeholder="Search"
+          className="w-full bg-transparent border-0 outline-none text-sm text-stone-900 placeholder:text-stone-400 px-3.5 py-2.5"
         />
 
-        {query ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setQuery('')
-              inputRef.current?.focus()
-            }}
-            className="p-1 text-stone-400 hover:text-stone-700 rounded-md hover:bg-stone-200/60"
-            title="Clear search"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        ) : (
-          <div className="hidden sm:flex items-center gap-0.5 text-[10px] font-mono text-stone-400 bg-white border border-stone-200 px-1.5 py-0.5 rounded shadow-2xs shrink-0 select-none">
-            <span className="text-[11px]">⌘</span>
-            <span>K</span>
-          </div>
-        )}
+        <button data-ui="button"
+          type="button"
+          onClick={() => {
+            setIsOpen(true)
+            setTimeout(() => inputRef.current?.focus(), 50)
+          }}
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-stone-100 text-stone-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 mr-1.5"
+          aria-label="Search"
+          title="Search"
+        >
+          <Search className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Dropdown Results Modal / Popover */}
       {isOpen && (
         <div
-          className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-stone-200/90 z-50 overflow-hidden flex flex-col max-h-[520px] animate-in fade-in slide-in-from-top-2 duration-150"
+          className="gradient-card absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-stone-200/90 z-50 overflow-hidden flex flex-col max-h-[520px] animate-in fade-in slide-in-from-top-2 duration-150"
           id="global-search-results-modal"
           style={{ minWidth: 'min(92vw, 560px)' }}
         >
           {/* Category Filter Tabs */}
           <div className="px-3 py-2 bg-stone-50/80 border-b border-stone-100 flex items-center gap-1 overflow-x-auto no-scrollbar text-xs">
-            <button
+            <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('all')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors ${
@@ -417,7 +406,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
               All ({categoryCounts.all})
             </button>
 
-            <button
+            <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('customers')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
@@ -430,7 +419,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
               <span>Customers ({categoryCounts.customers})</span>
             </button>
 
-            <button
+            <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('products')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
@@ -443,7 +432,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
               <span>Products ({categoryCounts.products})</span>
             </button>
 
-            <button
+            <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('suppliers')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
@@ -456,7 +445,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
               <span>Suppliers ({categoryCounts.suppliers})</span>
             </button>
 
-            <button
+            <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('employees')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
@@ -469,7 +458,7 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
               <span>Staff ({categoryCounts.employees})</span>
             </button>
 
-            <button
+            <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('invoices')}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
@@ -506,10 +495,11 @@ export default function GlobalSearch({ db, onNavigate }: GlobalSearchProps) {
                 const badgeClass = getBadgeClass(item.badgeVariant)
 
                 return (
-                  <div
+                  <div data-ui="surface"
                     key={item.id}
                     data-selected={isSelected}
                     onClick={() => handleSelect(item)}
+                    onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleSelect(item) } }}
                     onMouseEnter={() => setSelectedIndex(index)}
                     className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-between gap-3 group border ${
                       isSelected

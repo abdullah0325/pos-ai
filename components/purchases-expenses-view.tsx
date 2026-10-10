@@ -56,7 +56,7 @@ export default function PurchasesExpensesView({
   return (
     <div className="space-y-5" id="purchases-expenses-unified-module">
       {/* Top Module Header & Navigation Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-stone-200 shadow-xs">
+      <div data-ui="toolbar" className="page-title-banner gradient-card flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-stone-200 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
@@ -70,8 +70,8 @@ export default function PurchasesExpensesView({
         </div>
 
         {/* Two Unified Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-stone-100/90 rounded-xl border border-stone-200 self-start md:self-center shadow-2xs">
-          <button
+        <div data-ui="surface" className="gradient-card flex items-center gap-1 p-1 bg-stone-100/90 rounded-xl border border-stone-200 self-start md:self-center shadow-2xs">
+          <button data-ui="tab"
             onClick={() => setActiveTab('purchases')}
             className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === 'purchases'
@@ -87,7 +87,7 @@ export default function PurchasesExpensesView({
             </span>
           </button>
 
-          <button
+          <button data-ui="tab"
             onClick={() => setActiveTab('expenses')}
             className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === 'expenses'

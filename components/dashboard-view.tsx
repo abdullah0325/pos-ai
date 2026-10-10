@@ -1,5 +1,10 @@
 'use client'
 
+import ModuleHeading from './module-heading'
+
+import CatalogPhoto from './catalog-photo'
+import { latestDistributorCollection } from '@/lib/collections'
+
 import { useState, useMemo } from 'react'
 import {
   Activity,
@@ -35,6 +40,7 @@ interface DashboardProps {
 }
 
 export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }: DashboardProps) {
+  const latestCollection = latestDistributorCollection(db)
   const [breakdownType, setBreakdownType] = useState<'category' | 'customerType'>('category')
   const [hoveredSlice, setHoveredSlice] = useState<string | null>(null)
 
@@ -230,7 +236,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
   return (
     <div className="page-stack">
       {/* Header */}
-      <div className="page-heading">
+      <ModuleHeading icon="dashboard" className="dashboard-heading">
         <div>
           <p className="eyebrow">Al Farooq Foods · Plant & Distribution Workspace</p>
           <h1>Executive Dashboard</h1>
@@ -239,30 +245,36 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           </p>
         </div>
         <div className="heading-actions">
-          <button
+          <button data-ui="button"
             className="button secondary"
             onClick={() => generateStockReportPDF(db.products, db.rawMaterials)}
           >
             <FileText /> Stock Report
           </button>
-          <button className="button primary" onClick={() => onNavigate('sales')}>
+          <button data-ui="button" className="button primary" onClick={() => onNavigate('sales')}>
             <Plus /> New Sale / Invoice
           </button>
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* Low stock alert banner if any */}
       {(lowStockProducts.length > 0 || lowStockRaw.length > 0) && (
-        <div className="banner-reminder">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-            <span>
-              <strong>Inventory Notice:</strong> {lowStockProducts.length} finished goods and{' '}
-              {lowStockRaw.length} raw materials are below reorder threshold.
-            </span>
+        <div className="banner-reminder inventory-notice" role="status">
+          <div className="inventory-notice-content">
+            <span className="inventory-notice-icon" aria-hidden="true"><AlertTriangle /></span>
+            <div>
+              <strong className="inventory-notice-title">Inventory Notice</strong>
+              <div className="inventory-notice-details">
+                <p className="inventory-notice-description">Some items are below their reorder threshold.</p>
+                <div className="inventory-notice-counts">
+                  <span><b>{lowStockProducts.length}</b> finished {lowStockProducts.length === 1 ? 'good' : 'goods'}</span>
+                  <span><b>{lowStockRaw.length}</b> raw {lowStockRaw.length === 1 ? 'material' : 'materials'}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <button
-            className="button secondary text-xs py-1 h-auto"
+          <button data-ui="button"
+            className="button secondary inventory-notice-action"
             onClick={() => onNavigate('products')}
           >
             Review Stock
@@ -272,7 +284,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
 
       {/* Primary KPI Grid */}
       <div className="stat-grid">
-        <div className="stat-card cursor-pointer" onClick={() => onNavigate('sales')}>
+        <div className="stat-card cursor-pointer" role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate('sales') } }} onClick={() => onNavigate('sales')}>
           <div className="stat-icon purple">
             <CircleDollarSign />
           </div>
@@ -283,7 +295,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           </span>
         </div>
 
-        <div className="stat-card cursor-pointer" onClick={() => onNavigate('products')}>
+        <div className="stat-card cursor-pointer" role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate('products') } }} onClick={() => onNavigate('products')}>
           <div className="stat-icon olive">
             <Package />
           </div>
@@ -294,7 +306,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           </span>
         </div>
 
-        <div className="stat-card cursor-pointer" onClick={() => onNavigate('sales')}>
+        <div className="stat-card cursor-pointer" role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate('sales') } }} onClick={() => onNavigate('sales')}>
           <div className="stat-icon rust">
             <Wallet />
           </div>
@@ -306,7 +318,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           </span>
         </div>
 
-        <div className="stat-card cursor-pointer" onClick={() => onNavigate('reports')}>
+        <div className="stat-card cursor-pointer" role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate('reports') } }} onClick={() => onNavigate('reports')}>
           <div className="stat-icon olive">
             <CircleDollarSign />
           </div>
@@ -327,7 +339,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
               <h2>Manufacturing & Sales Trajectory</h2>
               <p>Monthly revenue performance for water, juices, and snacks</p>
             </div>
-            <button className="select-button" onClick={() => onNavigate('reports')}>
+            <button data-ui="button" className="select-button" onClick={() => onNavigate('reports')}>
               View Reports
             </button>
           </div>
@@ -347,7 +359,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
                 <path
                   d="M0 170 C50 140, 80 150, 120 120 S180 135, 230 90 S300 115, 360 85 S430 70, 490 55 S560 65, 610 25 S640 35, 650 15"
                   fill="none"
-                  stroke="#7cb518"
+                  stroke="var(--primary)"
                   strokeWidth="3.5"
                   strokeLinecap="round"
                 />
@@ -387,7 +399,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
 
             {/* Toggle Category vs Customer Channel */}
             <div className="flex items-center bg-stone-100 p-1 rounded-lg border border-stone-200 text-xs font-semibold">
-              <button
+              <button data-ui="button"
                 type="button"
                 className={`px-2.5 py-1 rounded-md transition-all ${
                   breakdownType === 'category'
@@ -398,7 +410,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
               >
                 Category
               </button>
-              <button
+              <button data-ui="button"
                 type="button"
                 className={`px-2.5 py-1 rounded-md transition-all ${
                   breakdownType === 'customerType'
@@ -493,7 +505,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
                 ? `${db.products.length} product SKUs active`
                 : `${db.customers.length} commercial buyers`}
             </span>
-            <button
+            <button data-ui="button"
               className="text-primary hover:underline font-semibold flex items-center gap-1"
               onClick={() => onNavigate('sales')}
             >
@@ -512,7 +524,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
               <h2>Recent Factory Activity</h2>
               <p>Latest production runs, sales & shipments</p>
             </div>
-            <button className="link-button" onClick={() => onNavigate('sales')}>
+            <button data-ui="button" className="link-button" onClick={() => onNavigate('sales')}>
               All Sales
             </button>
           </div>
@@ -573,7 +585,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
               <h2>Top Food & Beverage Products</h2>
               <p>Highest demand finished goods this month</p>
             </div>
-            <button className="link-button" onClick={() => onNavigate('products')}>
+            <button data-ui="button" className="link-button" onClick={() => onNavigate('products')}>
               All Products
             </button>
           </div>
@@ -581,6 +593,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
             {topProducts.map((p, i) => (
               <div className="product-row" key={p.name}>
                 <div className="product-rank">0{i + 1}</div>
+                <CatalogPhoto item={{ name: p.name }} className="w-9 h-9 rounded-lg object-cover shrink-0" />
                 <div className="product-info">
                   <strong>{p.name}</strong>
                   <span>{p.revenue} revenue</span>
@@ -603,14 +616,14 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           </div>
           <div>
             <p className="eyebrow">Latest Distributor Collection</p>
-            <h2>Rs. 150,000.00</h2>
+            <h2>{latestCollection ? formatPKR(latestCollection.payment.amount) : 'No collections yet'}</h2>
             <p>
               Received from
               <br />
-              <strong>Haji Noor Muhammad (Noor Beverages)</strong>
+              <strong>{latestCollection ? `${latestCollection.customer.name}${latestCollection.customer.businessName ? ` (${latestCollection.customer.businessName})` : ''}` : 'Record a distributor payment to view a receipt.'}</strong>
             </p>
           </div>
-          <button className="button primary" onClick={onOpenReceipt}>
+          <button data-ui="button" className="button primary" onClick={onOpenReceipt} disabled={!latestCollection}>
             View Receipt Document
           </button>
         </div>

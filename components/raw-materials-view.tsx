@@ -1,6 +1,12 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { confirmAction } from '@/lib/confirmation'
+
+import ModuleHeading from './module-heading'
+
+import CatalogPhoto from './catalog-photo'
+
+import { useState, useRef, useEffect } from 'react'
 import {
   Plus,
   Search,
@@ -235,7 +241,7 @@ export default function RawMaterialsView({
     }
   }
 
-  const handleDeleteMaterial = (id: string, name: string) => {
+  const handleDeleteMaterial = async (id: string, name: string) => {
     const usedCount = db.productionRuns.filter((p) =>
       p.consumedMaterials?.some((c) => c.rawMaterialId === id || c.name === name)
     ).length
@@ -245,7 +251,7 @@ export default function RawMaterialsView({
         ? `Raw material "${name}" is referenced in ${usedCount} previous production batch(es). Are you sure you want to permanently delete it?`
         : `Are you sure you want to delete "${name}"?`
 
-    if (!window.confirm(confirmMsg)) return
+    if (!await confirmAction(confirmMsg)) return
 
     const updated = db.rawMaterials.filter((r) => r.id !== id)
     onSaveDatabase({ ...db, rawMaterials: updated })
@@ -324,6 +330,7 @@ export default function RawMaterialsView({
         r.id === materialId ? { ...r, imageUrl: base64 } : r
       )
       onSaveDatabase({ ...db, rawMaterials: updated })
+      setViewDetailsMaterial((current) => current?.id === materialId ? { ...current, imageUrl: base64 } : current)
     } catch (err) {
       console.error('Failed to upload image:', err)
     }
@@ -332,7 +339,7 @@ export default function RawMaterialsView({
   return (
     <div className="page-stack" id="raw-materials-management-view">
       {/* Top Heading */}
-      <div className="page-heading">
+      <ModuleHeading icon="materials">
         <div>
           <p className="eyebrow">Warehouse & Procurement Core</p>
           <h1>Raw Material Management</h1>
@@ -341,17 +348,17 @@ export default function RawMaterialsView({
           </p>
         </div>
         <div className="heading-actions">
-          <button
+          <button data-ui="button"
             className="button secondary"
             onClick={() => setIsManagingCategories(true)}
             id="btn-manage-raw-categories"
           >
             <Tag className="w-4 h-4" /> Manage Categories
           </button>
-          <button className="button secondary" onClick={handleExportCSV} id="btn-export-raw-csv">
+          <button data-ui="button" className="button secondary" onClick={handleExportCSV} id="btn-export-raw-csv">
             <Download className="w-4 h-4" /> Export CSV
           </button>
-          <button
+          <button data-ui="button"
             className="button primary"
             onClick={() => {
               setSelectedRawMaterial(null)
@@ -362,7 +369,7 @@ export default function RawMaterialsView({
             <Plus className="w-4 h-4" /> Add Raw Material
           </button>
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* KPI Stats Grid */}
       <div className="stat-grid">
@@ -412,14 +419,14 @@ export default function RawMaterialsView({
       </div>
 
       {/* Toolbar & Multi-Filters */}
-      <div
-        className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-3"
+      <div data-ui="toolbar"
+        className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-3"
         id="raw-materials-toolbar"
       >
         <div className="flex items-center gap-2 flex-1 min-w-[240px]">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
+            <input data-ui="input"
               placeholder="Search raw material by name, SKU, category, supplier, description..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -427,7 +434,7 @@ export default function RawMaterialsView({
               id="input-raw-search"
             />
             {query && (
-              <button
+              <button data-ui="button"
                 type="button"
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
                 onClick={() => setQuery('')}
@@ -440,7 +447,7 @@ export default function RawMaterialsView({
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Category Dropdown Filter */}
-          <select
+          <select data-ui="select"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -455,7 +462,7 @@ export default function RawMaterialsView({
           </select>
 
           {/* Stock Status Filter */}
-          <select
+          <select data-ui="select"
             value={stockStatusFilter}
             onChange={(e) => setStockStatusFilter(e.target.value)}
             className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -468,7 +475,7 @@ export default function RawMaterialsView({
           </select>
 
           {/* Supplier Filter */}
-          <select
+          <select data-ui="select"
             value={supplierFilter}
             onChange={(e) => setSupplierFilter(e.target.value)}
             className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -484,7 +491,7 @@ export default function RawMaterialsView({
 
           {/* Sorting */}
           <div className="flex items-center gap-1">
-            <select
+            <select data-ui="select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
               className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -497,7 +504,7 @@ export default function RawMaterialsView({
               <option value="valuation">Sort: Total Value</option>
               <option value="consumed">Sort: Consumed Qty</option>
             </select>
-            <button
+            <button data-ui="button"
               type="button"
               onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
               className="border border-stone-200 rounded-lg px-2.5 py-2 text-xs bg-white hover:bg-stone-50 text-stone-700 font-bold transition-colors"
@@ -512,7 +519,7 @@ export default function RawMaterialsView({
       {/* RAW MATERIALS CARD GRID */}
       <div id="raw-materials-panel">
         {filteredMaterials.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
+          <div data-ui="surface" className="gradient-card bg-white rounded-2xl p-12 text-center border border-stone-200 shadow-xs">
             <div className="flex flex-col items-center justify-center gap-3 max-w-sm mx-auto">
               <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400">
                 <Boxes className="w-7 h-7" />
@@ -523,7 +530,7 @@ export default function RawMaterialsView({
                   ? 'Try adjusting your search query or filters to find what you are looking for.'
                   : 'Get started by creating your first raw material item.'}
               </p>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button primary text-xs mt-2"
                 onClick={() => {
@@ -540,178 +547,30 @@ export default function RawMaterialsView({
             className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4.5"
             id="raw-materials-card-grid"
           >
-            {filteredMaterials.map((r) => {
-              const isLow = r.quantity <= r.reorderLevel && r.quantity > 0
-              const isOut = r.quantity <= 0
-              const effectiveCost =
-                r.totalCostPerUnit !== undefined ? r.totalCostPerUnit : r.unitCost + (r.otherCost || 0)
-              const sizeLabel = r.size ? `${r.size} ${r.unit}`.trim() : null
-
-              return (
-                <div
-                  key={r.id}
-                  className="group bg-white rounded-2xl p-3.5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between relative overflow-hidden"
-                  id={`raw-material-card-${r.id}`}
-                >
-                  {/* Top Section: Image & Overlaid Badges */}
-                  <div>
-                    <div className="w-full aspect-[4/3] rounded-xl bg-stone-100 overflow-hidden relative flex items-center justify-center mb-3">
-                      {r.imageUrl ? (
-                        <img
-                          src={r.imageUrl}
-                          alt={r.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-stone-300 gap-1">
-                          <Boxes className="w-10 h-10 stroke-[1.5]" />
-                          <span className="text-[10px] font-medium text-stone-400">No Image</span>
-                        </div>
-                      )}
-
-                      {/* Top-Right Action Buttons (Edit, Delete, Upload Image, Stock Adjust) */}
-                      <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur-xs p-1 rounded-lg shadow-xs opacity-90 group-hover:opacity-100 transition-opacity">
-                        <label
-                          className="p-1.5 text-stone-500 hover:text-indigo-600 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
-                          title="Upload / Change Image"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5" />
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) handleQuickImageUpload(r.id, file)
-                            }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="p-1.5 text-stone-500 hover:text-[#7cb518] hover:bg-stone-100 rounded-md transition-colors"
-                          title="Quick Stock Adjust"
-                          onClick={() =>
-                            setStockAdjustmentItem({
-                              id: r.id,
-                              name: r.name,
-                              current: r.quantity,
-                            })
-                          }
-                        >
-                          <ArrowUpCircle className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-stone-100 rounded-md transition-colors"
-                          title="Edit Raw Material"
-                          onClick={() => {
-                            setSelectedRawMaterial(r)
-                            setIsCreatingMaterial(true)
-                          }}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-md transition-colors"
-                          title="Delete Raw Material"
-                          onClick={() => handleDeleteMaterial(r.id, r.name)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {/* Top-Left Category Badge & Status Overlays */}
-                      <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
-                        <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs ${getCategoryBadgeClass(
-                            r.category,
-                            rawCategories
-                          )}`}
-                        >
-                          {r.category}
-                        </span>
-
-                        {isOut ? (
-                          <span className="inline-flex items-center gap-0.5 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
-                            Out of Stock
-                          </span>
-                        ) : isLow ? (
-                          <span className="inline-flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
-                            <AlertTriangle className="w-2.5 h-2.5" /> Low Stock
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {/* Category Pill & SKU Label Row */}
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="inline-block bg-stone-100 text-stone-700 font-semibold text-[10px] px-2 py-0.5 rounded-md truncate max-w-[130px]">
-                        {r.supplierName || r.category}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {r.expiryDate && <ExpiryDateBadge date={r.expiryDate} />}
-                        <span className="font-mono text-[10px] text-stone-400">
-                          {r.sku}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Material Name */}
-                    <h4
-                      className="font-bold text-stone-900 text-sm leading-snug line-clamp-1 group-hover:text-[#7cb518] transition-colors cursor-pointer"
-                      title={r.name}
-                      onClick={() => setViewDetailsMaterial(r)}
-                    >
-                      {r.name}
-                    </h4>
-
-                    {/* Unit & Quantity / Stock Info */}
-                    <div className="flex items-center justify-between text-xs text-stone-500 mt-1">
-                      <span>
-                        {sizeLabel ? `${sizeLabel} • ` : ''}
-                        <strong className="text-stone-700">{r.unit}</strong>
-                      </span>
-                      <span
-                        className={`font-bold ${
-                          isOut ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-stone-800'
-                        }`}
-                      >
-                        {r.quantity} {r.unit} in stock
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bottom Pricing Bar */}
-                  <div className="mt-3.5 pt-3 border-t border-stone-100 flex items-end justify-between">
-                    <div>
-                      <span className="text-[10px] text-stone-400 uppercase font-bold tracking-wider block">
-                        Price / Unit
-                      </span>
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-sm font-extrabold text-stone-900">
-                          {formatPKR(r.unitCost)}
-                        </span>
-                        {effectiveCost !== r.unitCost && (
-                          <span className="text-[10px] text-stone-400 font-medium">
-                            (Landed: {formatPKR(effectiveCost)})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setViewDetailsMaterial(r)}
-                      className="text-[11px] font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-0.5 hover:underline"
-                    >
-                      <Eye className="w-3 h-3" /> View
-                    </button>
-                  </div>
+            {filteredMaterials.map((r) => (
+              <div
+                key={r.id}
+                className="raw-material-card group"
+                id={`raw-material-card-${r.id}`}
+              >
+                <button type="button" className="raw-material-card-image"
+                  aria-label={`View ${r.name} details`} onClick={() => setViewDetailsMaterial(r)}>
+                  <CatalogPhoto item={r} src={r.imageUrl} alt={r.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy" />
+                </button>
+                <div className="raw-material-card-body">
+                <h4 className="raw-material-card-name" title={r.name}>{r.name}</h4>
+                <div className="raw-material-card-footer">
+                  <span className="raw-material-card-price">{formatPKR(r.unitCost)}</span>
+                  <button data-ui="button" type="button" className="raw-material-card-view"
+                    aria-label={`View ${r.name}`} onClick={() => setViewDetailsMaterial(r)}>
+                    <Eye className="w-3.5 h-3.5" /> View
+                  </button>
                 </div>
-              )
-            })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -775,13 +634,14 @@ export default function RawMaterialsView({
             })
           }}
           onViewInvoice={(img) => setViewingInvoiceImage(img)}
+          onUploadImage={(file) => handleQuickImageUpload(viewDetailsMaterial.id, file)}
         />
       )}
 
       {/* MODAL: VIEW INVOICE IMAGE PREVIEW */}
       {viewingInvoiceImage && (
         <div className="editor-overlay" onClick={() => setViewingInvoiceImage(null)}>
-          <div
+          <div data-ui="surface"
             className="bg-white p-4 rounded-xl max-w-2xl w-full mx-4 shadow-2xl relative"
             onClick={(e) => e.stopPropagation()}
           >
@@ -790,7 +650,7 @@ export default function RawMaterialsView({
                 <Receipt className="w-5 h-5 text-blue-600" />
                 <h3 className="font-bold text-gray-900 text-sm">Purchase Invoice Document Copy</h3>
               </div>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="icon-button"
                 onClick={() => setViewingInvoiceImage(null)}
@@ -806,7 +666,7 @@ export default function RawMaterialsView({
               />
             </div>
             <div className="flex justify-end mt-3">
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary text-xs"
                 onClick={() => setViewingInvoiceImage(null)}
@@ -866,7 +726,7 @@ function RawMaterialCategoryManagerModal({
     setError(null)
   }
 
-  const handleDeleteCategory = (cat: CategoryItem) => {
+  const handleDeleteCategory = async (cat: CategoryItem) => {
     if (categories.length <= 1) {
       setError('You must maintain at least one raw material category.')
       return
@@ -878,7 +738,7 @@ function RawMaterialCategoryManagerModal({
       confirmMsg = `Category "${cat.name}" is currently assigned to ${linkedCount} raw material item(s). If deleted, these items will be reassigned to the default category. Continue?`
     }
 
-    if (!window.confirm(confirmMsg)) return
+    if (!await confirmAction(confirmMsg)) return
 
     const remainingCats = categories.filter((c) => c.id !== cat.id)
     const fallbackCategoryName = remainingCats[0]?.name || 'Ingredients'
@@ -893,7 +753,7 @@ function RawMaterialCategoryManagerModal({
     onSaveCategories(remainingCats, updatedMaterials)
   }
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -912,6 +772,7 @@ function RawMaterialCategoryManagerModal({
       return
     }
 
+    if (editingCatId && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     if (editingCatId) {
       const oldCat = categories.find((c) => c.id === editingCatId)
       const oldName = oldCat?.name
@@ -969,7 +830,7 @@ function RawMaterialCategoryManagerModal({
               <h2>Manage Raw Material Categories</h2>
             </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1001,7 +862,7 @@ function RawMaterialCategoryManagerModal({
               <label className="text-xs font-semibold text-stone-700 mb-1 block">
                 Category Name *
               </label>
-              <input
+              <input data-ui="input"
                 value={catName}
                 onChange={(e) => setCatName(e.target.value)}
                 placeholder="e.g. Packaging, Ingredients, Preservatives"
@@ -1021,7 +882,7 @@ function RawMaterialCategoryManagerModal({
                 {RAW_CATEGORY_COLORS.map((col) => {
                   const isSelected = catColor === col.id
                   return (
-                    <button
+                    <button data-ui="button"
                       key={col.id}
                       type="button"
                       onClick={() => setCatColor(col.id)}
@@ -1045,7 +906,7 @@ function RawMaterialCategoryManagerModal({
               <label className="text-xs font-semibold text-stone-700 mb-1 block">
                 Description / Notes <span className="text-stone-400 font-normal">(Optional)</span>
               </label>
-              <input
+              <input data-ui="input"
                 value={catDesc}
                 onChange={(e) => setCatDesc(e.target.value)}
                 placeholder="Brief description or usage notes"
@@ -1054,7 +915,7 @@ function RawMaterialCategoryManagerModal({
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <button
+              <button data-ui="button"
                 type="button"
                 className="button secondary text-xs py-1.5 px-3"
                 onClick={() => {
@@ -1065,7 +926,7 @@ function RawMaterialCategoryManagerModal({
               >
                 Cancel
               </button>
-              <button type="submit" className="button primary text-xs py-1.5 px-4" id="btn-save-raw-category">
+              <button data-ui="button" type="submit" className="button primary text-xs py-1.5 px-4" id="btn-save-raw-category">
                 {isAddingNew ? 'Create Category' : 'Save Changes'}
               </button>
             </div>
@@ -1078,7 +939,7 @@ function RawMaterialCategoryManagerModal({
               </span>
               <p className="text-[11px] text-stone-500">Available in raw material dropdowns & badges</p>
             </div>
-            <button
+            <button data-ui="button"
               type="button"
               className="button primary text-xs py-1.5 px-3"
               onClick={() => {
@@ -1125,7 +986,7 @@ function RawMaterialCategoryManagerModal({
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="p-1.5 text-stone-500 hover:text-blue-600 rounded-md hover:bg-stone-100 transition-colors"
                       title="Edit Category"
@@ -1133,7 +994,7 @@ function RawMaterialCategoryManagerModal({
                     >
                       <Edit className="w-3.5 h-3.5" />
                     </button>
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="p-1.5 text-stone-500 hover:text-rose-600 rounded-md hover:bg-stone-100 transition-colors"
                       title="Delete Category"
@@ -1149,7 +1010,7 @@ function RawMaterialCategoryManagerModal({
         </div>
 
         <div className="editor-actions mt-5">
-          <button type="button" className="button secondary w-full py-2 text-xs" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary w-full py-2 text-xs" onClick={onClose}>
             Done
           </button>
         </div>
@@ -1242,7 +1103,7 @@ function RawMaterialEditorModal({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -1297,6 +1158,7 @@ function RawMaterialEditorModal({
       updatedAt: now,
     }
 
+    if (material && !(await confirmAction({"title":"Save changes?","message":"Apply these edits to the saved record?","confirmLabel":"Save changes","destructive":false}))) return
     onSave(saved)
   }
 
@@ -1320,7 +1182,7 @@ function RawMaterialEditorModal({
               </h2>
             </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1335,12 +1197,12 @@ function RawMaterialEditorModal({
           )}
 
           {/* SECTION 1: MATERIAL IDENTITY & CLASSIFICATION */}
-          <div className="bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
+          <div data-ui="surface" className="gradient-card bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Boxes className="w-4 h-4 text-[#7cb518]" /> 1. Material Identity & Classification
               </h3>
-              <button
+              <button data-ui="button"
                 type="button"
                 className="text-[11px] text-[#7cb518] hover:underline font-semibold flex items-center gap-1"
                 onClick={onOpenCategoryManager}
@@ -1354,7 +1216,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Material Name *
                 </label>
-                <input
+                <input data-ui="input"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Refined White Sugar"
@@ -1368,7 +1230,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   SKU Code * <span className="text-[10px] text-stone-400 font-normal">(Unique)</span>
                 </label>
-                <input
+                <input data-ui="input"
                   value={sku}
                   onChange={(e) => setSku(e.target.value)}
                   placeholder="e.g. RAW-SGR-01"
@@ -1384,7 +1246,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Category *
                 </label>
-                <select
+                <select data-ui="select"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -1402,7 +1264,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Description / Storage Notes <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
                 </label>
-                <input
+                <input data-ui="input"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="e.g. Food-grade, stored in dry area"
@@ -1418,7 +1280,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Size / Package Capacity <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
                 </label>
-                <input
+                <input data-ui="input"
                   value={size}
                   onChange={(e) => setSize(e.target.value)}
                   placeholder="e.g. 50"
@@ -1431,7 +1293,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Unit of Measurement *
                 </label>
-                <select
+                <select data-ui="select"
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -1461,7 +1323,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Batch / Receiving Date <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
                 </label>
-                <input
+                <input data-ui="input"
                   type="date"
                   value={manufacturingDate}
                   onChange={(e) => setManufacturingDate(e.target.value)}
@@ -1477,7 +1339,7 @@ function RawMaterialEditorModal({
                   </label>
                   {expiryDate && <ExpiryDateBadge date={expiryDate} />}
                 </div>
-                <input
+                <input data-ui="input"
                   type="date"
                   value={expiryDate}
                   onChange={(e) => setExpiryDate(e.target.value)}
@@ -1492,7 +1354,7 @@ function RawMaterialEditorModal({
           </div>
 
           {/* SECTION 2: PRICE, OTHER COSTS & LANDED COST RATE */}
-          <div className="bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
+          <div data-ui="surface" className="gradient-card bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
               <DollarSign className="w-4 h-4 text-[#7cb518]" /> 2. Price, Other Costs & Landed Cost Rate
             </h3>
@@ -1503,7 +1365,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Base Price per Unit (Rs) *
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   step="any"
@@ -1521,7 +1383,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Other Cost (Rs)
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   step="any"
@@ -1538,7 +1400,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Primary Supplier
                 </label>
-                <select
+                <select data-ui="select"
                   value={supplierId}
                   onChange={(e) => setSupplierId(e.target.value)}
                   className="w-full bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
@@ -1558,7 +1420,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Warehouse Stock ({unit}) *
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="0"
                   step="any"
@@ -1576,7 +1438,7 @@ function RawMaterialEditorModal({
                 <label className="text-xs font-semibold text-stone-700 mb-1 block">
                   Reorder Alert Threshold *
                 </label>
-                <input
+                <input data-ui="input"
                   type="number"
                   min="1"
                   step="any"
@@ -1592,7 +1454,7 @@ function RawMaterialEditorModal({
             </div>
 
             {/* Total Landed Cost Result Box (Prominent & Clear) */}
-            <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs mt-3">
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-xl border border-stone-200 shadow-2xs mt-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -1600,7 +1462,7 @@ function RawMaterialEditorModal({
                       Total Landed Cost Rate / {unit}
                     </span>
                     <label className="flex items-center gap-1 text-[11px] text-[#7cb518] font-semibold cursor-pointer select-none">
-                      <input
+                      <input data-ui="checkbox"
                         type="checkbox"
                         checked={isManualTotalCost}
                         onChange={(e) => setIsManualTotalCost(e.target.checked)}
@@ -1620,7 +1482,7 @@ function RawMaterialEditorModal({
                   {isManualTotalCost ? (
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-purple-900">Rs</span>
-                      <input
+                      <input data-ui="input"
                         type="number"
                         min="0"
                         step="any"
@@ -1655,16 +1517,16 @@ function RawMaterialEditorModal({
           </div>
 
           {/* SECTION 3: MEDIA & INVOICE ATTACHMENT */}
-          <div className="bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
+          <div data-ui="surface" className="gradient-card bg-stone-50/80 p-4.5 rounded-xl border border-stone-200 space-y-3.5">
             <h3 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
               <UploadCloud className="w-4 h-4 text-[#7cb518]" /> 3. Material Photo & Purchase Invoice Attachment
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Material Image */}
-              <div className="bg-white p-3.5 rounded-xl border border-stone-200 space-y-2">
+              <div data-ui="surface" className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 space-y-2">
                 <label className="text-xs font-bold text-stone-700 block">Raw Material Photo <span className="text-[10px] text-stone-400 font-normal">(Optional)</span></label>
-                <input
+                <input data-ui="file"
                   type="file"
                   ref={imageInputRef}
                   accept="image/*"
@@ -1674,15 +1536,11 @@ function RawMaterialEditorModal({
 
                 <div className="flex items-center gap-3">
                   <div className="w-16 h-16 rounded-xl bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center flex-shrink-0">
-                    {imageUrl ? (
-                      <img src={imageUrl} alt="Material preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <Boxes className="w-6 h-6 text-stone-300" />
-                    )}
+                    <CatalogPhoto item={{ name, category }} src={imageUrl} className="w-full h-full object-cover" />
                   </div>
 
                   <div className="flex-1 space-y-1.5">
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="button secondary text-xs w-full py-1.5"
                       onClick={() => imageInputRef.current?.click()}
@@ -1690,7 +1548,7 @@ function RawMaterialEditorModal({
                       <UploadCloud className="w-3.5 h-3.5" /> {imageUrl ? 'Change Photo' : 'Upload Photo'}
                     </button>
                     {imageUrl && (
-                      <button
+                      <button data-ui="button"
                         type="button"
                         className="text-[11px] text-rose-600 hover:underline font-semibold block"
                         onClick={() => setImageUrl('')}
@@ -1703,11 +1561,11 @@ function RawMaterialEditorModal({
               </div>
 
               {/* Purchase Invoice Attachment */}
-              <div className="bg-white p-3.5 rounded-xl border border-stone-200 space-y-2">
+              <div data-ui="surface" className="gradient-card bg-white p-3.5 rounded-xl border border-stone-200 space-y-2">
                 <label className="text-xs font-bold text-stone-700 block">
                   Purchase Invoice / Bill Image <span className="text-[10px] text-stone-400 font-normal">(Optional)</span>
                 </label>
-                <input
+                <input data-ui="file"
                   type="file"
                   ref={invoiceInputRef}
                   accept="image/*"
@@ -1725,7 +1583,7 @@ function RawMaterialEditorModal({
                   </div>
 
                   <div className="flex-1 space-y-1.5">
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="button secondary text-xs w-full py-1.5"
                       onClick={() => invoiceInputRef.current?.click()}
@@ -1734,7 +1592,7 @@ function RawMaterialEditorModal({
                       {purchaseInvoiceImage ? 'Change Invoice' : 'Attach Invoice'}
                     </button>
                     {purchaseInvoiceImage && (
-                      <button
+                      <button data-ui="button"
                         type="button"
                         className="text-[11px] text-rose-600 hover:underline font-semibold block"
                         onClick={() => setPurchaseInvoiceImage('')}
@@ -1751,10 +1609,10 @@ function RawMaterialEditorModal({
 
         {/* Sticky Fixed Bottom Actions (Always visible without scrolling) */}
         <div className="p-4 border-t border-stone-200 bg-stone-50/95 backdrop-blur-xs flex items-center justify-end gap-3 rounded-b-2xl flex-shrink-0">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary" id="btn-save-raw-material-submit">
+          <button data-ui="button" type="submit" className="button primary" id="btn-save-raw-material-submit">
             {material ? 'Update Material' : 'Add Material'}
           </button>
         </div>
@@ -1777,6 +1635,7 @@ function RawMaterialDetailsModal({
   onDelete,
   onStockAdjust,
   onViewInvoice,
+  onUploadImage,
 }: {
   material: RawMaterialItem
   consumptionHistory: Array<{
@@ -1795,6 +1654,7 @@ function RawMaterialDetailsModal({
   onDelete: () => void
   onStockAdjust: () => void
   onViewInvoice: (img: string) => void
+  onUploadImage: (file: File) => void
 }) {
   const isLow = material.quantity <= material.reorderLevel && material.quantity > 0
   const isOut = material.quantity <= 0
@@ -1805,18 +1665,31 @@ function RawMaterialDetailsModal({
   const totalVal = material.quantity * effectiveCost
   const supplier = suppliers.find((s) => s.id === material.supplierId)
   const badgeClass = getCategoryBadgeClass(material.category, rawCategories)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null
+    dialogRef.current?.focus()
+    return () => previousFocus?.focus()
+  }, [])
 
   return (
     <div className="editor-overlay">
-      <div className="editor-modal large" id="raw-material-details-modal">
+      <div className="editor-modal large" id="raw-material-details-modal"
+        ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="raw-material-details-title" tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.stopPropagation(); onClose() }
+          if (event.key === 'Tab') {
+            const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, input:not(.hidden), [href], [tabindex="0"]'))
+            const first = controls[0]
+            const last = controls[controls.length - 1]
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last?.focus() }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+          }
+        }}>
         <div className="editor-header">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center flex-shrink-0">
-              {material.imageUrl ? (
-                <img src={material.imageUrl} alt={material.name} className="w-full h-full object-cover" />
-              ) : (
-                <Boxes className="w-6 h-6 text-[#7cb518]" />
-              )}
+            <div className="material-details-photo">
+              <CatalogPhoto item={material} src={material.imageUrl} alt={material.name} className="w-full h-full object-cover" />
             </div>
             <div>
               <span className="text-xs font-mono text-stone-500 bg-stone-100 px-2 py-0.5 rounded mr-2">
@@ -1825,17 +1698,20 @@ function RawMaterialDetailsModal({
               <span className={`text-xs font-semibold px-2 py-0.5 rounded shadow-2xs ${badgeClass}`}>
                 {material.category}
               </span>
-              <h2 className="text-lg font-bold text-stone-900 mt-1">{material.name}</h2>
+              <h2 id="raw-material-details-title">{material.name}</h2>
+              <span className={`material-details-status ${isOut ? 'is-out' : isLow ? 'is-low' : ''}`}>
+                <span aria-hidden="true" />{isOut ? 'Out of stock' : isLow ? 'Low stock' : 'In stock'}
+              </span>
             </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" aria-label="Close material details" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-4 max-h-[72vh] overflow-y-auto pr-1">
+        <div className="material-details-body space-y-4">
           {/* Key Metric Blocks */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="material-details-metrics grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-stone-50 p-3 rounded-lg border border-stone-200">
               <div className="text-[11px] text-stone-500 font-medium">Remaining Stock</div>
               <div
@@ -1871,8 +1747,8 @@ function RawMaterialDetailsModal({
 
           {/* Specifications & Supplier Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
-              <h3 className="text-xs font-bold text-stone-700 uppercase tracking-wider">Specifications & Metrics</h3>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+              <h3>Specifications</h3>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1 border-b border-stone-100">
                   <span className="text-stone-500">Packaging Size:</span>
@@ -1907,8 +1783,8 @@ function RawMaterialDetailsModal({
             </div>
 
             {/* Supplier & Document Copies */}
-            <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
-              <h3 className="text-xs font-bold text-stone-700 uppercase tracking-wider">Supplier & Attached Documents</h3>
+            <div data-ui="surface" className="gradient-card bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+              <h3>Supplier & Documents</h3>
 
               {supplier ? (
                 <div className="bg-blue-50/60 p-3 rounded-lg border border-blue-200/70 text-xs space-y-1">
@@ -1934,7 +1810,7 @@ function RawMaterialDetailsModal({
                 <div className="text-xs font-bold text-stone-700 mb-1.5 flex items-center justify-between">
                   <span>Attached Purchase Invoice</span>
                   {material.purchaseInvoiceImage && (
-                    <button
+                    <button data-ui="button"
                       type="button"
                       className="text-[11px] text-blue-600 font-semibold hover:underline"
                       onClick={() => onViewInvoice(material.purchaseInvoiceImage!)}
@@ -1968,9 +1844,9 @@ function RawMaterialDetailsModal({
           </div>
 
           {/* Production Usage History Table */}
-          <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+          <div data-ui="surface" className="gradient-card bg-white p-4 rounded-xl border border-stone-200 space-y-3">
             <h3 className="text-xs font-bold text-stone-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" /> Linked Production Engine Consumption History
+              <Layers className="w-3.5 h-3.5 text-emerald-600" /> Production Usage
             </h3>
 
             {consumptionHistory.length === 0 ? (
@@ -1979,7 +1855,7 @@ function RawMaterialDetailsModal({
               </p>
             ) : (
               <div className="table-scroll border border-stone-200 rounded-lg">
-                <table className="w-full text-xs">
+                <table data-ui="table" className="w-full text-xs">
                   <thead className="bg-stone-50">
                     <tr>
                       <th>Batch #</th>
@@ -2009,7 +1885,7 @@ function RawMaterialDetailsModal({
         </div>
 
         <div className="editor-actions justify-between">
-          <button
+          <button data-ui="button"
             type="button"
             className="button secondary text-rose-600 hover:text-rose-700"
             onClick={onDelete}
@@ -2018,10 +1894,19 @@ function RawMaterialDetailsModal({
           </button>
 
           <div className="flex items-center gap-2">
-            <button type="button" className="button secondary" onClick={onStockAdjust}>
+            <label className="button secondary cursor-pointer">
+              <ImageIcon className="w-4 h-4" /> Change Image
+              <input type="file" accept="image/*" className="hidden" aria-label="Change material image"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) onUploadImage(file)
+                  event.target.value = ''
+                }} />
+            </label>
+            <button data-ui="button" type="button" className="button secondary" onClick={onStockAdjust}>
               <ArrowUpCircle className="w-4 h-4" /> Adjust Stock
             </button>
-            <button type="button" className="button primary" onClick={onEdit}>
+            <button data-ui="button" type="button" className="button primary" onClick={onEdit}>
               <Edit className="w-4 h-4" /> Edit Material
             </button>
           </div>
@@ -2047,9 +1932,10 @@ function StockAdjustmentModal({
   const [qty, setQty] = useState(50)
   const [reason, setReason] = useState('Manual physical stock audit / warehouse count')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const delta = adjustmentType === 'add' ? qty : -qty
+    if (!(await confirmAction({"title":"Apply stock adjustment?","message":"Update the inventory quantity with this adjustment?","confirmLabel":"Apply adjustment","destructive":false}))) return
     onApply(delta, reason)
   }
 
@@ -2061,7 +1947,7 @@ function StockAdjustmentModal({
             <p className="eyebrow">Warehouse Physical Audit</p>
             <h2>Adjust Raw Material Stock: {item.name}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2073,7 +1959,7 @@ function StockAdjustmentModal({
         <div className="form-grid single">
           <label>
             Adjustment Action
-            <select
+            <select data-ui="select"
               value={adjustmentType}
               onChange={(e) => setAdjustmentType(e.target.value as any)}
             >
@@ -2084,7 +1970,7 @@ function StockAdjustmentModal({
 
           <label>
             Adjustment Quantity
-            <input
+            <input data-ui="input"
               type="number"
               min="1"
               step="any"
@@ -2096,7 +1982,7 @@ function StockAdjustmentModal({
 
           <label>
             Reason / Audit Notes
-            <input
+            <input data-ui="input"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Physical inventory count correction"
@@ -2106,10 +1992,10 @@ function StockAdjustmentModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Apply Stock Adjustment
           </button>
         </div>

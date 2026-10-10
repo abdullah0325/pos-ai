@@ -1,5 +1,9 @@
 // Client-side PDF & Excel/CSV Export Engine for AL FAROOQ FOODS
 import jsPDF from 'jspdf'
+import { loadDatabase, defaultCompanyProfile } from '@/lib/db'
+
+function billingProfile() { return { ...defaultCompanyProfile, ...loadDatabase().companyProfile } }
+function billingContact() { const p = billingProfile(); return [p.phone1, p.phone2, p.email].filter(Boolean).join(' | ') }
 import autoTable from 'jspdf-autotable'
 import {
   formatPKR,
@@ -34,12 +38,12 @@ export function generateInvoicePDF(invoice: InvoiceItem, customer?: CustomerItem
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
-  doc.text('AL FAROOQ FOODS', 14, 15)
+  doc.text(billingProfile().name, 14, 15)
 
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
-  doc.text('Manufacturers of Mineral Water, Juices, Confectionery & Snacks', 14, 21)
-  doc.text('Phone: 0344 9549051, 0346 9829900 | Email: umarfarooq4847@gmail.com', 14, 26)
+  doc.text(billingProfile().tagline, 14, 21)
+  doc.text(billingContact(), 14, 26)
 
   // Invoice Title Badge
   doc.setFillColor(255, 255, 255)
@@ -181,7 +185,7 @@ export function generateLedgerPDF(party: CustomerItem | SupplierItem, ledgers: L
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(18)
-  doc.text('AL FAROOQ FOODS', 14, 13)
+  doc.text(billingProfile().name, 14, 13)
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.text(`${isCustomer ? 'Customer / Distributor' : 'Supplier'} Account Statement & Ledger`, 14, 20)
@@ -297,7 +301,7 @@ export function generateSalarySlipPDF(employee: EmployeeItem, payment: SalaryPay
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
-  doc.text('AL FAROOQ FOODS', 14, 15)
+  doc.text(billingProfile().name, 14, 15)
 
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
@@ -457,7 +461,7 @@ export function generateCustomerPaymentReceiptPDF(
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
-  doc.text('AL FAROOQ FOODS', 10, 11)
+  doc.text(billingProfile().name, 10, 11)
 
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
@@ -555,7 +559,7 @@ export function generateSupplierDealReceiptPDF(
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(20)
-  doc.text('AL FAROOQ FOODS', 14, 14)
+  doc.text(billingProfile().name, 14, 14)
 
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
@@ -661,12 +665,12 @@ export function generatePurchaseVoucherPDF(purchase: PurchaseItem, supplier?: Su
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
-  doc.text('AL FAROOQ FOODS', 14, 15)
+  doc.text(billingProfile().name, 14, 15)
 
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.text('Raw Material Procurement & Finished Goods Purchase Voucher', 14, 21)
-  doc.text('Phone: 0344 9549051, 0346 9829900 | Email: umarfarooq4847@gmail.com', 14, 26)
+  doc.text(billingContact(), 14, 26)
 
   // Title Box
   doc.setFillColor(255, 255, 255)
@@ -831,7 +835,7 @@ export function generateExpenseVoucherPDF(expense: any) {
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
-  doc.text('AL FAROOQ FOODS', 10, 11)
+  doc.text(billingProfile().name, 10, 11)
 
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
@@ -966,7 +970,7 @@ export function generateBusinessReportPDF(options: BusinessReportPDFOptions) {
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
-  doc.text('AL FAROOQ FOODS', 14, 11)
+  doc.text(billingProfile().name, 14, 11)
 
   doc.setFontSize(8.5)
   doc.setFont('helvetica', 'normal')

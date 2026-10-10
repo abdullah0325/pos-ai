@@ -1,5 +1,9 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
+import ModuleHeading from './module-heading'
+
 import { useState } from 'react'
 import { Plus, Search, FileText, Download, Trash2, Printer, CheckCircle, Clock, AlertCircle, ShoppingCart, X, Calendar } from 'lucide-react'
 import { formatPKR, formatDate, type AppDatabase, type InvoiceItem, type InvoiceLineItem, type CustomerItem, type Status, type LedgerEntry } from '@/lib/db'
@@ -50,55 +54,59 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
   }
 
   // Delete invoice
-  const handleDelete = (invId: string) => {
-    if (!window.confirm('Are you sure you want to delete this invoice?')) return
+  const handleDelete = async (invId: string) => {
+    if (!await confirmAction('Are you sure you want to delete this invoice?')) return
     const updatedInvoices = db.invoices.filter((i) => i.id !== invId)
     onSaveDatabase({ ...db, invoices: updatedInvoices })
   }
 
   return (
     <div className="page-stack">
-      <div className="page-heading">
+      <ModuleHeading icon="invoices">
         <div>
           <p className="eyebrow">Commerce / Billing & Sales</p>
           <h1>Invoice Management</h1>
           <p className="subheading">Create, track, and print customer tax invoices with automatic inventory and ledger deduction.</p>
         </div>
         <div className="heading-actions">
-          <button className="button secondary" onClick={handleExportCSV}>
+          <button data-ui="button" className="button secondary" onClick={handleExportCSV}>
             <Download /> Export CSV
           </button>
-          <button className="button primary" onClick={() => setShowCreateModal(true)}>
+          <button data-ui="button" className="button primary" onClick={() => setShowCreateModal(true)}>
             <Plus /> Create Invoice
           </button>
         </div>
-      </div>
+      </ModuleHeading>
 
       {/* KPI Cards (Auto-wrap 2x2 on smaller screens) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
+            <div className="stat-icon olive"><FileText aria-hidden="true" /></div>
             <span className="text-xs font-semibold text-stone-500 block">Total Invoiced Sales</span>
             <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">{formatPKR(totalSales)}</strong>
           </div>
           <span className="text-[11px] font-medium text-stone-500 mt-2 block">{db.invoices.length} total invoices issued</span>
         </div>
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
+            <div className="stat-icon blue"><CheckCircle aria-hidden="true" /></div>
             <span className="text-xs font-semibold text-stone-500 block">Payments Collected</span>
             <strong className="text-xl font-extrabold text-emerald-700 block mt-1 tracking-tight">{formatPKR(totalReceived)}</strong>
           </div>
           <span className="text-[11px] font-medium text-emerald-700 mt-2 block">Deposited into Cash & Bank</span>
         </div>
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
+            <div className="stat-icon orange"><Clock aria-hidden="true" /></div>
             <span className="text-xs font-semibold text-stone-500 block">Outstanding Receivables</span>
             <strong className="text-xl font-extrabold text-amber-700 block mt-1 tracking-tight">{formatPKR(totalReceivable)}</strong>
           </div>
           <span className="text-[11px] font-medium text-amber-800/80 mt-2 block">Pending customer recovery</span>
         </div>
-        <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
+        <div data-ui="toolbar" className="gradient-card bg-white rounded-xl border border-stone-200 p-4 shadow-xs flex flex-col justify-between">
           <div>
+            <div className="stat-icon purple"><AlertCircle aria-hidden="true" /></div>
             <span className="text-xs font-semibold text-stone-500 block">Unpaid / Partial Invoices</span>
             <strong className="text-xl font-extrabold text-stone-900 block mt-1 tracking-tight">
               {db.invoices.filter((i) => i.status !== 'Paid').length}
@@ -109,18 +117,18 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
       </div>
 
       {/* Filter toolbar (Grouped Cohesive Container) */}
-      <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-xs flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+      <div data-ui="toolbar" className="gradient-card bg-white p-2.5 rounded-xl border border-stone-200 shadow-xs flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
         <div className="flex flex-1 items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input
+            <input data-ui="input"
               placeholder="Search invoice # or customer..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full pl-9 pr-8 py-1.5 text-xs bg-stone-50 hover:bg-white focus:bg-white border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
             />
             {query && (
-              <button
+              <button data-ui="button"
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
                 onClick={() => setQuery('')}
               >
@@ -128,7 +136,7 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
               </button>
             )}
           </div>
-          <select
+          <select data-ui="select"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
             className="border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs bg-stone-50 text-stone-700 font-medium focus:outline-none cursor-pointer"
@@ -145,9 +153,9 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
       </div>
 
       {/* Invoices Table (Fit within 1440px desktop with no horizontal scroll) */}
-      <div className="bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
+      <div data-ui="surface" className="gradient-card bg-white rounded-xl border border-stone-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table data-ui="table" className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-500 text-[10.5px] uppercase tracking-wider font-bold">
                 <th className="py-2.5 px-3">Invoice & Date</th>
@@ -218,7 +226,7 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
                   </td>
                   <td className="py-2.5 px-3 text-right">
                     <div className="row-actions justify-end">
-                      <button
+                      <button data-ui="button"
                         className="row-action text-[#7cb518] hover:bg-emerald-50"
                         title="Download / Print PDF"
                         onClick={() => {
@@ -228,10 +236,10 @@ export default function InvoicesView({ db, onSaveDatabase }: InvoicesViewProps) 
                       >
                         <Download className="w-3.5 h-3.5" />
                       </button>
-                      <button className="row-action hover:bg-stone-100" title="View details" onClick={() => setSelectedInvoice(inv)}>
+                      <button data-ui="button" className="row-action hover:bg-stone-100" title="View details" onClick={() => setSelectedInvoice(inv)}>
                         <FileText className="w-3.5 h-3.5" />
                       </button>
-                      <button className="row-action danger" title="Delete invoice" onClick={() => handleDelete(inv.id)}>
+                      <button data-ui="button" className="row-action danger" title="Delete invoice" onClick={() => handleDelete(inv.id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -284,12 +292,12 @@ function InvoiceDetailModal({
             <p className="eyebrow">Tax Invoice Detail</p>
             <h2>{invoice.invoiceNumber}</h2>
           </div>
-          <button className="icon-button" onClick={onClose}>
+          <button data-ui="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+        <div data-ui="surface" className="gradient-card bg-gray-50 border border-gray-200 rounded-xl p-4 mb-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
           <div>
             <span className="text-gray-500 block">Customer Name</span>
             <strong className="text-sm text-gray-900">{invoice.customerName}</strong>
@@ -327,7 +335,7 @@ function InvoiceDetailModal({
         </div>
 
         <div className="table-scroll border border-gray-200 rounded-lg mb-4">
-          <table className="w-full text-xs">
+          <table data-ui="table" className="w-full text-xs">
             <thead className="bg-gray-100">
               <tr>
                 <th>#</th>
@@ -382,10 +390,10 @@ function InvoiceDetailModal({
         </div>
 
         <div className="editor-actions flex justify-between items-center">
-          <button className="button secondary" onClick={() => generateInvoicePDF(invoice, customer)}>
+          <button data-ui="button" className="button secondary" onClick={() => generateInvoicePDF(invoice, customer)}>
             <Download /> Download Official PDF
           </button>
-          <button className="button primary" onClick={onClose}>
+          <button data-ui="button" className="button primary" onClick={onClose}>
             Close
           </button>
         </div>
@@ -604,8 +612,8 @@ function CreateInvoiceModal({
     onClose()
 
     // Automatically prompt PDF generation
-    setTimeout(() => {
-      if (window.confirm('Invoice created successfully! Would you like to download the PDF invoice?')) {
+    setTimeout(async () => {
+      if (await confirmAction('Invoice created successfully! Would you like to download the PDF invoice?')) {
         generateInvoicePDF(newInvoice, selectedCustomer)
       }
     }, 150)
@@ -619,7 +627,7 @@ function CreateInvoiceModal({
             <p className="eyebrow">New Transaction</p>
             <h2>Create Customer Invoice</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -628,7 +636,7 @@ function CreateInvoiceModal({
         <div className="form-grid three mb-4">
           <label>
             Customer / Distributor *
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+            <select data-ui="select" value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
               {db.customers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.type} - {c.city})
@@ -639,7 +647,7 @@ function CreateInvoiceModal({
 
           <label>
             Sale Channel
-            <select value={saleType} onChange={(e) => setSaleType(e.target.value as any)}>
+            <select data-ui="select" value={saleType} onChange={(e) => setSaleType(e.target.value as any)}>
               <option value="Distributor">Distributor Rate</option>
               <option value="Wholesale">Wholesale Rate</option>
               <option value="Retail">Retail Rate</option>
@@ -649,7 +657,7 @@ function CreateInvoiceModal({
 
           <label>
             Invoice Date
-            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required />
+            <input data-ui="input" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required />
           </label>
         </div>
 
@@ -657,13 +665,13 @@ function CreateInvoiceModal({
         <div className="mb-4">
           <div className="flex justify-between items-center mb-2">
             <span className="text-xs font-bold uppercase text-gray-500">Products & Quantities</span>
-            <button type="button" className="button secondary text-xs py-1 h-auto" onClick={addLine}>
+            <button data-ui="button" type="button" className="button secondary text-xs py-1 h-auto" onClick={addLine}>
               <Plus className="w-3.5 h-3.5" /> Add Product Row
             </button>
           </div>
 
           <div className="table-scroll border border-gray-200 rounded-lg">
-            <table className="w-full text-xs">
+            <table data-ui="table" className="w-full text-xs">
               <thead className="bg-gray-50">
                 <tr>
                   <th style={{ width: '45%' }}>Finished Product</th>
@@ -677,7 +685,7 @@ function CreateInvoiceModal({
                 {lines.map((line, idx) => (
                   <tr key={idx}>
                     <td>
-                      <select
+                      <select data-ui="select"
                         value={line.productId}
                         onChange={(e) => handleProductChange(idx, e.target.value)}
                         className="w-full text-xs border border-gray-300 rounded p-1.5"
@@ -690,7 +698,7 @@ function CreateInvoiceModal({
                       </select>
                     </td>
                     <td>
-                      <input
+                      <input data-ui="input"
                         type="number"
                         min="1"
                         value={line.quantity}
@@ -699,7 +707,7 @@ function CreateInvoiceModal({
                       />
                     </td>
                     <td>
-                      <input
+                      <input data-ui="input"
                         type="number"
                         min="0"
                         value={line.unitPrice}
@@ -709,7 +717,7 @@ function CreateInvoiceModal({
                     </td>
                     <td className="font-bold text-gray-800">{formatPKR(line.total)}</td>
                     <td>
-                      <button
+                      <button data-ui="button"
                         type="button"
                         className="text-red-500 hover:text-red-700 p-1"
                         onClick={() => removeLine(idx)}
@@ -725,11 +733,11 @@ function CreateInvoiceModal({
         </div>
 
         {/* Payment and Totals Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
+        <div data-ui="surface" className="gradient-card grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
           <div className="space-y-3">
             <label className="block text-xs font-bold text-gray-700">
               Payment Method
-              <select
+              <select data-ui="select"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value as any)}
                 className="w-full mt-1 border border-gray-300 rounded-md p-2 bg-white text-xs"
@@ -743,7 +751,7 @@ function CreateInvoiceModal({
 
             <label className="block text-xs font-bold text-gray-700">
               Deposit Account
-              <select
+              <select data-ui="select"
                 value={paymentAccount}
                 onChange={(e) => setPaymentAccount(e.target.value as any)}
                 className="w-full mt-1 border border-gray-300 rounded-md p-2 bg-white text-xs"
@@ -758,7 +766,7 @@ function CreateInvoiceModal({
 
             <label className="block text-xs font-bold text-gray-700">
               Notes & Dispatch Info
-              <input
+              <input data-ui="input"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Driver, vehicle #, dispatch comments"
@@ -775,7 +783,7 @@ function CreateInvoiceModal({
 
             <div className="flex justify-between items-center">
               <span>Special Discount (Rs):</span>
-              <input
+              <input data-ui="input"
                 type="number"
                 min="0"
                 value={discount}
@@ -791,7 +799,7 @@ function CreateInvoiceModal({
 
             <div className="flex justify-between items-center pt-1">
               <span className="font-bold text-emerald-800">Amount Received Now:</span>
-              <input
+              <input data-ui="input"
                 type="number"
                 min="0"
                 max={grandTotal}
@@ -815,7 +823,7 @@ function CreateInvoiceModal({
                     <Calendar className="w-3.5 h-3.5 text-amber-700" />
                     <span>Payment Due Date (Optional):</span>
                   </label>
-                  <input
+                  <input data-ui="input"
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
@@ -831,10 +839,10 @@ function CreateInvoiceModal({
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Save Invoice & Update Stock
           </button>
         </div>

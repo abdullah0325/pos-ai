@@ -1,5 +1,7 @@
 'use client'
 
+import { confirmAction } from '@/lib/confirmation'
+
 import { useState, useEffect } from 'react'
 import {
   Plus,
@@ -138,12 +140,12 @@ export default function ProcurementView({
   return (
     <div className="page-stack">
       {/* Top Purchase Horizontal Navigation Bar */}
-      <div className="bg-white rounded-xl border border-stone-200 p-2 shadow-xs sticky top-[71px] z-20">
+      <div data-ui="surface" className="gradient-card module-tabs bg-white rounded-xl border border-stone-200 p-2 shadow-xs sticky top-[76px] z-[9]">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
           {tabs.map((t) => {
             const isActive = currentView === t.id
             return (
-              <button
+              <button data-ui="tab"
                 key={t.id}
                 id={`purchase-tab-${t.id}`}
                 onClick={() => setTab(t.id)}
@@ -188,7 +190,7 @@ export default function ProcurementView({
       {/* VIEW 2: SUPPLIERS */}
       {currentView === 'suppliers' && (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
+          <div data-ui="toolbar" className="page-title-banner gradient-card flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
             <div>
               <p className="text-[11px] font-bold tracking-wide uppercase text-stone-500">Vendor Directory</p>
               <h1 className="text-2xl font-black text-stone-900 mt-0.5">Supplier Accounts & Ledgers</h1>
@@ -197,10 +199,10 @@ export default function ProcurementView({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="button secondary" onClick={handleExportSuppliers}>
+              <button data-ui="button" className="button secondary" onClick={handleExportSuppliers}>
                 <Download className="w-4 h-4" /> Export CSV
               </button>
-              <button className="button primary" onClick={() => setIsCreatingSupplier(true)}>
+              <button data-ui="button" className="button primary" onClick={() => setIsCreatingSupplier(true)}>
                 <Plus className="w-4 h-4 stroke-[3]" /> Add Supplier
               </button>
             </div>
@@ -208,7 +210,7 @@ export default function ProcurementView({
 
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Supplier Name & Agency</th>
@@ -247,21 +249,21 @@ export default function ProcurementView({
                       </td>
                       <td>
                         <div className="row-actions">
-                          <button
+                          <button data-ui="button"
                             className="row-action text-[#7cb518]"
                             title="View / Download Supplier Ledger"
                             onClick={() => setViewingSupplierLedger(s)}
                           >
                             <FileText className="w-4 h-4" />
                           </button>
-                          <button className="row-action" title="Edit supplier" onClick={() => setSelectedSupplier(s)}>
+                          <button data-ui="button" className="row-action" title="Edit supplier" onClick={() => setSelectedSupplier(s)}>
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button
+                          <button data-ui="button"
                             className="row-action danger"
                             title="Delete supplier"
-                            onClick={() => {
-                              if (window.confirm('Delete supplier?')) {
+                            onClick={async () => {
+                              if (await confirmAction('Delete supplier?')) {
                                 onSaveDatabase({ ...db, suppliers: db.suppliers.filter((sup) => sup.id !== s.id) })
                               }
                             }}
@@ -282,7 +284,7 @@ export default function ProcurementView({
       {/* VIEW 3: FACTORY EXPENSES */}
       {currentView === 'expenses' && (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
+          <div data-ui="toolbar" className="page-title-banner gradient-card flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
             <div>
               <p className="text-[11px] font-bold tracking-wide uppercase text-stone-500">Factory Overheads</p>
               <h1 className="text-2xl font-black text-stone-900 mt-0.5">Factory Expenses & Operational Costs</h1>
@@ -291,10 +293,10 @@ export default function ProcurementView({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="button secondary" onClick={handleExportExpenses}>
+              <button data-ui="button" className="button secondary" onClick={handleExportExpenses}>
                 <Download className="w-4 h-4" /> Export CSV
               </button>
-              <button className="button primary" onClick={() => setIsCreatingExpense(true)}>
+              <button data-ui="button" className="button primary" onClick={() => setIsCreatingExpense(true)}>
                 <Plus className="w-4 h-4 stroke-[3]" /> Record Expense
               </button>
             </div>
@@ -302,7 +304,7 @@ export default function ProcurementView({
 
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Voucher #</th>
@@ -329,11 +331,11 @@ export default function ProcurementView({
                       <td className="text-xs text-gray-700">{e.paidTo || '—'}</td>
                       <td>
                         <div className="row-actions">
-                          <button
+                          <button data-ui="button"
                             className="row-action danger"
                             title="Delete expense"
-                            onClick={() => {
-                              if (window.confirm('Delete expense voucher?')) {
+                            onClick={async () => {
+                              if (await confirmAction('Delete expense voucher?')) {
                                 onSaveDatabase({ ...db, expenses: db.expenses.filter((exp) => exp.id !== e.id) })
                               }
                             }}
@@ -354,7 +356,7 @@ export default function ProcurementView({
       {/* VIEW 4: RETURNS & DEFECTS */}
       {currentView === 'returns' && (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
+          <div data-ui="toolbar" className="page-title-banner gradient-card flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
             <div>
               <p className="text-[11px] font-bold tracking-wide uppercase text-stone-500">Quality & Loss Tracking</p>
               <h1 className="text-2xl font-black text-stone-900 mt-0.5">Returns & Defective Goods</h1>
@@ -363,7 +365,7 @@ export default function ProcurementView({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="button primary" onClick={() => setIsCreatingReturn(true)}>
+              <button data-ui="button" className="button primary" onClick={() => setIsCreatingReturn(true)}>
                 <Plus className="w-4 h-4 stroke-[3]" /> Record Return / Defect
               </button>
             </div>
@@ -371,7 +373,7 @@ export default function ProcurementView({
 
           <div className="panel table-panel">
             <div className="table-scroll">
-              <table>
+              <table data-ui="table">
                 <thead>
                   <tr>
                     <th>Return #</th>
@@ -402,11 +404,11 @@ export default function ProcurementView({
                       <td className="text-xs text-gray-600">{r.reason}</td>
                       <td>
                         <div className="row-actions">
-                          <button
+                          <button data-ui="button"
                             className="row-action danger"
                             title="Delete return entry"
-                            onClick={() => {
-                              if (window.confirm('Delete return record?')) {
+                            onClick={async () => {
+                              if (await confirmAction('Delete return record?')) {
                                 onSaveDatabase({ ...db, returns: db.returns.filter((ret) => ret.id !== r.id) })
                               }
                             }}
@@ -536,7 +538,7 @@ function CreateSupplierModal({
             <p className="eyebrow">Vendor Directory</p>
             <h2>{supplier ? 'Edit Supplier' : 'Add New Raw Material Supplier'}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -544,47 +546,47 @@ function CreateSupplierModal({
         <div className="form-grid">
           <label>
             Company / Supplier Name *
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. National Sugar Mills" required />
+            <input data-ui="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. National Sugar Mills" required />
           </label>
 
           <label>
             Supply Category *
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Sugar, Preforms, Cartons" required />
+            <input data-ui="input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Sugar, Preforms, Cartons" required />
           </label>
 
           <label>
             Contact Person
-            <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Sales Manager Name" />
+            <input data-ui="input" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Sales Manager Name" />
           </label>
 
           <label>
             Phone Number *
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0300 XXXXXXX" required />
+            <input data-ui="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0300 XXXXXXX" required />
           </label>
 
           <label>
             City *
-            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Lahore" required />
+            <input data-ui="input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Lahore" required />
           </label>
 
           <label>
             Address
-            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Mill / Office Address" />
+            <input data-ui="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Mill / Office Address" />
           </label>
 
           {!supplier && (
             <label>
               Opening Balance (Rs)
-              <input type="number" value={openingBalance} onChange={(e) => setOpeningBalance(Number(e.target.value))} />
+              <input data-ui="input" type="number" value={openingBalance} onChange={(e) => setOpeningBalance(Number(e.target.value))} />
             </label>
           )}
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Save Supplier
           </button>
         </div>
@@ -659,7 +661,7 @@ function CreateExpenseModal({
             <p className="eyebrow">Voucher Entry</p>
             <h2>Record Factory / Admin Expense</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -667,12 +669,12 @@ function CreateExpenseModal({
         <div className="form-grid">
           <label>
             Expense Description *
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Bottling Line Wages" required />
+            <input data-ui="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Bottling Line Wages" required />
           </label>
 
           <label>
             Expense Category *
-            <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
+            <select data-ui="select" value={category} onChange={(e) => setCategory(e.target.value as any)}>
               <option value="Factory Electricity">Factory Electricity (LESCO)</option>
               <option value="Labor & Wages">Labor & Wages</option>
               <option value="Fuel & Diesel">Fuel & Diesel Generator</option>
@@ -687,17 +689,17 @@ function CreateExpenseModal({
 
           <label>
             Amount (Rs) *
-            <input type="number" min="1" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
+            <input data-ui="input" type="number" min="1" value={amount} onChange={(e) => setAmount(Number(e.target.value))} required />
           </label>
 
           <label>
             Date
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <input data-ui="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </label>
 
           <label>
             Payment Mode
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)}>
+            <select data-ui="select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)}>
               <option value="Cash">Cash</option>
               <option value="Bank Transfer">Bank Transfer</option>
               <option value="Cheque">Cheque</option>
@@ -706,7 +708,7 @@ function CreateExpenseModal({
 
           <label>
             Paid From Account
-            <select value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)}>
+            <select data-ui="select" value={paymentAccount} onChange={(e) => setPaymentAccount(e.target.value as any)}>
               {db.accounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
                   {acc.name} (Bal: {formatPKR(acc.balance)})
@@ -717,15 +719,15 @@ function CreateExpenseModal({
 
           <label className="col-span-2">
             Paid To Person / Vendor
-            <input value={paidTo} onChange={(e) => setPaidTo(e.target.value)} placeholder="Recipient name" />
+            <input data-ui="input" value={paidTo} onChange={(e) => setPaidTo(e.target.value)} placeholder="Recipient name" />
           </label>
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Record Expense Voucher
           </button>
         </div>
@@ -785,7 +787,7 @@ function CreateReturnModal({
             <p className="eyebrow">Defects & Adjustments</p>
             <h2>Log Return / Damaged Goods</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose}>
+          <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
@@ -793,7 +795,7 @@ function CreateReturnModal({
         <div className="form-grid">
           <label>
             Return Type *
-            <select value={type} onChange={(e) => setType(e.target.value as any)}>
+            <select data-ui="select" value={type} onChange={(e) => setType(e.target.value as any)}>
               <option value="Customer Return">Customer Return</option>
               <option value="Supplier Return">Supplier Return</option>
               <option value="Damaged in Factory">Damaged in Factory / Transit</option>
@@ -802,40 +804,40 @@ function CreateReturnModal({
 
           <label>
             Party / Customer / Vendor Name
-            <input value={partyName} onChange={(e) => setPartyName(e.target.value)} required />
+            <input data-ui="input" value={partyName} onChange={(e) => setPartyName(e.target.value)} required />
           </label>
 
           <label>
             Product / Material Name *
-            <input value={productName} onChange={(e) => setProductName(e.target.value)} required />
+            <input data-ui="input" value={productName} onChange={(e) => setProductName(e.target.value)} required />
           </label>
 
           <label>
             Quantity *
-            <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} required />
+            <input data-ui="input" type="number" min="1" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} required />
           </label>
 
           <label>
             Unit Packing
-            <input value={unit} onChange={(e) => setUnit(e.target.value)} required />
+            <input data-ui="input" value={unit} onChange={(e) => setUnit(e.target.value)} required />
           </label>
 
           <label>
             Estimated Value / Loss (Rs) *
-            <input type="number" min="0" value={totalLoss} onChange={(e) => setTotalLoss(Number(e.target.value))} required />
+            <input data-ui="input" type="number" min="0" value={totalLoss} onChange={(e) => setTotalLoss(Number(e.target.value))} required />
           </label>
 
           <label className="col-span-2">
             Reason for Return / Defect *
-            <input value={reason} onChange={(e) => setReason(e.target.value)} required />
+            <input data-ui="input" value={reason} onChange={(e) => setReason(e.target.value)} required />
           </label>
         </div>
 
         <div className="editor-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button data-ui="button" type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="button primary">
+          <button data-ui="button" type="submit" className="button primary">
             Record Return
           </button>
         </div>
@@ -861,12 +863,12 @@ function SupplierLedgerModal({
             <p className="eyebrow">Supplier Statement</p>
             <h2>{supplier.name} · Vendor Ledger</h2>
           </div>
-          <button className="icon-button" onClick={onClose}>
+          <button data-ui="button" className="icon-button" onClick={onClose}>
             <X />
           </button>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+        <div data-ui="surface" className="gradient-card bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
           <div>
             <span className="text-gray-500 block">Supply Category</span>
             <strong className="text-sm text-gray-900">{supplier.category}</strong>
@@ -886,7 +888,7 @@ function SupplierLedgerModal({
         </div>
 
         <div className="table-scroll border border-gray-200 rounded-lg mb-4">
-          <table className="w-full text-xs">
+          <table data-ui="table" className="w-full text-xs">
             <thead className="bg-gray-100">
               <tr>
                 <th>Date</th>
@@ -922,10 +924,10 @@ function SupplierLedgerModal({
         </div>
 
         <div className="editor-actions flex justify-between items-center">
-          <button className="button secondary" onClick={() => generateLedgerPDF(supplier, ledgers, false)}>
+          <button data-ui="button" className="button secondary" onClick={() => generateLedgerPDF(supplier, ledgers, false)}>
             <Download className="w-4 h-4" /> Download Vendor Statement PDF
           </button>
-          <button className="button primary" onClick={onClose}>
+          <button data-ui="button" className="button primary" onClick={onClose}>
             Close
           </button>
         </div>
