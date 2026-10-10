@@ -82,3 +82,50 @@
 }
 
 @keyframes mobile-module-enter { from { opacity: .7; } to { opacity: 1; } }
+
+/* Compact, lighter mobile typography; retain modest emphasis for hierarchy. */
+@layer utilities {
+@media screen and (max-width: 900px) {
+  :is(.app-frame, .editor-modal, .profile-edit-dialog, .collection-receipt, .confirmation-dialog, .pin-lock-screen) {
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  :is(.app-frame, .editor-modal, .profile-edit-dialog, .collection-receipt, .confirmation-dialog, .pin-lock-screen)
+    :is(div, p, span, label, li, a, th, td, input, select, textarea, small) {
+    font-weight: 400 !important;
+  }
+  :is(.app-frame, .editor-modal, .profile-edit-dialog, .collection-receipt, .confirmation-dialog, .pin-lock-screen)
+    :is(h1, h2, h3, h4, h5, h6, strong, b, button, button span, th) {
+    font-weight: 500 !important;
+  }
+  .app-frame :is(.font-semibold, .font-bold, .font-extrabold, .font-black) { font-weight: 500 !important; }
+  .app-frame :is(.text-sm, .text-base):not(input, select, textarea) { font-size: 12px !important; }
+  .app-frame .text-lg { font-size: 14px !important; }
+  .app-frame .text-xl { font-size: 16px !important; }
+  .app-frame :is(.text-2xl, .text-3xl, .text-4xl) { font-size: 18px !important; }
+  .app-frame .content :is(h1, .module-heading h1),
+  :is(.editor-modal, .profile-edit-dialog, .confirmation-dialog, .pin-lock-screen) :is(h1, h2) {
+    font-size: 18px !important;
+    line-height: 1.4;
+  }
+  .app-frame .content h2 { font-size: 15px !important; }
+  .app-frame .content h3 { font-size: 13px !important; }
+  .app-frame .content :is(.subheading, .settings-muted) { font-size: 12px; line-height: 1.65; }
+  .app-frame .content :is(.stat-card strong, .metric-value, .customer-card-summary strong, .raw-material-card-price),
+  .app-frame .employee-profile-metrics > div > span:nth-child(2) { font-size: 17px !important; }
+  .app-frame :is(.button, .nav-item, .tab-pill, [data-ui="tab"]),
+  :is(.editor-modal, .profile-edit-dialog, .confirmation-dialog, .collection-receipt) button { font-size: 12px; }
+  .app-frame .mobile-bottom-nav button[aria-current="page"] { font-weight: 500; }
+
+  /* Keep card and control borders thin; border-style: none remains respected. */
+  .app-frame :is([data-ui="surface"], .panel, .gradient-card, .stat-card, .metric-card, .customer-card, .phonebook-contact-card, .raw-material-card, .button, button, input, select, textarea),
+  :is(.editor-modal, .profile-edit-dialog, .collection-receipt, .confirmation-dialog) {
+    border-width: 1px;
+  }
+  .app-frame :is(.border-2, .border-4) { border-width: 1px !important; }
+  .app-frame :is(.border-l-2, .border-l-4, .inventory-notice, .purchase-record-note) { border-left-width: 1px !important; }
+  .app-frame :is(.border-b-2, .border-b-4, .employee-profile-tabs .tab-pill) { border-bottom-width: 1px !important; }
+  .app-frame :is(.border-t-2, .border-t-4) { border-top-width: 1px !important; }
+  .app-frame :is(.border-r-2, .border-r-4) { border-right-width: 1px !important; }
+}
+}
