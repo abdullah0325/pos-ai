@@ -53,7 +53,6 @@ import GlobalSearch from './global-search'
 import { useAppLock } from './pin-gate'
 import ProfileMenu from './profile-menu'
 import CollectionReceipt from './collection-receipt'
-import { confirmAction } from '@/lib/confirmation'
 
 export default function BusinessApp() {
   const lockApp = useAppLock()
@@ -95,9 +94,8 @@ export default function BusinessApp() {
     setDb(updated)
   }
 
-  const handleRoleChange = async (owner: boolean) => {
+  const handleRoleChange = (owner: boolean) => {
     if (owner === isOwner) return
-    if (!(await confirmAction({ title: 'Change session view?', message: `Switch to ${owner ? 'owner' : 'staff'} view for this session?`, confirmLabel: 'Switch view' }))) return
     setIsOwner(owner)
   }
 

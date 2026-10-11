@@ -31,6 +31,7 @@
   .mobile-nav-backdrop { display: block; position: fixed; inset: 0; z-index: 39; background: #142c2366; border: 0; }
   .app-frame .sidebar { max-width: calc(100vw - 32px); height: 100dvh; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
   .app-frame .sidebar .nav-item { min-height: 46px; }
+  .app-frame .sidebar .brand-logo { display: none; }
   .app-frame .topbar { height: auto; min-height: 64px; padding: 10px 12px; gap: 8px; }
   .app-frame .topbar > .breadcrumb { display: none; }
   .app-frame .topbar .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
@@ -118,6 +119,24 @@
   .app-frame .topbar > .global-search.mobile-search-visible { display: block; position: fixed; top: 76px; left: 12px; right: 12px; width: auto; max-width: none; margin: 0; padding-right: 50px; z-index: 50; }
   .mobile-search-close { display: grid; place-items: center; position: absolute; top: 0; right: 0; width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 12px; background: #fff; color: var(--text-secondary); }
   .app-frame #global-search-results-modal { min-width: 0 !important; max-height: calc(100dvh - 210px - env(safe-area-inset-bottom)); }
+}
+
+/* Give mobile controls and stacked content room without changing desktop layouts. */
+@media screen and (max-width: 900px) {
+  .app-frame .content :is(.heading-actions, .module-toolbar, .module-toolbar > .flex) { gap: 12px; }
+  .app-frame .content :is(.row-actions, .customer-card-actions, .purchase-record-actions, .phonebook-card-record-actions) { gap: 8px; }
+  .app-frame .content :is(.employee-card-record-actions, .customer-card-record-actions) { gap: 8px; }
+  .app-frame .content :is(.module-tabs, .employee-profile-tabs) { gap: 8px; }
+  .app-frame .content .settings-menu { gap: 8px; }
+  .app-frame .content :is(.settings-inline-actions, .settings-save-bar > div) { gap: 12px; }
+  .app-frame .content .module-heading > div:not(.module-heading-icon):not(.heading-actions) > h1 { margin-top: 6px; }
+  .app-frame .content .module-heading .subheading { margin-top: 8px; }
+  .app-frame .content .module-heading .heading-actions { margin-top: 4px; }
+  .app-frame .profile-dropdown > button + button { margin-top: 6px; }
+  .mobile-profile-actions > button + button { margin-top: 6px; }
+  :is(.editor-modal, .profile-edit-dialog) .editor-actions,
+  .editor-modal .editor-actions > div,
+  .profile-edit-dialog form > footer { gap: 12px; }
 }
 
 /* Compact, lighter mobile typography; retain modest emphasis for hierarchy. */

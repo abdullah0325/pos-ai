@@ -402,10 +402,11 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
           style={{ minWidth: 'min(92vw, 560px)' }}
         >
           {/* Category Filter Tabs */}
-          <div className="px-3 py-2 bg-stone-50/80 border-b border-stone-100 flex items-center gap-1 overflow-x-auto no-scrollbar text-xs">
+          <div className="search-filters px-3 py-2 bg-stone-50/80 border-b border-stone-100 flex items-center gap-1 overflow-x-auto no-scrollbar text-xs" aria-label="Filter search results">
             <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('all')}
+              aria-pressed={activeCategory === 'all'}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors ${
                 activeCategory === 'all'
                   ? 'bg-stone-900 text-white shadow-2xs'
@@ -418,6 +419,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
             <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('customers')}
+              aria-pressed={activeCategory === 'customers'}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
                 activeCategory === 'customers'
                   ? 'bg-emerald-700 text-white shadow-2xs'
@@ -431,6 +433,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
             <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('products')}
+              aria-pressed={activeCategory === 'products'}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
                 activeCategory === 'products'
                   ? 'bg-blue-700 text-white shadow-2xs'
@@ -444,6 +447,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
             <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('suppliers')}
+              aria-pressed={activeCategory === 'suppliers'}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
                 activeCategory === 'suppliers'
                   ? 'bg-purple-700 text-white shadow-2xs'
@@ -457,6 +461,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
             <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('employees')}
+              aria-pressed={activeCategory === 'employees'}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
                 activeCategory === 'employees'
                   ? 'bg-indigo-700 text-white shadow-2xs'
@@ -470,6 +475,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
             <button data-ui="tab"
               type="button"
               onClick={() => setActiveCategory('invoices')}
+              aria-pressed={activeCategory === 'invoices'}
               className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] shrink-0 transition-colors flex items-center gap-1 ${
                 activeCategory === 'invoices'
                   ? 'bg-amber-700 text-white shadow-2xs'
@@ -510,7 +516,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
                     onClick={() => handleSelect(item)}
                     onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleSelect(item) } }}
                     onMouseEnter={() => setSelectedIndex(index)}
-                    className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-between gap-3 group border ${
+                    className={`search-result-row p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-between gap-3 group border ${
                       isSelected
                         ? 'bg-emerald-50/90 border-emerald-200/90 shadow-2xs'
                         : 'hover:bg-stone-50/80 border-transparent'
@@ -521,7 +527,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
                     {/* Left: Avatar & Text */}
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs ${meta.avatarBg}`}
+                        className={`search-result-icon w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs ${meta.avatarBg}`}
                         title={meta.label}
                       >
                         {meta.icon}
@@ -538,7 +544,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
                             </span>
                           )}
                           {item.extraInfo && (
-                            <span className="text-[10px] text-stone-400 font-medium truncate">
+                            <span className="search-result-extra text-[10px] text-stone-400 font-medium truncate">
                               · {item.extraInfo}
                             </span>
                           )}
@@ -561,13 +567,13 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
                     {/* Right: Badge & Jump Arrow */}
                     <div className="flex items-center gap-2 shrink-0">
                       {item.badgeText && (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${badgeClass}`}>
+                        <span className={`search-result-badge text-[10px] font-bold px-2 py-0.5 rounded-md border shadow-2xs ${badgeClass}`}>
                           {item.badgeText}
                         </span>
                       )}
 
                       <div
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition-transform ${
+                        className={`search-result-arrow w-6 h-6 rounded-lg flex items-center justify-center transition-transform ${
                           isSelected
                             ? 'bg-emerald-600 text-white translate-x-0.5'
                             : 'text-stone-400 group-hover:text-stone-700'
@@ -584,7 +590,7 @@ export default function GlobalSearch({ db, onNavigate, openRequest = 0 }: Global
           </div>
 
           {/* Footer Quick Hints */}
-          <div className="px-3.5 py-2 bg-stone-50/90 border-t border-stone-200/80 flex items-center justify-between text-[11px] text-stone-500">
+          <div className="search-results-footer px-3.5 py-2 bg-stone-50/90 border-t border-stone-200/80 flex items-center justify-between text-[11px] text-stone-500">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <kbd className="px-1.5 py-0.5 bg-white border border-stone-200 rounded font-mono text-[9.5px] shadow-2xs">↑</kbd>
