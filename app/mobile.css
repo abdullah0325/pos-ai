@@ -1,6 +1,7 @@
 /* Keep this layer last in the cascade: all visible changes are mobile-only. */
 .mobile-bottom-nav, .mobile-nav-backdrop { display: none; }
 .mobile-profile-actions, .mobile-search-close { display: none; }
+.mobile-header-name { display: none; }
 
 @media screen and (max-width: 900px) {
   html { scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
@@ -85,11 +86,16 @@
 @keyframes mobile-module-enter { from { opacity: .7; } to { opacity: 1; } }
 
 @media screen and (max-width: 900px) {
-  .app-frame .topbar > .mobile-menu,
   .app-frame .topbar > .global-search,
   .app-frame .top-actions > button { display: none; }
+  .app-frame .topbar > .mobile-menu { display: grid; }
+  .app-frame .mobile-header-name {
+    display: block; min-width: 0; flex: 1;
+    color: var(--text-primary); font-size: 15px; font-weight: 500;
+    line-height: 1.3; letter-spacing: -.2px;
+  }
   .app-frame .topbar { min-height: 64px; padding: 10px 16px; }
-  .app-frame .top-actions { flex: 1; gap: 10px; }
+  .app-frame .top-actions { flex: 0 0 auto; gap: 10px; }
   .app-frame .top-actions .icon-button,
   .app-frame .header-profile .profile-trigger { width: 44px; min-width: 44px; height: 44px; }
   .app-frame .profile-dropdown { position: fixed; top: 70px; right: 12px; left: 12px; width: auto; max-width: none; max-height: calc(100dvh - 158px - env(safe-area-inset-bottom)); overflow-y: auto; }

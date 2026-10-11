@@ -308,6 +308,8 @@ export default function BusinessApp() {
             <Menu />
           </button>
 
+          <span className="mobile-header-name">Al Farooq Foods</span>
+
           <div className="breadcrumb hidden sm:flex">
             <span>AL FAROOQ FOODS</span>
             <span>/</span>
