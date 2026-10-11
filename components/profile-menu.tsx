@@ -3,16 +3,15 @@
 import { confirmAction } from '@/lib/confirmation'
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { UserRound, Settings, LockKeyhole, X, Save, ShieldCheck, Menu, Search, Download } from 'lucide-react'
+import { UserRound, Settings, LockKeyhole, X, Save, ShieldCheck, Search, Download } from 'lucide-react'
 import { defaultAdminProfile, type AdminProfile, type AppDatabase } from '@/lib/db'
 
-export default function ProfileMenu({ db, isOwner, onSave, onSettings, onLock, onNavigation, onSearch, onBackup, onRoleChange }: {
+export default function ProfileMenu({ db, isOwner, onSave, onSettings, onLock, onSearch, onBackup, onRoleChange }: {
   db: AppDatabase
   isOwner: boolean
   onSave: (db: AppDatabase) => void
   onSettings: () => void
   onLock: () => void
-  onNavigation: () => void
   onSearch: () => void
   onBackup: () => void
   onRoleChange: () => void
@@ -79,14 +78,13 @@ export default function ProfileMenu({ db, isOwner, onSave, onSettings, onLock, o
         <div className="profile-dropdown-identity"><div className="profile-identity-avatar">{initials}</div><div><strong>{name}</strong><span>{isOwner ? profile.title || 'Administrator' : 'Operator'}</span>{isOwner && profile.email && <small>{profile.email}</small>}</div></div>
         <span className="profile-role-label"><ShieldCheck size={13} />{isOwner ? 'Owner session' : 'Staff session'}</span>
         <div className="mobile-profile-actions">
-          <button type="button" onClick={() => { setOpen(false); onNavigation() }}><Menu size={16} /><span>All modules<small>Open workspace navigation</small></span></button>
           <button type="button" onClick={() => { setOpen(false); onSearch() }}><Search size={16} /><span>Search workspace<small>Find records across all modules</small></span></button>
           <button type="button" onClick={() => { setOpen(false); onRoleChange() }}><ShieldCheck size={16} /><span>Switch to {isOwner ? 'staff' : 'owner'} view<small>Change this session’s role</small></span></button>
           <button type="button" onClick={() => { setOpen(false); onBackup() }}><Download size={16} /><span>Download backup<small>Export your workspace as JSON</small></span></button>
         </div>
         {isOwner && <button type="button" onClick={edit}><UserRound size={16} /><span>Edit my profile<small>Name, contact details & title</small></span></button>}
         <button type="button" onClick={() => { setOpen(false); onSettings() }}><Settings size={16} /><span>Workspace settings<small>Company, backups & preferences</small></span></button>
-        <button type="button" className="profile-lock-action" onClick={() => { setOpen(false); onLock() }}><LockKeyhole size={16} /><span>Lock workspace<small>Require PIN to continue</small></span></button>
+        <button type="button" className="profile-lock-action" aria-label="Lock workspace" title="Lock workspace" onClick={() => { setOpen(false); onLock() }}><LockKeyhole size={16} /><span>Lock workspace<small>Require PIN to continue</small></span></button>
       </div>}
       <dialog ref={dialog} className="profile-edit-dialog" aria-labelledby="profile-edit-title" onCancel={event => { event.preventDefault(); closeEditor() }} onClose={() => setEditing(false)} onClick={event => { if (event.target === dialog.current) { const box = dialog.current.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) closeEditor() } }}>
         <form onSubmit={save}>

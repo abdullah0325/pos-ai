@@ -98,6 +98,15 @@
   .app-frame .top-actions { flex: 0 0 auto; gap: 10px; }
   .app-frame .top-actions .icon-button,
   .app-frame .header-profile .profile-trigger { width: 44px; min-width: 44px; height: 44px; }
+  .app-frame .header-profile .profile-trigger { border-radius: 50%; }
+  .app-frame .profile-dropdown-identity { padding-right: 56px; }
+  .app-frame .profile-dropdown > .profile-lock-action {
+    position: absolute; top: 12px; right: 12px;
+    display: grid; place-items: center; width: 44px; height: 44px;
+    min-height: 44px; margin: 0; padding: 0;
+    border: 1px solid var(--border); border-radius: 50%;
+  }
+  .app-frame .profile-lock-action > span { display: none; }
   .app-frame .profile-dropdown { position: fixed; top: 70px; right: 12px; left: 12px; width: auto; max-width: none; max-height: calc(100dvh - 158px - env(safe-area-inset-bottom)); overflow-y: auto; }
   .mobile-profile-actions { display: block; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
   .mobile-profile-actions > button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 10px; background: transparent; border: 0; border-radius: 8px; text-align: left; color: #40594a; font-size: 12px; }

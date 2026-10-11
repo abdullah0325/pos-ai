@@ -345,7 +345,7 @@ export default function BusinessApp() {
             </button>
 
             <ProfileMenu db={db} isOwner={isOwner} onSave={handleSaveDatabase} onSettings={() => handleNavigate('settings')} onLock={lockApp}
-              onNavigation={() => setSidebarOpen(true)} onSearch={() => setMobileSearchRequest(value => value + 1)}
+              onSearch={() => setMobileSearchRequest(value => value + 1)}
               onBackup={() => exportDatabaseJSON(db)} onRoleChange={() => handleRoleChange(!isOwner)} />
           </div>
         </header>
