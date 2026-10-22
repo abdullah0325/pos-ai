@@ -9,7 +9,7 @@ export function auditStock(previous: AppDatabase, next: AppDatabase): AppDatabas
     const after = kind === 'product' ? next.products : next.rawMaterials
     for (const item of after) {
       const qty = item.quantity - (before.find(p => p.id === item.id)?.quantity || 0)
-      if (qty) movements.push({ id: crypto.randomUUID(), itemId: item.id, kind, type: purchase ? 'purchase' : sale ? 'sale' : 'adjust', qty, refId: purchase?.id || sale?.id || crypto.randomUUID(), createdAt: now })
+      if (qty) movements.push({ id: crypto.randomUUID(), itemId: item.id, kind, type: purchase ? 'purchase' : sale ? 'sale' : !before.some(p => p.id === item.id) ? 'opening' : 'adjust', qty, refId: purchase?.id || sale?.id || crypto.randomUUID(), createdAt: now })
     }
     for (const item of before) if (!after.some(p => p.id === item.id) && item.quantity) movements.push({ id: crypto.randomUUID(), itemId: item.id, kind, type: 'adjust', qty: -item.quantity, refId: item.id, createdAt: now })
   }

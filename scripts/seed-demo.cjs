@@ -1,0 +1,4 @@
+require('@next/env').loadEnvConfig(process.cwd())
+const {load}=require('./ts-loader.cjs'),{buildDemo}=load('lib/demo-seed.ts'),{transaction,readDatabase,persist,closeDatabase}=load('lib/online-db.ts')
+async function main(){const anchor=process.argv[2]||'2026-10-23';if(!/^\d{4}-\d{2}-\d{2}$/.test(anchor)||Number.isNaN(Date.parse(anchor)))throw new Error('Use YYYY-MM-DD');const result=await transaction(async c=>{const before=await readDatabase(c,true);const result=await persist(c,before,buildDemo(anchor),true);await c.query("UPDATE app_state SET requests='{}'::jsonb WHERE id=1");return result});console.log(`Seeded ${result.products.length} products, ${result.suppliers.length} suppliers, ${result.customers.length} customers, ${result.purchases.length} purchases, ${result.invoices.length} sales. Anchor: ${anchor}`)}
+main().catch(e=>{console.error('Seed failed:',e.code||e.message.replace(/postgres[^ ]+/g,'[database]'));process.exitCode=1}).finally(closeDatabase)

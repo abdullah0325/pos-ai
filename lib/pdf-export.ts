@@ -1,8 +1,8 @@
 // Client-side PDF & Excel/CSV Export Engine for AL FAROOQ FOODS
 import jsPDF from 'jspdf'
-import { loadDatabase, defaultCompanyProfile } from '@/lib/db'
+import { getOnlineSnapshot, defaultCompanyProfile } from '@/lib/db'
 
-function billingProfile() { return { ...defaultCompanyProfile, ...loadDatabase().companyProfile } }
+function billingProfile() { return { ...defaultCompanyProfile, ...getOnlineSnapshot().companyProfile } }
 function billingContact() { const p = billingProfile(); return [p.phone1, p.phone2, p.email].filter(Boolean).join(' | ') }
 import autoTable from 'jspdf-autotable'
 import {

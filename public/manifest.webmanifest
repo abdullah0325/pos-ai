@@ -1,7 +1,7 @@
 {
-  "name": "AL FAROOQ FOODS - Business ERP & POS",
-  "short_name": "AL FAROOQ FOODS",
-  "description": "Offline-First Enterprise ERP & POS System for Food, Juices & Confectionery Manufacturing",
+  "name": "AL FAROOQ HARDWARE - Business ERP & POS",
+  "short_name": "AL FAROOQ HARDWARE",
+  "description": "Online hardware store inventory and POS",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -13,9 +13,9 @@
       "type": "image/svg+xml"
     },
     {
-      "src": "/al-farooq-foods-logo.png",
-      "sizes": "192x192 512x512",
-      "type": "image/png"
+      "src": "/hardware-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }

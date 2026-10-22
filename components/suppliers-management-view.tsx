@@ -578,7 +578,7 @@ export default function SuppliersManagementView({
               </div>
               <h1 className="text-2xl font-black text-stone-900 mt-1">Suppliers & Vendors</h1>
               <p className="text-xs text-stone-600 mt-0.5">
-                Manage all suppliers of raw materials and finished products, track running ledgers, deal history, receipts, and offline payments.
+                Manage all suppliers of raw materials and hardware products, track running ledgers, deal history, receipts, and offline payments.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1301,7 +1301,7 @@ export default function SuppliersManagementView({
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider">Finished Products / Packaging</h4>
+                  <h4 className="text-xs font-bold text-stone-700 uppercase tracking-wider">Hardware Products / Packaging</h4>
                   {db.products
                     .filter((p) => (p.description || '').toLowerCase().includes(selectedSupplier.name.toLowerCase()))
                     .map((prod) => (

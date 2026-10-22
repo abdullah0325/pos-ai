@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import './mobile.css'
+import './smart-entry.css'
 
 export const metadata: Metadata = {
-  title: 'AL FAROOQ FOODS - Business Management System',
-  description: 'Offline-first business and production management for AL FAROOQ FOODS (Juices, Mineral Water, Confectionery & Snacks).',
+  title: 'Al Farooq Hardware POS',
+  description: 'Online hardware store POS, inventory, purchases and sales.',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/al-farooq-foods-logo.png', type: 'image/png' },
+      { url: '/hardware-logo.svg', type: 'image/svg+xml' },
     ],
-    apple: '/al-farooq-foods-logo.png',
+    apple: '/hardware-logo.svg',
   },
 }
 
@@ -36,14 +37,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol === 'https:' && window.location.hostname !== 'localhost') {
-                window.addEventListener('load', function() {
-                  try {
-                    navigator.serviceWorker.register('/sw.js').catch(function(e) {
-                      console.log('SW registration note:', e);
-                    });
-                  } catch (e) {}
-                });
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                  for (const registration of registrations) {
+                    if (new URL(registration.scope).origin === location.origin) registration.unregister();
+                  }
+                }).catch(() => {});
+                caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('al-farooq')).map(key => caches.delete(key)))).catch(() => {});
               }
             `,
           }}

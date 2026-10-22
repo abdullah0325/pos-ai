@@ -9,8 +9,9 @@ function compile(path, dependency) {
   module._compile(source, path + '.js');
   return module.exports;
 }
-const db = compile('lib/db.ts');
-const { createReportSample, buildReportTimeline, pakistanDate } = compile('lib/report-data.ts', db);
+const {load}=require('../scripts/ts-loader.cjs');
+const db = load('lib/db.ts');
+const { createReportSample, buildReportTimeline, pakistanDate } = load('lib/report-data.ts');
 const before = JSON.stringify(db.initialDatabase);
 const sample = createReportSample('2026-10-10', 2026);
 assert.deepEqual(sample, createReportSample('2026-10-10', 2026), 'Seed should reproduce data');

@@ -14,7 +14,7 @@ interface ProductionViewProps {
   onSaveDatabase: (updated: AppDatabase) => void
 }
 
-// Preset Recipe Templates for AL FAROOQ FOODS manufacturing
+// Preset Recipe Templates for AL FAROOQ HARDWARE manufacturing
 const DEFAULT_RECIPES: Record<string, { materialSku: string; qtyPerBatch100: number }[]> = {
   'prod-1': [ // Mineral Water 500ml (24-pack)
     { materialSku: 'RAW-MIN-01', qtyPerBatch100: 2 }, // 2kg RO Minerals

@@ -6,7 +6,8 @@ const compiled = ts.transpileModule(fs.readFileSync('lib/db.ts', 'utf8'), { comp
 const loaded = new Module('backup-validation');
 loaded._compile(compiled, 'backup-validation.js');
 const { initialDatabase, defaultCompanyProfile, validateDatabaseBackup, importDatabaseJSON } = loaded.exports;
-const copy = () => JSON.parse(JSON.stringify(initialDatabase));
+const {load}=require('../scripts/ts-loader.cjs');
+const copy = () => load('lib/demo-seed.ts').buildDemo();
 (async () => {
   assert.equal(validateDatabaseBackup(copy()).version, initialDatabase.version);
   const withProfile = { ...copy(), companyProfile: { ...defaultCompanyProfile, name: 'Test Foods' } };

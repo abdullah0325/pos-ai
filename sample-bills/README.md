@@ -1,0 +1,1 @@
+Printed demo inputs. Upload 01 in Purchase Bill, 02 in Product List, 03 in Stock Count, and 04 in Sale List. AI extraction must be reviewed. Prices are illustrative, not live quotations. Bills are test artifacts, not stored customer images.

@@ -3,7 +3,7 @@
 import { confirmAction } from '@/lib/confirmation'
 
 import CatalogPhoto from './catalog-photo'
-import AiVoice from './ai-voice'
+import SmartEntry from './smart-entry'
 import ModuleHeading from './module-heading'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
@@ -957,7 +957,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       .join('\n')
 
     const text =
-      `*AL FAROOQ FOODS - SALE RECEIPT*\n` +
+      `*AL FAROOQ HARDWARE - SALE RECEIPT*\n` +
       `*Invoice #:* ${completedInvoice.invoiceNumber}\n` +
       `*Date:* ${formatDate(completedInvoice.date)} ${completedInvoice.time || ''}\n` +
       `*Customer:* ${completedInvoice.customerName}\n` +
@@ -978,23 +978,10 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   return (
     <div className="space-y-4" id="pos-terminal-root">
-      <AiVoice db={db} onApply={(draft, customerId) => {
-        const grouped = new Map<string, number>()
-        draft.items.forEach(line => { if (line.matched_product_id) grouped.set(line.matched_product_id, (grouped.get(line.matched_product_id) || 0) + line.qty) })
-        const lines: CartItem[] = [...grouped].map(([id, qty]) => {
-          const product = db.products.find(p => p.id === id)!
-          if (qty > product.quantity) alert(`Warning: ${product.name} will have negative stock.`)
-          return { product, quantity: qty, unitPrice: product.retailPrice, pricingTier: 'Retail', discountType: 'fixed', discountValue: 0, discountAmount: 0, lineTotal: qty * product.retailPrice }
-        })
-        setCart(lines); setVoiceDraft(true); setCompletedInvoice(null)
-        setCartDiscountValue(0); setCartDiscountType('fixed'); setOrderNotes(''); setPaymentScreenshot('')
-        const customer = db.customers.find(c => c.id === customerId)
-        setSelectedCategoryName(customer?.type || 'Walk-in Customer'); setSelectedCustomerId(customerId)
-        setPaymentStatus(draft.payment_type === 'credit' ? 'Unpaid' : 'Paid'); setPaymentMethod('Cash'); setAmountPaid(0)
-      }} />
+      <SmartEntry mode="sale_list" db={db} />
       <ModuleHeading icon="invoices" className="pos-no-print">
         <div>
-          <p className="eyebrow">Al Farooq Foods · Sales Workspace</p>
+          <p className="eyebrow">Al Farooq Hardware · Sales Workspace</p>
           <h1>Point of Sale</h1>
           <p className="subheading">Create sales, manage customer pricing, and issue receipts.</p>
         </div>
@@ -2075,7 +2062,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                 }`}
               >
                 <div className="text-center pb-2 border-b border-stone-200">
-                  <h2 className="font-black text-xs text-stone-900">AL FAROOQ FOODS</h2>
+                  <h2 className="font-black text-xs text-stone-900">AL FAROOQ HARDWARE</h2>
                   <p className="text-[9px] text-stone-500">Pure Mineral Water, Juices, Candies & Snacks</p>
                   <p className="text-[9px] text-stone-500">Phone: 0344 9549051 | 0346 9829900</p>
                 </div>

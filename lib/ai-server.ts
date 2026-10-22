@@ -18,5 +18,5 @@ export const nullableString = { type: ['string', 'null'] }
 export const nullableNumber = { type: ['number', 'null'] }
 export function object(properties: Record<string, unknown>) { return { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } }
 export function apiError(error: unknown) {
-  return NextResponse.json({ error: error instanceof z.ZodError ? 'Invalid or incomplete data. Check the fields and try again.' : error instanceof Error ? error.message : 'Request failed. Continue manually.' }, { status: error instanceof z.ZodError ? 400 : 503, headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ error: error instanceof z.ZodError ? 'Invalid or incomplete data. Check the fields and try again.' : error instanceof Error ? error.message : 'Request failed. Continue manually.' }, { status: error instanceof z.ZodError ? 400 : error instanceof Error && 'status' in error && error.status === 409 ? 409 : 503, headers: { 'Cache-Control': 'no-store' } })
 }

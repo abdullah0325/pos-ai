@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export function numeric(value: unknown): unknown {
   if (typeof value !== 'string') return value
-  const text = value.trim().replace(/[۰-۹٠-٩]/g, c => String(c.charCodeAt(0) - (c >= '۰' ? 1776 : 1632))).replace(/[,٬]/g, '').replace(/٫/g, '.')
+  const text = value.trim().replace(/[\u06f0-\u06f9\u0660-\u0669]/g, c => String(c.charCodeAt(0) - (c.charCodeAt(0) >= 0x6f0 ? 0x6f0 : 0x660))).replace(/[,\u066c]/g, '').replace(/\u066b/g, '.')
   return text === '' ? null : Number(text)
 }
 export const number = z.preprocess(numeric, z.number().finite().min(0).max(1e12))

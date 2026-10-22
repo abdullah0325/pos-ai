@@ -649,7 +649,7 @@ export default function EmployeesView({ db, onSaveDatabase }: EmployeesViewProps
 
   // Copy WhatsApp Receipt
   const handleCopyWhatsAppSlip = (emp: EmployeeItem, payment: SalaryPaymentRecord) => {
-    const text = `*AL FAROOQ FOODS - SALARY DISBURSEMENT RECEIPT*
+    const text = `*AL FAROOQ HARDWARE - SALARY DISBURSEMENT RECEIPT*
 ━━━━━━━━━━━━━━━━━━━━━
 *Voucher No:* ${payment.receiptNumber}
 *Employee:* ${emp.name} (${emp.role})
@@ -665,7 +665,7 @@ ${payment.overtimeBonus ? `• Overtime Bonus: +${formatPKR(payment.overtimeBonu
 *Payment Mode:* ${payment.paymentMethod} (${payment.paymentAccount.toUpperCase()})
 *Status:* PAID ✓
 ${emp.totalLoanBalance > 0 ? `*Remaining Loan Balance:* ${formatPKR(emp.totalLoanBalance)}\n` : ''}━━━━━━━━━━━━━━━━━━━━━
-_AL FAROOQ FOODS Industrial Plant & Bottling Division_`
+_AL FAROOQ HARDWARE Industrial Plant & Bottling Division_`
 
     navigator.clipboard.writeText(text)
     alert('Salary voucher copied to clipboard! You can paste it directly in WhatsApp.')
@@ -1648,7 +1648,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
               {/* Receipt Header */}
               <div className="flex items-start justify-between border-b border-slate-300 pb-3">
                 <div>
-                  <h3 className="font-black text-lg text-slate-900 tracking-tight">AL FAROOQ FOODS</h3>
+                  <h3 className="font-black text-lg text-slate-900 tracking-tight">AL FAROOQ HARDWARE</h3>
                   <p className="text-[11px] text-slate-600">Industrial Area, Sheikhupura Road, Lahore</p>
                   <p className="text-[11px] text-slate-600">Phone: 0344 9549051 · 0346 9829900</p>
                 </div>
@@ -1762,7 +1762,7 @@ _AL FAROOQ FOODS Industrial Plant & Bottling Division_`
                   Employee Signature & Date
                 </div>
                 <div className="border-t border-slate-400 text-center pt-1">
-                  Authorized Signatory (AL FAROOQ FOODS)
+                  Authorized Signatory (AL FAROOQ HARDWARE)
                 </div>
               </div>
             </div>

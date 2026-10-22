@@ -6,24 +6,7 @@ type CatalogItem = { name?: string; category?: string; imageUrl?: string }
 
 // Presentation-only category photos. Never written into product or inventory records.
 export function getCatalogPhoto(item?: CatalogItem): string {
-  const name = (item?.name || '').toLowerCase()
-  const category = (item?.category || '').toLowerCase()
-  let photo = 'packaging'
-  if (/packaging/.test(category)) photo = 'packaging'
-  else if (/chemical|mineral.*premix|citric|sanitiz/.test(`${category} ${name}`)) photo = 'chemicals'
-  else if (/oil/.test(name)) photo = 'oil'
-  else if (/sugar/.test(name)) photo = 'sugar'
-  else if (/mango/.test(name)) photo = 'mango'
-  else if (/apple/.test(name)) photo = 'apple'
-  else if (/guava/.test(name)) photo = 'guava'
-  else if (/spice|masala|seasoning|flavor/.test(`${name} ${category}`)) photo = 'spices'
-  else if (/ingredients/.test(category) && /potato/.test(name)) photo = 'potatoes'
-  else if (/water/.test(`${name} ${category}`)) photo = 'water'
-  else if (/juice|nectar|beverage|soda/.test(`${name} ${category}`)) photo = 'juice'
-  else if (/candy|toffee|sweet/.test(`${name} ${category}`)) photo = 'candy'
-  else if (/chip|crisp/.test(`${name} ${category}`)) photo = 'chips'
-  else if (/snack|savory|savories|nimko/.test(`${name} ${category}`)) photo = 'snacks'
-  return `/images/catalog/${photo}.jpg`
+  return '/images/hardware-catalog.svg'
 }
 
 export default function CatalogPhoto({ item, src, ...props }: Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & { item?: CatalogItem; src?: string }) {

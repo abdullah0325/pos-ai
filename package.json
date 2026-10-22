@@ -1,5 +1,5 @@
 {
-  "name": "al-farooq-foods",
+  "name": "hardware-store-pos",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "db:migrate": "node scripts/migrate-ai.cjs",
-    "test:ai": "node tests/ai.cjs"
+    "test:ai": "node tests/ai.cjs",
+    "db:seed": "node scripts/seed-demo.cjs",
+    "test:smart": "node tests/smart-entry.cjs",
+    "test:db": "node tests/online-db.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

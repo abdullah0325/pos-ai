@@ -75,7 +75,7 @@ export default function NotificationsPopover({ db, onNavigate }: NotificationsPo
   const allAlerts = useMemo<SystemAlert[]>(() => {
     const alerts: SystemAlert[] = []
 
-    // 1. Finished Products Low Stock
+    // 1. Hardware Products Low Stock
     db.products.forEach((p) => {
       const reorder = p.reorderLevel || 10
       if (p.quantity <= 0) {

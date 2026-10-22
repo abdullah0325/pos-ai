@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import {
   Boxes,
@@ -27,6 +27,7 @@ import {
 
 import {
   loadDatabase,
+  setOnlineSnapshot,
   saveDatabase,
   exportDatabaseJSON,
   type AppDatabase,
@@ -37,9 +38,8 @@ import {
 } from '@/lib/db'
 
 import DashboardView from './dashboard-view'
-import AiBill from './ai-bill'
-import { auditStock } from '@/lib/stock-audit'
-import { mirrorPayload } from '@/lib/mirror-client'
+import SmartEntry from './smart-entry'
+import type { SmartMode } from '@/lib/smart-schema'
 import PosView from './pos-view'
 import SalesView, { type SalesSubTab } from './sales-view'
 import CustomerManagementView from './customer-management-view'
@@ -59,7 +59,10 @@ import CollectionReceipt from './collection-receipt'
 
 export default function BusinessApp() {
   const lockApp = useAppLock()
-  const [syncNote, setSyncNote] = useState('')
+  const [syncNote, setSyncNote] = useState('Connecting to Neon...')
+  const [smartMode, setSmartMode] = useState<SmartMode | null>(null)
+  const [saving, setSaving] = useState(false)
+  const saveLock = useRef(false)
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
   const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard')
   const [salesTab, setSalesTab] = useState<SalesSubTab>('invoices')
@@ -85,24 +88,22 @@ export default function BusinessApp() {
     return () => window.removeEventListener('keydown', dismissOnEscape)
   }, [sidebarOpen])
 
-  // Load from offline persistent storage on mount
+  const refresh = async () => {
+    try { const loaded = await loadDatabase(); setDb(loaded); setIsClientLoaded(true); setSyncNote('Online - all records loaded from Neon') }
+    catch(error) { setSyncNote((error as Error).message); setIsClientLoaded(false) }
+  }
+  useEffect(() => { void refresh() }, [])
   useEffect(() => {
-    const loaded = loadDatabase()
-    setDb(loaded)
-    setIsClientLoaded(true)
+    const committed = (event: Event) => { setOnlineSnapshot((event as CustomEvent<AppDatabase>).detail); setDb((event as CustomEvent<AppDatabase>).detail); setIsClientLoaded(true); setSyncNote('Approved records saved to Neon.') }
+    window.addEventListener('hardware:committed', committed)
+    return () => window.removeEventListener('hardware:committed', committed)
   }, [])
-
-  // Sync back to offline localStorage whenever db updates
-  const handleSaveDatabase = (updated: AppDatabase) => {
-    const audited = auditStock(db, updated)
-    saveDatabase(audited)
-    setDb(audited)
-    if ((audited.aiActivity?.length || 0) > (db.aiActivity?.length || 0)) {
-      setSyncNote('Saved locally; syncing to Neon…')
-      void fetch('/api/mirror', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mirrorPayload(db, audited)), signal: AbortSignal.timeout(20000) })
-        .then(response => { setSyncNote(response.ok ? 'Saved locally and synced to Neon.' : 'Saved locally; not synced to Neon.') })
-        .catch(() => setSyncNote('Saved locally; not synced to Neon.'))
-    }
+  const handleSaveDatabase = async (updated: AppDatabase) => {
+    if (saveLock.current) { setSyncNote('A save is already in progress. Please wait.'); return false }
+    saveLock.current = true; setSaving(true); setSyncNote('Saving to Neon...')
+    try { const saved = await saveDatabase({...updated, revision:db.revision}); setDb(saved); setSyncNote('Saved to Neon.'); return true }
+    catch(error) { setSyncNote((error as Error).message + ' Changes were not saved.'); return false }
+    finally { saveLock.current = false; setSaving(false) }
   }
 
   const handleRoleChange = (owner: boolean) => {
@@ -165,8 +166,8 @@ export default function BusinessApp() {
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="brand">
           <Image
-            src="/al-farooq-foods-logo.png"
-            alt="AL FAROOQ FOODS"
+            src="/hardware-logo.svg"
+            alt="AL FAROOQ HARDWARE"
             width={220}
             height={52}
             className="brand-logo"
@@ -180,8 +181,8 @@ export default function BusinessApp() {
         <div className="workspace">
           <div className="workspace-avatar">AF</div>
           <div className="workspace-identity">
-            <strong>AL FAROOQ FOODS</strong>
-            <span>Food & Beverage Plant</span>
+            <strong>AL FAROOQ HARDWARE</strong>
+            <span>Hardware Store POS</span>
           </div>
           <ChevronDown className="workspace-chevron" />
         </div>
@@ -317,10 +318,10 @@ export default function BusinessApp() {
             <Menu />
           </button>
 
-          <span className="mobile-header-name">Al Farooq Foods</span>
+          <span className="mobile-header-name">Al Farooq Hardware</span>
 
           <div className="breadcrumb hidden sm:flex">
-            <span>AL FAROOQ FOODS</span>
+            <span>AL FAROOQ HARDWARE</span>
             <span>/</span>
             <strong>{moduleLabels[activeModule] || 'Workspace'}</strong>
           </div>
@@ -361,9 +362,12 @@ export default function BusinessApp() {
 
         {/* Body Content Router */}
         <div className="content" data-mobile-module={activeModule}>
-          {syncNote && <p role="status" className="text-sm mb-3">{syncNote}</p>}
-          {activeModule === 'dashboard' && <section className="ai-panel gradient-card p-4 rounded-2xl border border-stone-200 mb-4 space-y-2"><div className="flex gap-3"><button className="btn btn-primary" onClick={() => handleNavigate('purchase')}>Scan Bill</button><button className="btn btn-primary" onClick={() => handleNavigate('pos')}>Voice Sale</button></div><strong>AI Activity — today</strong><p>{(db.aiActivity || []).filter(a => a.createdAt.slice(0,10) === new Date().toISOString().slice(0,10) && a.type === 'scan').length} scans · {(db.aiActivity || []).filter(a => a.createdAt.slice(0,10) === new Date().toISOString().slice(0,10) && a.type === 'voice').length} voice sales · {(db.aiActivity || []).filter(a => a.createdAt.slice(0,10) === new Date().toISOString().slice(0,10)).reduce((sum,a) => sum + a.created,0)} items auto-created</p></section>}
-          {(activeModule === 'purchase' && purchaseTab === 'purchases') && <AiBill db={db} onSave={handleSaveDatabase} />}
+          <div role="status" className={`online-status ${!isClientLoaded ? 'online-error' : ''}`}>{syncNote} <button type="button" onClick={() => void refresh()} disabled={saving}>Reload records</button></div>
+          {!isClientLoaded ? <p>Connect to the database to continue. Run the migration and seed if this is a new setup.</p> : <fieldset disabled={saving} style={{border:0,padding:0,minWidth:0}}>
+          {activeModule === 'dashboard' && <>
+            <section className="smart-hero"><button className="button primary" onClick={() => setSmartMode('purchase_bill')}>Scan Bill</button><button className="button primary" onClick={() => setSmartMode('sale_list')}>Voice Sale</button><button className="button secondary" onClick={() => setSmartMode('product_list')}>Add Stock / Product</button></section>
+            <section className="smart-activity"><h3>AI Activity today</h3><p>{(db.aiActivity || []).filter(a => new Date(a.createdAt).toLocaleDateString('en-CA', {timeZone:'Asia/Karachi'}) === new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Karachi'}) && a.type === 'scan').length} scans | {(db.aiActivity || []).filter(a => new Date(a.createdAt).toLocaleDateString('en-CA', {timeZone:'Asia/Karachi'}) === new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Karachi'}) && a.type === 'voice' && a.mode === 'sale_list').length} voice sales | {(db.aiActivity || []).filter(a => new Date(a.createdAt).toLocaleDateString('en-CA', {timeZone:'Asia/Karachi'}) === new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Karachi'})).reduce((n,a) => n+a.created,0)} items auto-created | {(db.productAliases || []).length} aliases learned</p></section>
+          </>}
           {activeModule === 'dashboard' && (
             <DashboardView
               db={db}
@@ -399,6 +403,7 @@ export default function BusinessApp() {
             />
           )}
 
+          {activeModule === 'purchase' && purchaseTab === 'purchases' && <SmartEntry mode="purchase_bill" db={db} />}
           {(activeModule === 'purchase' || activeModule === 'expenses') && (
             <PurchasesExpensesView
               db={db}
@@ -454,6 +459,7 @@ export default function BusinessApp() {
               onSaveDatabase={handleSaveDatabase}
             />
           )}
+          </fieldset>}
         </div>
       </main>
 
@@ -473,6 +479,8 @@ export default function BusinessApp() {
         ))}
       </nav>
 
+      {isClientLoaded && <button type="button" className="smart-floating" aria-label="Open Smart Entry" onClick={() => setSmartMode(activeModule === 'purchase' ? 'purchase_bill' : activeModule === 'pos' || activeModule === 'sales' ? 'sale_list' : activeModule === 'products' && productsTab === 'stock' ? 'stock_count' : 'product_list')}>AI</button>}
+      {smartMode && <div className="smart-overlay" role="dialog" aria-modal="true" aria-label="Smart Entry"><SmartEntry mode={smartMode} db={db} onClose={() => setSmartMode(null)} /></div>}
       {/* Payment receipt uses the same record as the dashboard collection card. */}
       {showReceiptModal && <CollectionReceipt db={db} onClose={() => setShowReceiptModal(false)} onViewCustomer={() => { setShowReceiptModal(false); handleNavigate('customer-management') }} />}
     </div>

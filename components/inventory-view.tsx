@@ -1,4 +1,5 @@
 'use client'
+import SmartEntry from './smart-entry'
 
 import { confirmAction } from '@/lib/confirmation'
 
@@ -284,6 +285,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
 
   return (
     <div className="page-stack" id="inventory-view-module">
+      <SmartEntry mode={activeSubView === 'stock' ? 'stock_count' : 'product_list'} db={db} />
       {/* Heading */}
       <ModuleHeading icon="inventory">
         <div>
@@ -297,9 +299,9 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
           </h1>
           <p className="subheading">
             {activeSubView === 'products'
-              ? 'Manage finished products catalog, categories, pricing rates, images, and stock inventory.'
+              ? 'Manage hardware catalog, categories, pricing rates, images, and stock inventory.'
               : activeSubView === 'raw-materials'
-              ? 'Sugar, concentrates, packaging boxes, PET preforms, and flavorings.'
+              ? 'Building supplies, fittings, tools, and electrical stock.'
               : 'Comprehensive inventory ledger, low-stock reorder triggers, and manual batch adjustments.'}
           </p>
         </div>
@@ -352,7 +354,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       {/* KPI Stats */}
       <div className="stat-grid">
         <div className="stat-card" id="kpi-total-valuation">
-          <div className="stat-label">Finished Products Valuation</div>
+          <div className="stat-label">Hardware Products Valuation</div>
           <strong>{formatPKR(totalFinishedStockValuation)}</strong>
           <span className="stat-change text-emerald-700">{db.products.length} registered products</span>
         </div>
@@ -664,6 +666,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
                       <td>{p.category}</td>
                       <td className="font-bold text-gray-900">
                         {p.quantity} {p.unit}
+                        {p.units?.filter(u=>u.unit!==p.unit).map(u=><small key={u.unit} className="block text-xs text-stone-500">{(p.quantity/u.factor_to_base).toFixed(2)} {u.unit}</small>)}
                       </td>
                       <td className="text-gray-500">
                         {p.reorderLevel} {p.unit}
@@ -774,6 +777,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       {/* Product Create/Edit Modal */}
       {(isCreatingProduct || selectedProduct) && (
         <ProductEditorModal
+          db={db}
           product={selectedProduct}
           categories={categories}
           existingProducts={db.products}
@@ -855,6 +859,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
       {/* Quick Stock Adjustment Modal */}
       {stockAdjustmentItem && (
         <StockAdjustmentModal
+          db={db}
           item={stockAdjustmentItem}
           onClose={() => setStockAdjustmentItem(null)}
           onApply={handleApplyStockAdjustment}
@@ -884,6 +889,7 @@ export default function InventoryView({ db, activeSubView, onSaveDatabase }: Inv
    PRODUCT EDITOR MODAL (Add / Edit Product with all requested fields)
 ========================================================================= */
 function ProductEditorModal({
+  db,
   product,
   categories,
   existingProducts,
@@ -891,6 +897,7 @@ function ProductEditorModal({
   onSave,
   onOpenCategoryManager,
 }: {
+  db: AppDatabase
   product: ProductItem | null
   categories: CategoryItem[]
   existingProducts: ProductItem[]
@@ -904,27 +911,27 @@ function ProductEditorModal({
 
   // Optional fields
   const [category, setCategory] = useState<string>(
-    product?.category || categories[0]?.name || 'Mineral Water'
+    product?.category || categories[0]?.name || 'Other'
   )
   const [description, setDescription] = useState(product?.description || '')
   const [size, setSize] = useState(product?.size || '')
-  const [sizeUnit, setSizeUnit] = useState(product?.sizeUnit || 'ml')
-  const [unit, setUnit] = useState(product?.unit || 'Cartons')
-  const [quantity, setQuantity] = useState<number>(product?.quantity ?? 100)
+  const [sizeUnit, setSizeUnit] = useState(product?.sizeUnit || 'inch')
+  const [unit, setUnit] = useState(product?.unit || 'piece')
+  const [quantity, setQuantity] = useState<number>(product?.quantity ?? 0)
   const [reorderLevel, setReorderLevel] = useState<number>(product?.reorderLevel ?? 20)
   const [expiryDate, setExpiryDate] = useState<string>(product?.expiryDate || '')
   const [manufacturingDate, setManufacturingDate] = useState<string>(product?.manufacturingDate || '')
 
   // Pricing & Valuation
-  const [costPrice, setCostPrice] = useState<number>(product?.costPrice ?? 350)
-  const [wholesalePrice, setWholesalePrice] = useState<number>(product?.wholesalePrice ?? 480)
+  const [costPrice, setCostPrice] = useState<number>(product?.costPrice ?? 0)
+  const [wholesalePrice, setWholesalePrice] = useState<number>(product?.wholesalePrice ?? 0)
   const [wholesaleMinQty, setWholesaleMinQty] = useState<number>(product?.wholesaleMinQty ?? 12)
-  const [retailPrice, setRetailPrice] = useState<number>(product?.retailPrice ?? 600)
+  const [retailPrice, setRetailPrice] = useState<number>(product?.retailPrice ?? 0)
 
   // Total cost auto-calculated vs manual override
   const [isManualTotalCost, setIsManualTotalCost] = useState(product?.isManualTotalCost || false)
   const [manualTotalCost, setManualTotalCost] = useState<number>(
-    product?.totalCost !== undefined ? product.totalCost : (product?.quantity || 100) * (product?.costPrice || 350)
+    product?.totalCost !== undefined ? product.totalCost : (product?.quantity || 0) * (product?.costPrice || 0)
   )
 
   // Product Image
@@ -932,7 +939,7 @@ function ProductEditorModal({
   const imageFileInputRef = useRef<HTMLInputElement>(null)
 
   // Sourcing & Purchase Invoice
-  const [isPurchasedProduct, setIsPurchasedProduct] = useState(product?.isPurchasedProduct || false)
+  const [isPurchasedProduct, setIsPurchasedProduct] = useState(product?.isPurchasedProduct ?? true)
   const [purchaseCost, setPurchaseCost] = useState<number>(product?.purchaseCost || product?.costPrice || 0)
   const [purchaseInvoiceImage, setPurchaseInvoiceImage] = useState<string>(product?.purchaseInvoiceImage || '')
   const invoiceFileInputRef = useRef<HTMLInputElement>(null)
@@ -996,6 +1003,7 @@ function ProductEditorModal({
       quantity <= 0 ? 'Out of stock' : quantity <= reorderLevel ? 'Low stock' : 'In stock'
 
     const saved: ProductItem = {
+      ...product,
       id: product?.id || `prod-${Date.now()}`,
       name: name.trim(),
       sku: sku.trim(),
@@ -1003,7 +1011,7 @@ function ProductEditorModal({
       description: description.trim() || undefined,
       size: size.trim() || undefined,
       sizeUnit: size.trim() ? sizeUnit : undefined,
-      unit: unit.trim() || 'Cartons',
+      unit: unit.trim() || 'piece',
       quantity: Number(quantity) || 0,
       reorderLevel: Number(reorderLevel) || 0,
       costPrice: Number(costPrice) || 0,
@@ -1029,6 +1037,7 @@ function ProductEditorModal({
   return (
     <div className="editor-overlay">
       <form className="editor-modal large" onSubmit={handleSubmit} id="product-editor-form">
+        {!product && <SmartEntry mode="product_list" db={db} />}
         <div className="editor-header">
           <div>
             <p className="eyebrow">Product Management</p>
@@ -1104,7 +1113,7 @@ function ProductEditorModal({
               <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-stone-200">
                 <div>
                   <label className="text-xs font-semibold text-stone-700 mb-1 block">
-                    Product Size / Volume <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
+                    Product variant / size <span className="text-[11px] text-stone-400 font-normal">(Optional)</span>
                   </label>
                   <input data-ui="input"
                     value={size}
@@ -1125,7 +1134,7 @@ function ProductEditorModal({
                       className="border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 w-full focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                       id="select-product-size-unit"
                     >
-                      <option value="ml">ml (Milliliters)</option>
+                      <option value="inch">inch</option><option value="mm">mm</option><option value="foot">foot</option><option value="meter">meter</option>
                       <option value="L">L (Liters)</option>
                       <option value="g">g (Grams)</option>
                       <option value="kg">kg (Kilograms)</option>
@@ -1138,13 +1147,13 @@ function ProductEditorModal({
               </div>
 
               <label>
-                Packaging / Dispatch Unit *
+                Base stock unit *
                 <select data-ui="select"
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   className="w-full border border-stone-200 rounded-lg px-3 py-2 text-xs bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#7cb518]/20 focus:border-[#7cb518]"
                 >
-                  <option value="Cartons">Cartons</option>
+                  {['piece','box','dozen','foot','inch','meter','coil','kg','gram','bag','set','length','litre','gallon','load'].map(unit=><option key={unit} value={unit}>{unit}</option>)}
                   <option value="Bottles">Bottles</option>
                   <option value="Packs">Packs</option>
                   <option value="Pcs">Pcs</option>
@@ -1172,7 +1181,7 @@ function ProductEditorModal({
                 <input data-ui="input"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. 24 x 500ml shrink-wrapped bottles, pure mineral source, shelf life 12 months."
+                  placeholder="e.g. Copper wire, 2.5mm, coil = 90 feet."
                   id="input-product-desc"
                 />
               </label>
@@ -1478,7 +1487,7 @@ function ProductEditorModal({
               </div>
             ) : (
               <p className="text-xs text-stone-500 bg-white p-3 rounded-xl border border-stone-200">
-                This SKU is manufactured in-house at the AL FAROOQ FOODS plant using raw materials & production recipes.
+                This SKU is manufactured in-house at the AL FAROOQ HARDWARE plant using raw materials & production recipes.
               </p>
             )}
           </div>
@@ -1837,7 +1846,7 @@ function CategoryManagerModal({
             <p className="eyebrow">Product Catalog</p>
             <h2 className="text-lg font-bold text-stone-900">Manage Categories</h2>
             <p className="text-xs text-stone-500 mt-0.5">
-              Create, rename, and organize categories for your finished products.
+              Create, rename, and organize categories for your hardware products.
             </p>
           </div>
           <button data-ui="button" type="button" className="icon-button" onClick={onClose}>
@@ -2137,10 +2146,12 @@ function RawMaterialEditorModal({
    QUICK STOCK ADJUSTMENT MODAL
 ========================================================================= */
 function StockAdjustmentModal({
+  db,
   item,
   onClose,
   onApply,
 }: {
+  db: AppDatabase
   item: { id: string; name: string; current: number; type: 'product' | 'raw' }
   onClose: () => void
   onApply: (delta: number, reason: string) => void
@@ -2159,6 +2170,7 @@ function StockAdjustmentModal({
   return (
     <div className="editor-overlay">
       <form className="editor-modal" onSubmit={handleSubmit}>
+        <SmartEntry mode="stock_count" db={db} />
         <div className="editor-header">
           <div>
             <p className="eyebrow">Warehouse Adjustment</p>

@@ -1,4 +1,5 @@
 'use client'
+import SmartEntry from './smart-entry'
 
 import { confirmAction } from '@/lib/confirmation'
 
@@ -1622,7 +1623,7 @@ function PurchaseOrderModal({
   const [supplierId, setSupplierId] = useState(editingPurchase?.supplierId || (db.suppliers[0]?.id || ''))
   const [supplierName, setSupplierName] = useState(editingPurchase?.supplierName || (db.suppliers[0]?.name || ''))
   const [supplierPhone, setSupplierPhone] = useState(editingPurchase?.supplierPhone || '')
-  const [category, setCategory] = useState(editingPurchase?.category || 'Raw Material')
+  const [category, setCategory] = useState(editingPurchase?.category || 'Finished Product')
   const [isCustomCategory, setIsCustomCategory] = useState(editingPurchase?.isCustomCategory || false)
   const [customCategoryLabel, setCustomCategoryLabel] = useState(editingPurchase?.customCategoryLabel || '')
   const [poNumber, setPoNumber] = useState(
@@ -1912,6 +1913,7 @@ function PurchaseOrderModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
       <div data-ui="surface" className="gradient-card bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-8" id="purchase-order-modal">
+        {!editingPurchase && <SmartEntry mode="purchase_bill" db={db} />}
         {/* Modal Header - Identical styling to Expense Form */}
         <div className="bg-stone-900 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">

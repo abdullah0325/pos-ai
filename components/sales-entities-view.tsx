@@ -1122,7 +1122,7 @@ function ProfileDetailView({
 
   // Share Statement via WhatsApp
   const handleShareWhatsApp = () => {
-    const text = `*AL FAROOQ FOODS - ACCOUNT STATEMENT & LEDGER SUMMARY*
+    const text = `*AL FAROOQ HARDWARE - ACCOUNT STATEMENT & LEDGER SUMMARY*
 🏬 *Shop/Party:* ${profile.businessName || profile.name}
 👤 *Proprietor:* ${profile.name}
 🆔 *ID:* ${profile.id} | *Type:* ${profile.type}
@@ -1134,7 +1134,7 @@ function ProfileDetailView({
 📦 *Total Shipments / Invoices:* ${linkedInvoices.length} (${formatPKR(totalInvoiced)})
 ✅ *Total Payments Received:* ${formatPKR(lifetimePaid)}
 ----------------------------------
-_Generated offline via AL FAROOQ FOODS ERP on ${formatDate(new Date().toISOString().slice(0, 10))}._`
+_Generated offline via AL FAROOQ HARDWARE ERP on ${formatDate(new Date().toISOString().slice(0, 10))}._`
     window.open(`https://wa.me/92${profile.phone.replace(/[^0-9]/g, '').replace(/^0/, '')}?text=${encodeURIComponent(text)}`, '_blank')
   }
 

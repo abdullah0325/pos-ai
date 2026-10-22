@@ -1,4 +1,5 @@
-import { initialDatabase, type AppDatabase } from './db'
+import { type AppDatabase } from './db'
+import { buildDemo } from './demo-seed'
 
 export function pakistanDate(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
@@ -7,7 +8,7 @@ export function pakistanDate(now = new Date()) {
 
 // Seeded randomness keeps a report reproducible until the user regenerates it.
 export function createReportSample(endDate: string, seed = 2026): AppDatabase {
-  const db: AppDatabase = JSON.parse(JSON.stringify(initialDatabase))
+  const db: AppDatabase = buildDemo(endDate)
   let state = seed >>> 0
   const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296 }
   const invoiceTemplates = db.invoices

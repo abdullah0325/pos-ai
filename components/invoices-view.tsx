@@ -1,4 +1,5 @@
 'use client'
+import SmartEntry from './smart-entry'
 
 import { confirmAction } from '@/lib/confirmation'
 
@@ -622,6 +623,7 @@ function CreateInvoiceModal({
   return (
     <div className="editor-overlay">
       <form className="editor-modal large" onSubmit={handleSubmit}>
+        <SmartEntry mode="sale_list" db={db} />
         <div className="editor-header">
           <div>
             <p className="eyebrow">New Transaction</p>

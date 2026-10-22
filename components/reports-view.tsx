@@ -63,7 +63,7 @@ import {
   type RawMaterialItem,
 } from '@/lib/db'
 import { exportToCSV as downloadCSV, generateBusinessReportPDF as downloadPDF } from '@/lib/pdf-export'
-import { createReportSample, buildReportTimeline, pakistanDate, type ReportSource } from '@/lib/report-data'
+import { buildReportTimeline, pakistanDate, type ReportSource } from '@/lib/report-data'
 
 export type ReportCategoryKey =
   | 'overview'
@@ -110,13 +110,12 @@ export default function ReportsView({
   onSaveDatabase,
   isOwner = true,
 }: ReportsViewProps) {
-  const sampleMode = true
+  const sampleMode = false
   const sampleSeed = 2026
   const [traceDate, setTraceDate] = useState('')
   const [traceOpen, setTraceOpen] = useState(false)
   const today = pakistanDate()
-  const sampleDatabase = useMemo(() => createReportSample(today, sampleSeed), [today, sampleSeed])
-  const db = sampleMode ? sampleDatabase : liveDatabase
+  const db = liveDatabase
   const exportToCSV = (...args: Parameters<typeof downloadCSV>) => downloadCSV(sampleMode ? 'SAMPLE_' + args[0] : args[0], args[1], args[2])
   const generateBusinessReportPDF = (options: Parameters<typeof downloadPDF>[0]) => downloadPDF({ ...options, title: (sampleMode ? 'SAMPLE - ' : '') + options.title, filename: (sampleMode ? 'SAMPLE_' : '') + options.filename })
 
@@ -836,7 +835,7 @@ export default function ReportsView({
     } else if (activeCategory === 'inventory') {
       generateBusinessReportPDF({
         title: 'Inventory Valuation & Warehouse Stock Report',
-        subtitle: 'Stock status, valuation breakdown across finished products and raw materials',
+        subtitle: 'Stock status, valuation breakdown across hardware products and raw materials',
         dateRangeText: dateRange.label,
         filename: 'Inventory_Valuation_Report',
         kpiStats: [
@@ -2308,7 +2307,7 @@ export default function ReportsView({
                 className="bg-white border border-stone-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold"
               >
                 <option value="All">All Inventory</option>
-                <option value="Product">Finished Products Only</option>
+                <option value="Product">Hardware Products Only</option>
                 <option value="Raw Material">Raw Materials Only</option>
               </select>
             </div>

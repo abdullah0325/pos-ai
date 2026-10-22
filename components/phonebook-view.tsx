@@ -160,8 +160,8 @@ export default function PhonebookView({ db, onSaveDatabase, headerTarget }: Phon
       clean = '92' + clean
     }
     const greeting = contactName
-      ? `Assalam-o-Alaikum ${contactName}, from AL FAROOQ FOODS.`
-      : `Assalam-o-Alaikum, from AL FAROOQ FOODS.`
+      ? `Assalam-o-Alaikum ${contactName}, from AL FAROOQ HARDWARE.`
+      : `Assalam-o-Alaikum, from AL FAROOQ HARDWARE.`
     return `https://wa.me/${clean}?text=${encodeURIComponent(greeting)}`
   }
 

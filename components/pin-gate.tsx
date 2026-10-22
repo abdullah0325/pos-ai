@@ -99,7 +99,7 @@ export default function PinGate({ children }: { children: ReactNode }) {
     <div className="pin-lock-screen">
       <section className="pin-lock-card" role="dialog" aria-modal="true" aria-busy={status !== 'locked'} aria-labelledby="pin-lock-title" aria-describedby="pin-lock-description">
         <div className="pin-lock-icon">{status === 'checking' || status === 'locking' || status === 'unlocking' ? <LoaderCircle className="pin-processing-spinner" size={25} /> : <ShieldCheck size={25} />}</div>
-        <p className="pin-lock-brand">AL FAROOQ FOODS</p>
+        <p className="pin-lock-brand">AL FAROOQ HARDWARE</p>
         <h1 id="pin-lock-title">{status === 'checking' ? 'Checking access…' : status === 'locking' ? 'Locking workspace…' : status === 'unlocking' ? 'Verifying PIN…' : 'Unlock your workspace'}</h1>
         <p id="pin-lock-description" role="status">{status === 'locking' ? 'Securing your workspace.' : status === 'unlocking' ? 'Please wait while we check your PIN.' : 'Enter your five-digit PIN to access the app.'}</p>
         {(status === 'locked' || status === 'unlocking') && <form onSubmit={event => event.preventDefault()}>

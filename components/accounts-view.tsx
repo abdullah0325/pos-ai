@@ -495,7 +495,7 @@ export default function AccountsView({ db, viewType = 'reports', onSaveDatabase,
         <div className="panel max-w-4xl mx-auto">
           <div className="panel-heading mb-6 border-b border-gray-200 pb-4">
             <div>
-              <p className="eyebrow">AL FAROOQ FOODS · MANUFACTURING ACCOUNTS</p>
+              <p className="eyebrow">AL FAROOQ HARDWARE · MANUFACTURING ACCOUNTS</p>
               <h2>Income & Profit/Loss Statement</h2>
               <p>For Period: All Current Recorded Operations (2026)</p>
             </div>

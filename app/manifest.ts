@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'AL FAROOQ FOODS',
-    short_name: 'AL FAROOQ FOODS',
-    description: 'Offline-first business management for AL FAROOQ FOODS.',
+    name: 'AL FAROOQ HARDWARE',
+    short_name: 'AL FAROOQ HARDWARE',
+    description: 'Online hardware store POS.',
     start_url: '/',
     display: 'standalone',
     background_color: '#f7f7f5',
@@ -12,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait-primary',
     icons: [
       { src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml' },
-      { src: '/al-farooq-foods-logo.png', sizes: '512x512', type: 'image/png' },
+      { src: '/hardware-logo.svg', sizes: 'any', type: 'image/svg+xml' },
     ],
   }
 }

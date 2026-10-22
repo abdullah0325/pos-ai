@@ -840,7 +840,7 @@ export default function SalesView({
               onChange={(e) => setProductFilter(e.target.value)}
               className="w-full border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs bg-stone-50 text-stone-700 font-medium focus:outline-none cursor-pointer truncate"
             >
-              <option value="All">All Finished Products</option>
+              <option value="All">All Hardware Products</option>
               {db.products.map((prod) => (
                 <option key={prod.id} value={prod.id}>
                   {prod.name}

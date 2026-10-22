@@ -11,7 +11,7 @@ interface SettingsViewProps {
   db: AppDatabase
   isOwner: boolean
   setIsOwner: (value: boolean) => void
-  onSaveDatabase: (updated: AppDatabase) => void
+  onSaveDatabase: (updated: AppDatabase) => void | Promise<boolean>
 }
 const sections = [
   { id: 'company' as const, label: 'Company profile', description: 'Business & billing details', icon: Building2 },
@@ -82,22 +82,27 @@ export default function SettingsView({ db, isOwner, setIsOwner, onSaveDatabase }
     if (!(await confirmAction({"title":"Restore this backup?","message":"Replace current business records with the reviewed backup? A safety backup will download first.","confirmLabel":"Restore backup","destructive":true}))) return
     try {
       exportDatabaseJSON(db)
-      onSaveDatabase(preview.db)
+      if(await onSaveDatabase({...preview.db,revision:db.revision}) === false)throw new Error('Restore was not saved. Check the online status.')
       setPreview(null)
       setConfirmation('')
       setNotice({ text: 'Backup restored. A safety backup of the previous data was also downloaded.' })
-    } catch { setNotice({ text: 'Restore failed. Check your available browser storage.', error: true }) }
+    } catch { setNotice({ text: 'Restore failed. Check the online connection.', error: true }) }
   }
   async function reset() {
     if (!isOwner || confirmation !== 'RESET') return
-    if (!(await confirmAction({"title":"Reset business records?","message":"Replace business records with starter data? A safety backup will download first.","confirmLabel":"Reset database","destructive":true}))) return
+    if (!(await confirmAction({"title":"Reset business records?","message":"Replace the online hardware workspace with demo records? A safety backup will download first.","confirmLabel":"Reset database","destructive":true}))) return
     try {
       exportDatabaseJSON(db)
-      onSaveDatabase({ ...initialDatabase, companyProfile: db.companyProfile, adminProfile: db.adminProfile })
+      setBusy(true)
+      const response = await fetch('/api/demo/reset', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'RESET',revision:db.revision??0})})
+      const data = await response.json()
+      if(!response.ok)throw new Error(data.error || 'Reset failed')
+      window.dispatchEvent(new CustomEvent('hardware:committed',{detail:data}))
+      setBusy(false)
       setResetOpen(false)
       setConfirmation('')
-      setNotice({ text: 'Starter data restored. Your company profile was kept and a safety backup was downloaded.' })
-    } catch { setNotice({ text: 'Reset could not be completed.', error: true }) }
+      setNotice({ text: 'Hardware demo records seeded in Neon. A safety backup was downloaded.' })
+    } catch(error) { setBusy(false); setNotice({ text: (error as Error).message, error: true }) }
   }
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -106,10 +111,10 @@ export default function SettingsView({ db, isOwner, setIsOwner, onSaveDatabase }
     if (!cleaned.name) { setNotice({ text: 'Company name is required.', error: true }); return }
     if (!(await confirmAction({"title":"Save company profile?","message":"Update the company details used in billing documents and backups?","confirmLabel":"Save changes","destructive":false}))) return
     try {
-      onSaveDatabase({ ...db, companyProfile: cleaned })
+      if(await onSaveDatabase({ ...db, companyProfile: cleaned }) === false)throw new Error('Profile was not saved.')
       setProfile(cleaned)
-      setNotice({ text: 'Company profile saved on this device and included in future backups.' })
-    } catch { setNotice({ text: 'Could not save your profile. Check browser storage and try again.', error: true }) }
+      setNotice({ text: 'Company profile submitted. Check the online save status above.' })
+    } catch { setNotice({ text: 'Could not save your profile. Check the online connection and try again.', error: true }) }
   }
   function field(key: keyof CompanyProfile, label: string, type = 'text') {
     return <label>{label}<input data-ui="input" type={type} value={profile[key]} disabled={!isOwner} required={key === 'name'} maxLength={key === 'address' ? 240 : 120} onChange={event => setProfile({ ...profile, [key]: event.target.value })} /></label>
@@ -126,7 +131,7 @@ export default function SettingsView({ db, isOwner, setIsOwner, onSaveDatabase }
         <nav className="settings-menu" aria-label="Settings sections">
           <p>Workspace settings</p>
           {sections.map(item => <button key={item.id} type="button" aria-current={section === item.id ? 'page' : undefined} onClick={() => { setSection(item.id); setNotice(null); setPreview(null); setResetOpen(false); setConfirmation('') }}><item.icon size={18} /><span><strong>{item.label}</strong><small>{item.description}</small></span></button>)}
-          <div className="settings-menu-footer"><Shield size={16} /><span>{isOwner ? 'Owner session' : 'Staff session'}<small>Offline workspace</small></span></div>
+          <div className="settings-menu-footer"><Shield size={16} /><span>{isOwner ? 'Owner session' : 'Staff session'}<small>Online workspace</small></span></div>
         </nav>
         <section className="settings-content" aria-label={current.label}>
           <div className="settings-section-heading"><h2>{current.label}</h2><p>{current.description}</p></div>
@@ -149,9 +154,9 @@ export default function SettingsView({ db, isOwner, setIsOwner, onSaveDatabase }
             <div className="settings-info"><Shield size={18} /><p>Owner and staff are view modes, not separate user accounts. The browser PIN is a local privacy lock. Server authentication is required for enforced user permissions.</p></div>
           </div>}
           {section === 'storage' && <div className="settings-section-stack">
-            <div className="settings-overview-grid"><div data-ui="surface" className="settings-detail-card"><HardDrive size={18} /><span>Database payload</span><strong>{sizeLabel(bytes)}</strong><small>JSON size; browser storage overhead varies</small></div><div data-ui="surface" className="settings-detail-card"><Database size={18} /><span>Total records</span><strong>{recordCount(db).toLocaleString()}</strong><small>Database version {db.version}</small></div></div>
-            <div data-ui="surface" className="settings-detail-card"><h3>Record overview</h3><div className="settings-record-summary">{[['Products', db.products.length], ['Raw materials', db.rawMaterials.length], ['Customers', db.customers.length], ['Suppliers', db.suppliers.length], ['Invoices', db.invoices.length], ['Purchases', db.purchases.length], ['Expenses', db.expenses.length], ['Employees', db.employees.length]].map(([label, count]) => <span key={label}>{label}<strong>{count}</strong></span>)}</div>{usage && <p>Browser-reported origin storage: {sizeLabel(usage.usage)} used of {sizeLabel(usage.quota)}. This estimate includes caches and may exclude localStorage.</p>}</div>
-            <div className="settings-danger-zone"><h3>Reset to starter data</h3><p>Replaces business records with the default sample database. Your saved company profile is preserved.</p>{!resetOpen ? <button data-ui="button" className="button secondary" disabled={!isOwner} onClick={() => { setResetOpen(true); setConfirmation('') }}><RotateCcw size={15} /> Reset database</button> : <div><label>Type RESET to confirm<input data-ui="input" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></label><div className="settings-inline-actions"><button data-ui="button" className="button rust" disabled={confirmation !== 'RESET' || !isOwner} onClick={reset}>Download safety backup & reset</button><button className="button secondary" onClick={() => { setResetOpen(false); setConfirmation('') }}>Cancel</button></div></div>}</div>
+            <div className="settings-overview-grid"><div data-ui="surface" className="settings-detail-card"><HardDrive size={18} /><span>Database payload</span><strong>{sizeLabel(bytes)}</strong><small>Online database snapshot size</small></div><div data-ui="surface" className="settings-detail-card"><Database size={18} /><span>Total records</span><strong>{recordCount(db).toLocaleString()}</strong><small>Database version {db.version}</small></div></div>
+            <div data-ui="surface" className="settings-detail-card"><h3>Record overview</h3><div className="settings-record-summary">{[['Products', db.products.length], ['Raw materials', db.rawMaterials.length], ['Customers', db.customers.length], ['Suppliers', db.suppliers.length], ['Invoices', db.invoices.length], ['Purchases', db.purchases.length], ['Expenses', db.expenses.length], ['Employees', db.employees.length]].map(([label, count]) => <span key={label}>{label}<strong>{count}</strong></span>)}</div>{usage && <p>Legacy browser storage: {sizeLabel(usage.usage)} used of {sizeLabel(usage.quota)}. Business records are stored in Neon.</p>}</div>
+            <div className="settings-danger-zone"><h3>Reset & seed demo data</h3><p>Replaces business records with the hardware demo database. Includes products, suppliers, customers, purchases and sales.</p>{!resetOpen ? <button data-ui="button" className="button secondary" disabled={!isOwner} onClick={() => { setResetOpen(true); setConfirmation('') }}><RotateCcw size={15} /> Reset & seed demo data</button> : <div><label>Type RESET to confirm<input data-ui="input" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></label><div className="settings-inline-actions"><button data-ui="button" className="button rust" disabled={busy || confirmation !== 'RESET' || !isOwner} onClick={reset}>Reset & seed demo data</button><button className="button secondary" onClick={() => { setResetOpen(false); setConfirmation('') }}>Cancel</button></div></div>}</div>
           </div>}
         </section>
       </div>

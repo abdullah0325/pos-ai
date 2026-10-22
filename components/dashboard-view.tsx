@@ -61,31 +61,15 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
   const lowStockRaw = db.rawMaterials.filter((r) => r.quantity <= r.reorderLevel)
 
   // Top products by sales volume
-  const topProducts = useMemo(() => {
-    return db.products.slice(0, 4).map((p, idx) => {
-      const pSales = db.invoices
-        .flatMap((inv) => inv.items)
-        .filter((it) => it.productId === p.id)
-        .reduce((sum, it) => sum + it.total, 0)
-      const pct =
-        totalSalesRevenue > 0
-          ? Math.min(100, Math.round((pSales / (totalSalesRevenue || 1)) * 100))
-          : 35 - idx * 7
-      return {
-        name: p.name,
-        revenue: formatPKR(pSales || p.wholesalePrice * (150 - idx * 30)),
-        pct: `${Math.max(12, pct)}%`,
-      }
-    })
-  }, [db.products, db.invoices, totalSalesRevenue])
+  const topProducts = useMemo(() => db.products.map(p => ({name:p.name,revenueValue:db.invoices.flatMap(i=>i.items).filter(l=>l.productId===p.id).reduce((sum,l)=>sum+l.total,0)})).sort((a,b)=>b.revenueValue-a.revenueValue).slice(0,4).map(p=>({name:p.name,revenue:formatPKR(p.revenueValue),pct:`${totalSalesRevenue>0?Math.max(0,Math.round(p.revenueValue/totalSalesRevenue*100)):0}%`})),[db.products,db.invoices,totalSalesRevenue])
 
   // Category Colors Palette
   const categoryColors: Record<string, string> = {
-    'Mineral Water': '#0284c7', // Sky Blue
-    'Fruit Juice': '#f59e0b', // Amber
-    'Candy & Toffee': '#ec4899', // Pink
-    'Potato Chips': '#eab308', // Yellow
-    'Snacks & Savories': '#b8481e', // Rust / Terracotta
+    'Electrical': '#0284c7', // Sky Blue
+    'Water supply & plumbing': '#f59e0b', // Amber
+    'Building materials': '#ec4899', // Pink
+    'General hardware & tools': '#eab308', // Yellow
+    'Electronics': '#b8481e', // Rust / Terracotta
     'Carbonated Beverages': '#8b5cf6', // Violet
     Other: '#64748b', // Slate
   }
@@ -121,8 +105,8 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
       db.categories.forEach((cat, idx) => {
         map[cat.name] = {
           name: cat.name,
-          revenue: [420000, 310000, 185000, 140000, 95000, 75000, 30000][idx] || 50000,
-          unitsSold: [650, 480, 290, 220, 160, 120, 50][idx] || 80,
+          revenue: 0,
+          unitsSold: 0,
         }
       })
     }
@@ -233,15 +217,23 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
     })
   }, [activeBreakdown, activeTotalRevenue])
 
+  const today = new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Karachi'})
+  const series = Array.from({length:7},(_,i)=>{
+    const date=new Date(Date.parse(today+'T12:00:00Z')-(6-i)*86400000).toISOString().slice(0,10)
+    return {date,value:db.invoices.filter(s=>s.date===date).reduce((sum,s)=>sum+s.grandTotal,0)}
+  })
+  const chartMax=Math.max(1,...series.map(s=>s.value))
+  const chartPath=series.map((s,i)=>`${i?'L':'M'}${i*650/6} ${195-s.value/chartMax*180}`).join(' ')
+
   return (
     <div className="page-stack">
       {/* Header */}
       <ModuleHeading icon="dashboard" className="dashboard-heading">
         <div>
-          <p className="eyebrow">Al Farooq Foods · Plant & Distribution Workspace</p>
+          <p className="eyebrow">Al Farooq Hardware · Hardware Store Workspace</p>
           <h1>Executive Dashboard</h1>
           <p className="subheading">
-            Real-time food manufacturing, bottling runs, inventory levels & sales status.
+            Hardware inventory, purchases, customer credit & sales.
           </p>
         </div>
         <div className="heading-actions">
@@ -288,7 +280,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           <div className="stat-icon purple">
             <CircleDollarSign />
           </div>
-          <div className="stat-label">Total Sales (MTD)</div>
+          <div className="stat-label">Total Recorded Sales</div>
           <strong>{formatPKR(totalSalesRevenue)}</strong>
           <span className="stat-change flex items-center gap-1">
             <ArrowUpRight className="w-3.5 h-3.5" /> {totalInvoicesCount} invoices issued
@@ -299,7 +291,7 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           <div className="stat-icon olive">
             <Package />
           </div>
-          <div className="stat-label">Finished Stock Units</div>
+          <div className="stat-label">Hardware Stock Units</div>
           <strong>{totalFinishedStockUnits.toLocaleString()}</strong>
           <span className="stat-change flex items-center gap-1">
             <ArrowUpRight className="w-3.5 h-3.5" /> {db.products.length} active SKUs
@@ -336,8 +328,8 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
         <div className="panel sales-panel lg:col-span-7 flex flex-col justify-between">
           <div className="panel-heading">
             <div>
-              <h2>Manufacturing & Sales Trajectory</h2>
-              <p>Monthly revenue performance for water, juices, and snacks</p>
+              <h2>Daily Hardware Sales</h2>
+              <p>Recorded sales over the last seven days</p>
             </div>
             <button data-ui="button" className="select-button" onClick={() => onNavigate('reports')}>
               View Reports
@@ -345,8 +337,8 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
           </div>
           <div className="chart-area my-auto">
             <div className="chart-y">
-              <span>Rs. 300k</span>
-              <span>Rs. 150k</span>
+              <span>{formatPKR(chartMax)}</span>
+              <span>{formatPKR(chartMax/2)}</span>
               <span>Rs. 0</span>
             </div>
             <div className="chart">
@@ -357,30 +349,26 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
               </div>
               <svg viewBox="0 0 650 210" preserveAspectRatio="none" aria-label="Sales chart">
                 <path
-                  d="M0 170 C50 140, 80 150, 120 120 S180 135, 230 90 S300 115, 360 85 S430 70, 490 55 S560 65, 610 25 S640 35, 650 15"
+                  d={chartPath}
                   fill="none"
                   stroke="var(--primary)"
                   strokeWidth="3.5"
                   strokeLinecap="round"
                 />
                 <path
-                  d="M0 170 C50 140, 80 150, 120 120 S180 135, 230 90 S300 115, 360 85 S430 70, 490 55 S560 65, 610 25 S640 35, 650 15 L650 210 L0 210Z"
-                  fill="url(#foodFill)"
+                  d={`${chartPath} L650 210 L0 210Z`}
+                  fill="url(#hardwareFill)"
                   opacity="0.22"
                 />
                 <defs>
-                  <linearGradient id="foodFill" x1="0" x2="0" y1="0" y2="1">
+                  <linearGradient id="hardwareFill" x1="0" x2="0" y1="0" y2="1">
                     <stop stopColor="#7cb518" />
                     <stop offset="1" stopColor="#7cb518" stopOpacity="0" />
                   </linearGradient>
                 </defs>
               </svg>
               <div className="chart-x">
-                <span>Week 1</span>
-                <span>Week 2</span>
-                <span>Week 3</span>
-                <span>Week 4</span>
-                <span>Today</span>
+                {series.map(s=><span key={s.date}>{s.date.slice(5)}</span>)}
               </div>
             </div>
           </div>
@@ -521,60 +509,16 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
         <div className="panel activity-panel">
           <div className="panel-heading">
             <div>
-              <h2>Recent Factory Activity</h2>
-              <p>Latest production runs, sales & shipments</p>
+              <h2>Recent Store Activity</h2>
+              <p>Latest sales and supplier purchases</p>
             </div>
             <button data-ui="button" className="link-button" onClick={() => onNavigate('sales')}>
               All Sales
             </button>
           </div>
           <div className="activity-list">
-            <div className="activity-item cursor-pointer" onClick={() => onNavigate('sales')}>
-              <div className="activity-icon purple">
-                <ShoppingCart />
-              </div>
-              <div>
-                <strong>Distributor Order Dispatched</strong>
-                <span>Haji Noor Muhammad · Rs. 230,000</span>
-              </div>
-              <time>Today</time>
-            </div>
-
-            <div className="activity-item cursor-pointer" onClick={() => onNavigate('products')}>
-              <div className="activity-icon olive">
-                <Factory />
-              </div>
-              <div>
-                <strong>Bottling Batch Completed</strong>
-                <span>Mango Nectar 250ml · 200 cartons</span>
-              </div>
-              <time>Yesterday</time>
-            </div>
-
-            <div
-              className="activity-item cursor-pointer"
-              onClick={() => onNavigate('raw-materials')}
-            >
-              <div className="activity-icon rust">
-                <Package />
-              </div>
-              <div>
-                <strong>Raw Material Low</strong>
-                <span>Masala Crinkle Seasoning · 65 kg left</span>
-              </div>
-              <time>2 days ago</time>
-            </div>
-
-            <div className="activity-item cursor-pointer" onClick={() => onNavigate('purchase')}>
-              <div className="activity-icon purple">
-                <Truck />
-              </div>
-              <div>
-                <strong>Raw Material Purchase Received</strong>
-                <span>National Sugar Mills · 2,000 kg</span>
-              </div>
-              <time>3 days ago</time>
-            </div>
+            {[...db.invoices.map(s=>({id:s.id,title:s.invoiceNumber,label:`${s.customerName} | ${formatPKR(s.grandTotal)}`,date:s.date,route:'sales' as const})),...db.purchases.map(p=>({id:p.id,title:p.poNumber,label:`${p.supplierName} | ${formatPKR(p.grandTotal)}`,date:p.date,route:'purchase' as const}))].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4).map(item=><div key={item.id} className="activity-item cursor-pointer" onClick={()=>onNavigate(item.route)}><div className="activity-icon olive"><ShoppingCart /></div><div><strong>{item.title}</strong><span>{item.label}</span></div><time>{item.date}</time></div>)}
+            {!db.invoices.length && !db.purchases.length && <p>No transactions yet.</p>}
           </div>
         </div>
 
@@ -582,8 +526,8 @@ export default function DashboardView({ db, onNavigate, onOpenReceipt, isOwner }
         <div className="panel">
           <div className="panel-heading">
             <div>
-              <h2>Top Food & Beverage Products</h2>
-              <p>Highest demand finished goods this month</p>
+              <h2>Top Hardware Products</h2>
+              <p>Products ranked by recorded sales</p>
             </div>
             <button data-ui="button" className="link-button" onClick={() => onNavigate('products')}>
               All Products
