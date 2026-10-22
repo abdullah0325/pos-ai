@@ -37,6 +37,9 @@ import {
 } from '@/lib/db'
 
 import DashboardView from './dashboard-view'
+import AiBill from './ai-bill'
+import { auditStock } from '@/lib/stock-audit'
+import { mirrorPayload } from '@/lib/mirror-client'
 import PosView from './pos-view'
 import SalesView, { type SalesSubTab } from './sales-view'
 import CustomerManagementView from './customer-management-view'
@@ -56,6 +59,7 @@ import CollectionReceipt from './collection-receipt'
 
 export default function BusinessApp() {
   const lockApp = useAppLock()
+  const [syncNote, setSyncNote] = useState('')
   const [db, setDb] = useState<AppDatabase>(initialDatabase)
   const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard')
   const [salesTab, setSalesTab] = useState<SalesSubTab>('invoices')
@@ -90,8 +94,15 @@ export default function BusinessApp() {
 
   // Sync back to offline localStorage whenever db updates
   const handleSaveDatabase = (updated: AppDatabase) => {
-    saveDatabase(updated)
-    setDb(updated)
+    const audited = auditStock(db, updated)
+    saveDatabase(audited)
+    setDb(audited)
+    if ((audited.aiActivity?.length || 0) > (db.aiActivity?.length || 0)) {
+      setSyncNote('Saved locally; syncing to Neon…')
+      void fetch('/api/mirror', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mirrorPayload(db, audited)), signal: AbortSignal.timeout(20000) })
+        .then(response => { setSyncNote(response.ok ? 'Saved locally and synced to Neon.' : 'Saved locally; not synced to Neon.') })
+        .catch(() => setSyncNote('Saved locally; not synced to Neon.'))
+    }
   }
 
   const handleRoleChange = (owner: boolean) => {
@@ -350,6 +361,9 @@ export default function BusinessApp() {
 
         {/* Body Content Router */}
         <div className="content" data-mobile-module={activeModule}>
+          {syncNote && <p role="status" className="text-sm mb-3">{syncNote}</p>}
+          {activeModule === 'dashboard' && <section className="ai-panel gradient-card p-4 rounded-2xl border border-stone-200 mb-4 space-y-2"><div className="flex gap-3"><button className="btn btn-primary" onClick={() => handleNavigate('purchase')}>Scan Bill</button><button className="btn btn-primary" onClick={() => handleNavigate('pos')}>Voice Sale</button></div><strong>AI Activity — today</strong><p>{(db.aiActivity || []).filter(a => a.createdAt.slice(0,10) === new Date().toISOString().slice(0,10) && a.type === 'scan').length} scans · {(db.aiActivity || []).filter(a => a.createdAt.slice(0,10) === new Date().toISOString().slice(0,10) && a.type === 'voice').length} voice sales · {(db.aiActivity || []).filter(a => a.createdAt.slice(0,10) === new Date().toISOString().slice(0,10)).reduce((sum,a) => sum + a.created,0)} items auto-created</p></section>}
+          {(activeModule === 'purchase' && purchaseTab === 'purchases') && <AiBill db={db} onSave={handleSaveDatabase} />}
           {activeModule === 'dashboard' && (
             <DashboardView
               db={db}

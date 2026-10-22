@@ -3,6 +3,7 @@
 import { confirmAction } from '@/lib/confirmation'
 
 import CatalogPhoto from './catalog-photo'
+import AiVoice from './ai-voice'
 import ModuleHeading from './module-heading'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
@@ -77,6 +78,7 @@ export interface CartItem {
 }
 
 export interface PosDraft {
+  voiceSource?: boolean
   id: string
   savedAt: string
   selectedCategoryName: string
@@ -89,6 +91,7 @@ export interface PosDraft {
 }
 
 export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps) {
+  const [voiceDraft, setVoiceDraft] = useState(false)
   // 1. DYNAMIC CUSTOMER CATEGORIES (Pulled directly from Customer Management)
   const liveCustomerCategories = useMemo<CustomerCategoryItem[]>(() => {
     const base =
@@ -670,6 +673,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       : selectedCustomer?.name || `${selectedCategoryName} Sale`
 
     const newDraft: PosDraft = {
+      voiceSource: voiceDraft,
       id: `draft-${Date.now()}`,
       savedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       selectedCategoryName,
@@ -682,6 +686,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     }
 
     setDrafts([newDraft, ...drafts])
+    setVoiceDraft(false)
     setCart([])
     setCartDiscountValue(0)
     alert(`Sale held as Draft for "${draftName}".`)
@@ -689,6 +694,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   // Resume Draft Sale
   const handleResumeDraft = (draft: PosDraft) => {
+    setVoiceDraft(!!draft.voiceSource)
     setSelectedCategoryName(draft.selectedCategoryName || 'Walk-in Customer')
     if (draft.selectedCustomerId) {
       setSelectedCustomerId(draft.selectedCustomerId)
@@ -814,7 +820,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       amountPaid: effectiveAmountPaid,
       balanceDue,
       dueDate: balanceDue > 0 && invoiceDueDate ? invoiceDueDate : undefined,
-      paymentMethod,
+      paymentMethod: voiceDraft && balanceDue > 0 ? 'Credit' : paymentMethod,
       paymentScreenshot: paymentScreenshot || undefined,
       paymentAccount,
       status: paymentStatus,
@@ -827,7 +833,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
     const updatedProducts = db.products.map((p) => {
       const matched = cart.find((item) => item.product.id === p.id)
       if (matched) {
-        const remaining = Math.max(0, p.quantity - matched.quantity)
+        const remaining = voiceDraft ? p.quantity - matched.quantity : Math.max(0, p.quantity - matched.quantity)
         return {
           ...p,
           quantity: remaining,
@@ -907,7 +913,9 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
       ledgers: [...newLedgerEntries, ...db.ledgers],
     }
 
+    if (voiceDraft) updatedDb.aiActivity = [...(db.aiActivity || []), { id: newInvoice.id, type: 'voice', createdAt: now.toISOString(), created: 0 }]
     onSaveDatabase(updatedDb)
+    setVoiceDraft(false)
 
     setCompletedInvoice(newInvoice)
     setShowCheckoutModal(false)
@@ -917,6 +925,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   // Reset POS for next sale
   const handleResetPOS = () => {
+    setVoiceDraft(false)
     setCart([])
     setCartDiscountValue(0)
     setCompletedInvoice(null)
@@ -969,6 +978,20 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
 
   return (
     <div className="space-y-4" id="pos-terminal-root">
+      <AiVoice db={db} onApply={(draft, customerId) => {
+        const grouped = new Map<string, number>()
+        draft.items.forEach(line => { if (line.matched_product_id) grouped.set(line.matched_product_id, (grouped.get(line.matched_product_id) || 0) + line.qty) })
+        const lines: CartItem[] = [...grouped].map(([id, qty]) => {
+          const product = db.products.find(p => p.id === id)!
+          if (qty > product.quantity) alert(`Warning: ${product.name} will have negative stock.`)
+          return { product, quantity: qty, unitPrice: product.retailPrice, pricingTier: 'Retail', discountType: 'fixed', discountValue: 0, discountAmount: 0, lineTotal: qty * product.retailPrice }
+        })
+        setCart(lines); setVoiceDraft(true); setCompletedInvoice(null)
+        setCartDiscountValue(0); setCartDiscountType('fixed'); setOrderNotes(''); setPaymentScreenshot('')
+        const customer = db.customers.find(c => c.id === customerId)
+        setSelectedCategoryName(customer?.type || 'Walk-in Customer'); setSelectedCustomerId(customerId)
+        setPaymentStatus(draft.payment_type === 'credit' ? 'Unpaid' : 'Paid'); setPaymentMethod('Cash'); setAmountPaid(0)
+      }} />
       <ModuleHeading icon="invoices" className="pos-no-print">
         <div>
           <p className="eyebrow">Al Farooq Foods · Sales Workspace</p>
@@ -1485,6 +1508,7 @@ export default function PosView({ db, onSaveDatabase, onNavigate }: PosViewProps
                         confirmLabel: 'Clear cart',
                         destructive: true,
                       })) {
+                        setVoiceDraft(false)
                         setCart([])
                         setCartDiscountValue(0)
                       }

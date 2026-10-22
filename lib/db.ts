@@ -548,6 +548,8 @@ export const defaultAdminProfile: AdminProfile = {
 }
 
 export interface AppDatabase {
+  stockMovements?: Array<{ id: string; itemId: string; kind: 'product' | 'raw_material'; type: 'purchase' | 'sale' | 'adjust'; qty: number; refId: string; createdAt: string }>
+  aiActivity?: Array<{ id: string; type: 'scan' | 'voice'; createdAt: string; created: number }>
   adminProfile?: AdminProfile
   companyProfile?: CompanyProfile
   categories: CategoryItem[]
