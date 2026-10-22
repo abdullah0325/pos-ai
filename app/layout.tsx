@@ -30,7 +30,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <link rel="apple-touch-icon" href="/apple-icon.png" />
       </head>
-      <body className="antialiased">
+      {/* Browser extensions such as Grammarly can add body attributes before hydration. */}
+      <body className="antialiased" suppressHydrationWarning>
         {children}
         <script
           dangerouslySetInnerHTML={{
