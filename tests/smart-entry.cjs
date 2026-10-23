@@ -20,3 +20,11 @@ draft.payment_type='credit';assert.throws(()=>applySmartEntry(seed,draft,'text',
 draft=blankDraft('purchase_bill');draft.lines=[{...blankRow(),name:'Missing qty'}];assert.throws(()=>applySmartEntry(seed,draft,'text',crypto.randomUUID()),/quantity/)
 assert.equal(JSON.stringify(seed),before)
 console.log('Passed: deterministic 72-product seed, Urdu/Arabic digits, ledger balances, mixed units, atomic draft application, new supplier/product, expenses, credit sale, receipt, counts, aliases, unknown IDs, missing quantities, negative-stock warnings, immutable input.')
+
+// Extraction may return blank optional cells; preserve them as unknown for review.
+const {draftSchema}=load('lib/smart-schema.ts')
+const extracted=blankDraft('purchase_bill'); extracted.date=''; extracted.total=''; extracted.lines=[{...blankRow(),name:'Copper wire',qty:'\u06f2',rate:'',amount:''}]
+const reviewed=draftSchema.parse(extracted)
+assert.equal(reviewed.date,null); assert.equal(reviewed.total,null); assert.equal(reviewed.lines[0].qty,2); assert.equal(reviewed.lines[0].rate,null); assert.equal(reviewed.lines[0].amount,null)
+assert.throws(()=>draftSchema.parse({...extracted,lines:[{...extracted.lines[0],qty:'unreadable'}]}))
+console.log('Passed: blank extracted cells remain editable; multilingual quantities normalize; invalid numbers are rejected.')

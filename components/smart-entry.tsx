@@ -1,4 +1,5 @@
 'use client';
+import { Upload, Camera, Mic, Keyboard, FileText, CheckCircle2, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState, useId } from 'react';
 import type { AppDatabase, InvoiceItem } from '@/lib/db';
 import { formatPKR } from '@/lib/db';
@@ -32,6 +33,8 @@ export default function SmartEntry({ mode, db, onClose }: {
     onClose?: () => void;
 }) {
     const instanceId = useId();
+    const reviewDialog = useRef<HTMLDialogElement>(null);
+    const [inputMethod, setInputMethod] = useState<'image' | 'voice' | 'text'>('image');
     const [draft, setDraft] = useState<SmartDraft | null>(null), [matches, setMatches] = useState<MatchedRow[]>([]), [images, setImages] = useState<string[]>([]), [text, setText] = useState(''), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [recording, setRecording] = useState(false), [receipt, setReceipt] = useState<InvoiceItem | null>(null);
     const [source, setSource] = useState<'image' | 'voice' | 'text' | 'manual'>('manual'), [revision, setRevision] = useState(db.revision ?? 0);
     const recorder = useRef<MediaRecorder | null>(null), stream = useRef<MediaStream | null>(null), requestId = useRef(crypto.randomUUID()), inFlight = useRef(false), audioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,6 +44,7 @@ export default function SmartEntry({ mode, db, onClose }: {
         if (recorder.current.state !== 'inactive')
             recorder.current.stop();
     } stream.current?.getTracks().forEach(t => t.stop()); }, []);
+    useEffect(() => { if (draft && !reviewDialog.current?.open) reviewDialog.current?.showModal(); else if (!draft) reviewDialog.current?.close(); }, [draft]);
     function startManual() { setDraft(blankDraft(mode)); setMatches([]); setImages([]); setSource('manual'); setRevision(db.revision ?? 0); requestId.current = crypto.randomUUID(); setMessage('Fill in the table, then approve to save.'); setReceipt(null); }
     async function extract(input: unknown, origin: 'image' | 'voice' | 'text') {
         if (inFlight.current)
@@ -138,8 +142,9 @@ export default function SmartEntry({ mode, db, onClose }: {
         }
     } return sum + (row.amount ?? (row.qty ?? 0) * rate); }, 0) || 0;
     return <section className="smart-entry" aria-label={titles[mode]}>
-  <div className="smart-heading"><div><span className="eyebrow">SMART ENTRY</span><h2>{titles[mode]}</h2><p>Scan, upload or speak to fill this form. Manual entry is always available.</p></div>{onClose && <button type="button" className="button secondary" onClick={onClose}>Close</button>}</div>
-  <div className="smart-inputs"><label className="button primary">Upload / Scan images<input type="file" accept="image/*" multiple hidden disabled={busy || recording} onChange={async (e) => { const files = Array.from(e.target.files || []); e.target.value = ''; if (!files.length)
+  <div className="smart-heading"><div><span className="eyebrow">SMART ENTRY</span><h2>{titles[mode]}</h2><p>Upload a bill, take a photo, or dictate the details. Review and approve before saving.</p></div>{onClose && <button type="button" className="button secondary" onClick={onClose}>Close</button>}</div>
+  <ol className="smart-steps"><li className={!draft ? "active" : ""}>1. Add information</li><li className={draft ? "active" : ""}>2. Review details</li><li>3. Approve and save</li></ol><p className="smart-language">Multilingual input supported ? Results are presented in English</p>
+  <div className="smart-inputs"><label className="smart-method"><Upload size={22}/><strong>Upload images</strong><span>Select up to 5 bill photos</span><input type="file" accept="image/*" multiple hidden disabled={busy || recording} onChange={async (e) => { const files = Array.from(e.target.files || []); e.target.value = ''; if (!files.length)
         return; if (files.length > 5) {
         setMessage('Choose up to 5 images.');
         return;
@@ -155,7 +160,7 @@ export default function SmartEntry({ mode, db, onClose }: {
     finally {
         setBusy(false);
     } }}/></label>
-  <label className="button secondary">Camera<input type="file" accept="image/*" capture="environment" hidden disabled={busy || recording} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file)
+  <label className="smart-method"><Camera size={22}/><strong>Take a photo</strong><span>Capture a clear, complete bill</span><input type="file" accept="image/*" capture="environment" hidden disabled={busy || recording} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file)
         return; try {
         const image = await resize(file);
         setImages([image]);
@@ -164,11 +169,11 @@ export default function SmartEntry({ mode, db, onClose }: {
     catch (e) {
         setMessage((e as Error).message);
     } }}/></label>
-  <button type="button" className="button secondary" disabled={busy} onClick={() => void speak()}>{recording ? 'Stop recording' : 'Speak'}</button><button type="button" className="button secondary" disabled={busy || recording} onClick={startManual}>Manual entry</button></div>
-  <label className="smart-text-label">Paste text<textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder="English, Urdu or Roman Urdu - for example: 2.5mm wire 2 coil, PVC pipe 1 inch 30 feet"/></label><button type="button" className="button secondary" disabled={busy || recording || !text.trim()} onClick={() => { setImages([]); void extract({ text }, 'text'); }}>Read text</button>
-  {message && <p role="status" className="smart-notice">{message}</p>}
-  {draft && <div className="smart-review"><div className="smart-thumbnails">{images.map((image, i) => <a key={i} href={image} target="_blank" rel="noreferrer"><img src={image} alt={`Source image ${i + 1}`}/></a>)}</div><div className="smart-review-main">
-  <h3>Review &amp; approve</h3><p>Nothing is saved yet. Suggested matches need your confirmation. Prices are per selected line unit; catalog prices are per base unit.</p>
+  <button type="button" className="smart-method" disabled={busy} onClick={() => { setInputMethod("voice"); void speak(); }}><Mic size={22}/><strong>{recording ? "Stop and process" : "Record voice"}</strong><span>{recording ? "Click when you have finished" : "Dictate items and quantities"}</span></button><button type="button" className="smart-method" disabled={busy || recording} onClick={() => setInputMethod("text")}><FileText size={22}/><strong>Paste or type text</strong><span>Use any supported language</span></button></div><button type="button" className="button secondary" disabled={busy || recording} onClick={startManual}><Keyboard size={16}/> Enter details manually</button>
+  {inputMethod === "text" && <div className="smart-text-panel"><label className="smart-text-label">Bill or item details<textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder="For example: Copper wire 2.5mm, 2 coils at Rs. 6,300 each; PVC pipe 1 inch, 30 feet. You may also type in Urdu or Roman Urdu."/></label><button type="button" className="button secondary" disabled={busy || recording || !text.trim()} onClick={() => { setImages([]); void extract({ text }, 'text'); }}>Extract details</button></div>}
+  {message && <p role="status" aria-live="polite" className="smart-notice">{busy && <Loader2 size={16} className="smart-spinner"/>}{message}</p>}
+  {draft && <dialog ref={reviewDialog} className="smart-review-dialog" aria-labelledby={`review-${instanceId}`} onCancel={e => { if (busy) e.preventDefault(); else setDraft(null); }}><div className="smart-review"><div className="smart-thumbnails">{images.map((image, i) => <a key={i} href={image} target="_blank" rel="noreferrer"><img src={image} alt={`Source image ${i + 1}`}/></a>)}</div><div className="smart-review-main">
+  <div className="smart-review-heading"><div><span className="eyebrow">STEP 2 OF 3</span><h3 id={`review-${instanceId}`}>Review extracted details</h3></div><CheckCircle2 size={28}/></div><p>Confirm the supplier, quantities and prices below. Correct any highlighted details, then approve to save.</p>{message && <p role="status" aria-live="polite" className="smart-notice">{message}</p>}<div className="smart-review-summary"><strong>{draft.lines.length} line items</strong><span>Editable draft ? Awaiting approval</span></div>
   <div className="smart-meta">
    {mode === 'purchase_bill' && <><label>Supplier name<input value={draft.supplier || ''} onChange={e => setDraft({ ...draft, supplier: e.target.value || null, supplier_id: null })}/></label><label>Use supplier<select value={draft.supplier_id || ''} onChange={e => setDraft({ ...draft, supplier_id: e.target.value || null })}><option value="">Create / match by name</option>{db.suppliers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label></>}
    {mode === 'sale_list' && <><label>Customer name<input value={draft.customer || ''} onChange={e => setDraft({ ...draft, customer: e.target.value || null, customer_id: null })}/></label><label>Use customer<select value={draft.customer_id || ''} onChange={e => setDraft({ ...draft, customer_id: e.target.value || null })}><option value="">Walk-in / create by name</option>{db.customers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>Payment<select value={draft.payment_type || 'cash'} onChange={e => setDraft({ ...draft, payment_type: e.target.value as 'cash' | 'credit' })}><option value="cash">Cash</option><option value="credit">Credit</option></select></label></>}
@@ -188,8 +193,8 @@ export default function SmartEntry({ mode, db, onClose }: {
    {mode === 'purchase_bill' && <><td><input aria-label={`Rate row ${i + 1}`} inputMode="decimal" value={row.rate ?? ''} onChange={e => change(i, { rate: numeric(e.target.value) as number | null })}/></td><td><input aria-label={`Amount row ${i + 1}`} inputMode="decimal" value={row.amount ?? ''} onChange={e => change(i, { amount: numeric(e.target.value) as number | null })}/></td><td><select value={row.kind} aria-label={`Kind row ${i + 1}`} onChange={e => change(i, { kind: e.target.value as 'product' | 'expense', product_id: null })}><option value="product">Product</option><option value="expense">Expense</option></select></td></>}
    <td>{warnings.map(w => <p key={w}>{w}</p>)}{(mode === 'product_list' || !p) && row.kind === 'product' && <details><summary>Product details &amp; units</summary>{(['group_name', 'spec', 'category', 'base_unit', 'purchase_price', 'sale_price'] as const).map(field => <label key={field}>{field.replaceAll('_', ' ')}<input value={row[field] ?? ''} onChange={e => change(i, { [field]: field.includes('price') ? numeric(e.target.value) : e.target.value || null })}/></label>)}{(row.units || []).map((u, j) => <div key={j} className="smart-unit"><input aria-label="Conversion unit" value={u.unit} onChange={e => change(i, { units: row.units!.map((v, n) => n === j ? { ...v, unit: e.target.value } : v) })}/><input aria-label="Factor to base unit" value={u.factor_to_base} onChange={e => change(i, { units: row.units!.map((v, n) => n === j ? { ...v, factor_to_base: Number(numeric(e.target.value)) } : v) })}/><button type="button" onClick={() => change(i, { units: row.units!.filter((_, n) => n !== j) })}>?</button></div>)}<button type="button" onClick={() => change(i, { units: [...(row.units || []), { unit: '', factor_to_base: 1 }] })}>Add unit conversion</button></details>}</td><td><button type="button" aria-label={`Delete row ${i + 1}`} onClick={() => setDraft({ ...draft, lines: draft.lines.filter((_, n) => n !== i) })}>Delete</button></td></tr>;
             })}</tbody></table></div>
-  <div className="smart-footer"><button type="button" className="button secondary" onClick={() => setDraft({ ...draft, lines: [...draft.lines, blankRow()] })}>Add row</button>{(mode === 'purchase_bill' || mode === 'sale_list') && <strong>Line total: {formatPKR(total)}</strong>}<button type="button" className="button primary" disabled={busy || !draft.lines.length} onClick={() => void approve()}>Approve &amp; Save</button><button type="button" className="button secondary" disabled={busy} onClick={() => setDraft(null)}>Cancel draft</button></div>
-  </div></div>}
+  <div className="smart-footer"><button type="button" className="button secondary" onClick={() => setDraft({ ...draft, lines: [...draft.lines, blankRow()] })}>Add row</button>{(mode === 'purchase_bill' || mode === 'sale_list') && <strong>Line total: {formatPKR(total)}</strong>}<button type="button" className="button primary" disabled={busy || recording || !draft.lines.length} onClick={() => void approve()}>Approve and save</button><button type="button" className="button secondary" disabled={busy} onClick={() => setDraft(null)}>Cancel draft</button></div>
+  </div></div></dialog>}
   {receipt && <dialog open className="smart-receipt" aria-label="Printable sale receipt"><div id="smart-print-receipt"><h2>{db.companyProfile?.name || 'Hardware Store'}</h2><p>{receipt.invoiceNumber} | {receipt.date}</p><p>{receipt.customerName} | {receipt.paymentMethod}</p><table><thead><tr><th>Item</th><th>Qty / unit</th><th>Rate</th><th>Total</th></tr></thead><tbody>{receipt.items.map((l, i) => <tr key={i}><td>{l.name}</td><td>{l.quantity} {l.unit}</td><td>{formatPKR(l.unitPrice)}</td><td>{formatPKR(l.total)}</td></tr>)}</tbody></table><h3>Total {formatPKR(receipt.grandTotal)}</h3><p>Paid {formatPKR(receipt.amountPaid)} | Due {formatPKR(receipt.balanceDue)}</p></div><div className="smart-footer"><button type="button" className="button primary" onClick={() => window.print()}>Print receipt</button><button type="button" className="button secondary" onClick={() => setReceipt(null)}>Close receipt</button></div></dialog>}
  </section>;
 }

@@ -4,7 +4,7 @@ export const modes = ['product_list', 'purchase_bill', 'sale_list', 'stock_count
 export const modeSchema = z.enum(modes);
 const name = z.string().trim().min(1).max(300);
 const str = z.string().trim().max(300).nullable();
-const nonnegative = z.preprocess(numeric, z.number().finite().min(0).max(1e10)).nullable();
+const nonnegative = z.preprocess(numeric, z.number().finite().min(0).max(1e10).nullable());
 export const unitSchema = z.object({ unit: name, factor_to_base: z.preprocess(numeric, z.number().finite().positive().max(1e8)) }).strict();
 export const rowSchema = z.object({
     name, extracted_name: z.string().trim().min(1).max(300).nullable().optional(), product_id: str, group_name: str, spec: str, category: str, base_unit: str,
@@ -13,7 +13,7 @@ export const rowSchema = z.object({
     kind: z.enum(['product', 'expense']),
 }).strict();
 export const draftSchema = z.object({ mode: modeSchema, supplier: str, supplier_id: str, customer: str, customer_id: str,
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !Number.isNaN(Date.parse(v)), 'Invalid date').nullable(), total: nonnegative,
+    date: z.preprocess(v => v === '' ? null : v, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !Number.isNaN(Date.parse(v)), 'Invalid date').nullable()), total: nonnegative,
     payment_type: z.enum(['cash', 'credit']).nullable(), lines: z.array(rowSchema).min(1).max(100) }).strict();
 export const approvalSchema = z.object({ draft: draftSchema, revision: z.number().int().nonnegative(), request_id: z.string().uuid(), source: z.enum(['image', 'voice', 'text', 'manual']) }).strict();
 export type SmartMode = z.infer<typeof modeSchema>;
